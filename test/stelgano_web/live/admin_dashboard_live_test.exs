@@ -49,7 +49,7 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
 
     test "grants access with correct credentials", %{conn: conn} do
       {:ok, _view, html} = conn |> authed_conn() |> live("/admin")
-      assert html =~ "Admin dashboard"
+      assert html =~ "Dashboard."
     end
   end
 
@@ -66,13 +66,13 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
       {:ok, _view, html} = live(conn, "/admin")
       assert html =~ "Active rooms"
       assert html =~ "Rooms today"
-      assert html =~ "Messages today"
-      assert html =~ "Rooms (90 days)"
+      assert html =~ "Messages"
+      assert html =~ "90-Day Range"
     end
 
     test "shows last-updated timestamp", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/admin")
-      assert html =~ "Last updated"
+      assert html =~ "Synced"
     end
 
     test "never exposes user identifiers or room hashes", %{conn: conn} do
@@ -84,14 +84,14 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
 
     test "explains what metrics are shown", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/admin")
-      assert html =~ "No user data"
-      assert html =~ "Server-side aggregates only"
+      assert html =~ "No Handshake Data"
+      assert html =~ "Aggregate Metrics Only"
     end
 
     test "refresh_now event updates the view", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/admin")
-      view |> element("button", "Refresh") |> render_click()
-      assert render(view) =~ "Last updated"
+      view |> element("button", "Synchronize Now") |> render_click()
+      assert render(view) =~ "Synced"
     end
 
     test "metric values are non-negative integers", %{conn: conn} do

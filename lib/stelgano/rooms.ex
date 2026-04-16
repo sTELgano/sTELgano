@@ -64,9 +64,9 @@ defmodule Stelgano.Rooms do
           | {:error, :not_found}
   def join_room(room_hash, access_hash)
       when is_binary(room_hash) and is_binary(access_hash) do
-    case Repo.get_by(Room, room_hash: room_hash, is_active: true) do
-      nil -> {:error, :not_found}
-      %Room{} = room -> handle_access(room, access_hash)
+    case find_or_create_room(room_hash) do
+      {:ok, room} -> handle_access(room, access_hash)
+      {:error, _} -> {:error, :not_found}
     end
   end
 
@@ -106,7 +106,7 @@ defmodule Stelgano.Rooms do
         :count
       )
 
-    if existing_count == 0 do
+    if existing_count < 2 do
       %{room_hash: room_hash, access_hash: access_hash}
       |> RoomAccess.create_changeset()
       |> Repo.insert!()
@@ -123,13 +123,21 @@ defmodule Stelgano.Rooms do
             limit: 1
         )
 
-      updated =
-        access
-        |> RoomAccess.failed_attempt_changeset()
-        |> Repo.update!()
+      if RoomAccess.locked?(access) do
+        {:error, :locked, 0}
+      else
+        updated =
+          access
+          |> RoomAccess.failed_attempt_changeset()
+          |> Repo.update!()
 
-      remaining = max(0, RoomAccess.max_attempts() - updated.failed_attempts)
-      {:error, :unauthorized, remaining}
+        if updated.failed_attempts >= RoomAccess.max_attempts() do
+          {:error, :locked, 0}
+        else
+          remaining = max(0, RoomAccess.max_attempts() - updated.failed_attempts)
+          {:error, :unauthorized, remaining}
+        end
+      end
     end
   end
 

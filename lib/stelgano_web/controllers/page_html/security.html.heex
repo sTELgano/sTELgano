@@ -1,151 +1,247 @@
 <Layouts.app flash={@flash}>
-  <div class="max-w-2xl mx-auto px-4 py-16">
-    <a
-      href="/"
-      class="text-sm hover:underline mb-8 inline-block"
-      style="color: var(--text-muted);"
-    >
-      ← Back
-    </a>
+  <div class="max-w-5xl mx-auto space-y-16 py-12 animate-in">
+    <%!-- Hero Header --%>
+    <div class="text-center space-y-6 pt-12">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="hero-document-text-mini" class="size-3" /> Technical Specification v1.8
+      </div>
 
-    <h1 class="text-3xl font-light mb-2" style="color: var(--text-primary);">
-      Cryptographic specification
-    </h1>
-    <p class="text-sm mb-12" style="color: var(--text-muted);">sTELgano-std-1 · April 2026</p>
+      <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
+        Cryptographic <span class="text-gradient">Integrity.</span>
+      </h1>
 
-    <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">
-        Derivation chain
-      </h2>
-      <pre
-        class="rounded-xl p-4 text-xs overflow-x-auto"
-        style="background: var(--bg-raised); color: var(--text-secondary); font-family: 'IBM Plex Mono', monospace;"
-        phx-no-curly-interpolation
-      >
+      <p class="text-slate-400 text-sm sm:text-base font-mono uppercase tracking-[0.4em] font-black animate-in stagger-3">
+        sTELgano-std-1 · Document Reference AE-2026
+      </p>
+    </div>
+
+    <%!-- Derivation Chain Section --%>
+    <div class="space-y-8 animate-in stagger-3">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Derivation Chain
+        </h2>
+        <div class="h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <.premium_card class="p-0 overflow-hidden ring-1 ring-white/5 shadow-2xl">
+        <div class="bg-slate-950/90 p-8 sm:p-12 relative">
+          <div class="absolute top-0 right-0 p-4 opacity-5">
+            <.icon name="hero-cpu-chip" class="size-32 text-white" />
+          </div>
+          <pre
+            class="text-xs sm:text-sm md:text-base overflow-x-auto leading-relaxed font-mono whitespace-pre text-slate-300 relative z-10"
+            phx-no-curly-interpolation
+          ><span class="text-primary italic opacity-60"># Normalization Vector</span>
 phone       = normalise(raw_input)
-              strips: spaces · dashes · dots · + · parentheses
-              result: digits only with country code prefix
+              <span class="text-slate-500">// strips: spaces · dashes · dots · + · parentheses</span>
+              <span class="text-slate-500">// result: E.164 formatted identity</span>
 
+<span class="text-primary italic opacity-60"># Public Artifacts (Sent to Server)</span>
 room_hash   = SHA-256(phone + ":" + ROOM_SALT)
-              Sent to server. Cannot be reversed to phone.
+              <span class="text-slate-500">// Irreversible room identifier</span>
 
 access_hash = SHA-256(phone + ":" + PIN + ":" + ACCESS_SALT)
-              Sent to server. PIN gate per user.
+              <span class="text-slate-500">// Per-user entry gate. Never persists in cleartext.</span>
 
+<span class="text-primary italic opacity-60"># Local Secrets (NEVER Leaves Hardware)</span>
 enc_key     = PBKDF2(
                 password  : phone,
                 salt      : room_id + ENC_SALT,
-                iterations: 600_000,
+                iterations: 600,000,
                 hash      : SHA-256,
-                keylen    : 256 bits → AES-256-GCM key
+                keylen    : 256 bits → <span class="text-primary font-black drop-shadow-[0_0_10px_rgba(0,255,163,0.5)]">AES-256-GCM Key</span>
               )
-              Derived client-side. NEVER transmitted.
 
 sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
-              Stored in sessionStorage only.</pre>
-    </section>
+              <span class="text-slate-500">// Stored in volatile sessionStorage only.</span></pre>
+        </div>
+      </.premium_card>
+    </div>
 
-    <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">
-        Message encryption
-      </h2>
-      <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
-        <li><strong style="color: var(--text-primary);">Algorithm:</strong> AES-256-GCM</li>
-        <li>
-          <strong style="color: var(--text-primary);">Key:</strong> 256-bit from PBKDF2 above
-        </li>
-        <li>
-          <strong style="color: var(--text-primary);">IV/Nonce:</strong>
-          96-bit, cryptographically random per message (crypto.getRandomValues)
-        </li>
-        <li>
-          <strong style="color: var(--text-primary);">Auth tag:</strong>
-          128-bit GCM default — tampered ciphertext throws before plaintext is returned
-        </li>
-        <li>
-          <strong style="color: var(--text-primary);">Storage:</strong>
-          server stores binary (nonce || ciphertext || auth_tag), base64 in transit
-        </li>
-      </ul>
-    </section>
-
-    <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">
-        PBKDF2 iteration count
-      </h2>
-      <p class="text-sm" style="color: var(--text-secondary);">
-        600,000 iterations is the OWASP 2023 recommendation for PBKDF2-HMAC-SHA256. The phone number (the PBKDF2 password) is typically 10–13 digits — relatively low entropy. The encryption key protects all message content — the highest-value target. 600,000 iterations on a modern mobile device takes approximately 1.5–2.5 seconds — acceptable for a one-time join operation.
-      </p>
-    </section>
-
-    <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">Threat model</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <h3 class="text-sm font-medium mb-3" style="color: var(--accent);">
-            Protected against
+    <%!-- Technical Sections Grid --%>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-4">
+      <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner group-hover:scale-110 transition-transform">
+            <.icon name="hero-shield-check-mini" class="size-6 text-primary" />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            Encryption Matrix
           </h3>
-          <ul class="space-y-1 text-sm" style="color: var(--text-secondary);">
-            <li>Partner with device access</li>
-            <li>Family members, casual snooping</li>
-            <li>Browser history inspection</li>
-            <li>Database breach</li>
+        </div>
+        <div class="space-y-4">
+          <div
+            :for={
+              {label, value} <- [
+                {"Algorithm", "AES-256-GCM"},
+                {"Key Entropy", "256-bit (PBKDF2)"},
+                {"Nonce Vector", "96-bit Random"},
+                {"Auth Tag", "128-bit MAC"}
+              ]
+            }
+            class="flex items-center justify-between py-4 border-b border-white/5 last:border-0 group/item"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">
+              {label}
+            </span>
+            <span class="text-sm font-mono font-bold text-white group-hover/item:scale-105 transition-transform">
+              {value}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner group-hover:scale-110 transition-transform">
+            <.icon name="hero-adjustments-horizontal-mini" class="size-6 text-primary" />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            Wait Cycles
+          </h3>
+        </div>
+        <div class="space-y-6">
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">
+            We employ <span class="text-white">600,000 PBKDF2 iterations</span>, aligning with modern standards to defeat brute-force attempts at the edge.
+          </p>
+          <div class="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                Resource Drain
+              </span>
+              <span class="text-[10px] font-mono font-bold text-primary">~2.0s</span>
+            </div>
+            <div class="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/5">
+              <div class="h-full bg-gradient-to-r from-primary to-emerald-400 animate-progress w-full">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Threat Model Grid --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Threat Model
+        </h2>
+        <div class="h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="glass-card p-10 space-y-8 border-primary/20 bg-primary/[0.02] group transition-all hover:bg-primary/[0.04]">
+          <div class="flex items-center gap-4 text-primary">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center">
+              <.icon name="hero-check-badge-mini" class="size-6" />
+            </div>
+            <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">
+              Protected Mitigations
+            </h4>
+          </div>
+          <ul class="space-y-4">
+            <li
+              :for={
+                item <- [
+                  "Casual device snooping / Shoulder surfing",
+                  "ISP / Network operator packet inspection",
+                  "Database-level identity breaches",
+                  "Browser history / Cache forensics"
+                ]
+              }
+              class="flex items-start gap-4 group/li"
+            >
+              <.icon
+                name="hero-check-circle-mini"
+                class="size-5 text-primary group-hover/li:scale-125 transition-transform"
+              />
+              <span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">
+                {item}
+              </span>
+            </li>
           </ul>
         </div>
-        <div>
-          <h3 class="text-sm font-medium mb-3" style="color: var(--danger);">
-            Not protected against
-          </h3>
-          <ul class="space-y-1 text-sm" style="color: var(--text-secondary);">
-            <li>Government subpoenas</li>
-            <li>Nation-state surveillance</li>
-            <li>Law enforcement with warrant</li>
-            <li>Institutional monitoring</li>
+
+        <div class="glass-card p-10 space-y-8 border-danger/20 bg-danger/[0.02] group transition-all hover:bg-danger/[0.04]">
+          <div class="flex items-center gap-4 text-danger">
+            <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center">
+              <.icon name="hero-exclamation-triangle-mini" class="size-6" />
+            </div>
+            <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">Out-of-Scope Risks</h4>
+          </div>
+          <ul class="space-y-4">
+            <li
+              :for={
+                item <- [
+                  "Nation-state surveillance infrastructure",
+                  "Government subpoenas and law enforcement",
+                  "Targeted endpoint malware / Keyloggers",
+                  "Coerced PIN disclosure sessions"
+                ]
+              }
+              class="flex items-start gap-4 group/li"
+            >
+              <div class="size-5 flex items-center justify-center shrink-0">
+                <div class="size-1.5 rounded-full bg-danger animate-pulse"></div>
+              </div>
+              <span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">
+                {item}
+              </span>
+            </li>
           </ul>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">
-        What the server stores
-      </h2>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm" style="border-collapse: collapse;">
-          <thead>
-            <tr style="border-bottom: 1px solid var(--border);">
-              <th class="text-left py-2 pr-4 font-medium" style="color: var(--text-primary);">
-                Value
-              </th>
-              <th class="text-left py-2 font-medium" style="color: var(--text-primary);">
-                Server can reverse?
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom: 1px solid var(--border);">
-              <td class="py-2 pr-4" style="color: var(--text-secondary);">room_hash</td>
-              <td class="py-2" style="color: var(--text-muted);">No</td>
-            </tr>
-            <tr style="border-bottom: 1px solid var(--border);">
-              <td class="py-2 pr-4" style="color: var(--text-secondary);">access_hash</td>
-              <td class="py-2" style="color: var(--text-muted);">No</td>
-            </tr>
-            <tr style="border-bottom: 1px solid var(--border);">
-              <td class="py-2 pr-4" style="color: var(--text-secondary);">
-                Encrypted ciphertext
-              </td>
-              <td class="py-2" style="color: var(--text-muted);">
-                No — enc_key never reaches server
-              </td>
-            </tr>
-            <tr>
-              <td class="py-2 pr-4" style="color: var(--text-secondary);">sender_hash</td>
-              <td class="py-2" style="color: var(--text-muted);">No</td>
-            </tr>
-          </tbody>
-        </table>
+    <%!-- Persistence Audit Table --%>
+    <div class="space-y-8 pb-40 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Persistence Audit
+        </h2>
+        <div class="h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent"></div>
       </div>
-    </section>
+
+      <.premium_card class="p-0 overflow-hidden shadow-2xl">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-white/[0.02] border-b border-white/5">
+                <th class="p-8 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 font-mono">
+                  Artifact Vector
+                </th>
+                <th class="p-8 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 font-mono">
+                  Server Retention State
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5">
+              <tr
+                :for={
+                  {item, state} <- [
+                    {"room_hash", "Anonymous Reference (Opaque SHA-256)"},
+                    {"access_hash", "Challenge Token (One-Way Hash)"},
+                    {"ciphertext", "Edge-Encrypted Buffer (AES-256-GCM)"},
+                    {"sender_hash", "Volatile Ephemeral Reference (Null)"}
+                  ]
+                }
+                class="group hover:bg-white/[0.03] transition-all"
+              >
+                <td class="p-8 font-mono text-xs font-black text-white tracking-[0.2em]">
+                  {item}
+                </td>
+                <td class="p-8">
+                  <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-white/5 text-[10px] font-bold text-slate-400">
+                    <div class="size-1 bg-slate-700 rounded-full"></div>
+                    {state}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </.premium_card>
+    </div>
   </div>
 </Layouts.app>

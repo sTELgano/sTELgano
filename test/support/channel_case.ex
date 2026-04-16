@@ -13,7 +13,7 @@ defmodule StelganoWeb.ChannelCase do
   using do
     quote do
       # Import channel testing helpers from `Phoenix.ChannelTest`
-      use Phoenix.ChannelTest
+      import Phoenix.ChannelTest
 
       # The default endpoint for testing
       @endpoint StelganoWeb.Endpoint
