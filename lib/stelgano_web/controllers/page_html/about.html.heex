@@ -173,7 +173,7 @@
                "Binary UUIDs for all identifiers. Encrypted-at-rest capable. The database only ever stores opaque hashes and ciphertext -- never plaintext.",
                "database"},
               {"Oban",
-               "Background job processing for automatic data purging. Soft-deleted messages are hard-purged after 24 hours. Expired rooms are cleaned hourly.",
+               "Background job processing for automatic room expiry. Expired rooms and their messages are hard-deleted hourly. No deferred cleanup needed &mdash; messages are hard-deleted immediately on reply.",
                "clock"}
             ]
           }

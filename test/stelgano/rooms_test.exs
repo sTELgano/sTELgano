@@ -202,32 +202,27 @@ defmodule Stelgano.RoomsTest do
                Rooms.send_message(room.id, sender_hash(), ciphertext(), iv())
     end
 
-    test "new message soft-deletes the previous one atomically", %{room: room} do
+    test "new message hard-deletes the previous one atomically", %{room: room} do
       sh1 = hex64(80)
       sh2 = hex64(81)
 
       {:ok, msg1} = Rooms.send_message(room.id, sh1, ciphertext(), iv())
-      assert is_nil(msg1.deleted_at)
 
-      # sh2 replies — this should delete msg1
+      # sh2 replies — this should hard-delete msg1
       {:ok, _msg2} = Rooms.send_message(room.id, sh2, ciphertext(), iv())
 
-      # msg1 should now be soft-deleted
-      reloaded = Repo.get!(Message, msg1.id)
-      assert reloaded.deleted_at != nil
+      # msg1 should be completely gone from the database
+      assert is_nil(Repo.get(Message, msg1.id))
     end
 
-    test "at most one live message exists after multiple sends", %{room: room} do
+    test "at most one message exists after multiple sends", %{room: room} do
       sh1 = hex64(82)
       sh2 = hex64(83)
 
       Rooms.send_message(room.id, sh1, ciphertext(), iv())
       Rooms.send_message(room.id, sh2, ciphertext(), iv())
 
-      query =
-        from(m in Message,
-          where: m.room_id == ^room.id and is_nil(m.deleted_at)
-        )
+      query = from(m in Message, where: m.room_id == ^room.id)
 
       live_count = Repo.aggregate(query, :count)
 
@@ -336,9 +331,9 @@ defmodule Stelgano.RoomsTest do
       %{room: room, msg: msg, sh: sh}
     end
 
-    test "deletes an unread message", %{room: room, msg: msg, sh: sh} do
-      assert {:ok, deleted} = Rooms.delete_message(msg.id, room.id, sh)
-      assert deleted.deleted_at != nil
+    test "hard-deletes an unread message", %{room: room, msg: msg, sh: sh} do
+      assert {:ok, _deleted} = Rooms.delete_message(msg.id, room.id, sh)
+      assert is_nil(Repo.get(Message, msg.id))
     end
 
     test "returns :not_deletable after the message is read", %{room: room, msg: msg, sh: sh} do
@@ -357,16 +352,15 @@ defmodule Stelgano.RoomsTest do
   # ---------------------------------------------------------------------------
 
   describe "expire_room/1" do
-    test "sets is_active = false and soft-deletes messages" do
+    test "sets is_active = false and hard-deletes messages" do
       {:ok, room} = 130 |> hex64() |> Rooms.find_or_create_room()
       {:ok, msg} = Rooms.send_message(room.id, sender_hash(), ciphertext(), iv())
 
       assert {:ok, expired} = Rooms.expire_room(room.id)
       assert expired.is_active == false
 
-      # Message should be soft-deleted
-      reloaded = Repo.get!(Message, msg.id)
-      assert reloaded.deleted_at != nil
+      # Message should be completely gone from the database
+      assert is_nil(Repo.get(Message, msg.id))
     end
 
     test "room_exists? returns false for expired room" do

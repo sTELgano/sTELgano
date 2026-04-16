@@ -321,11 +321,11 @@
           :for={
             {title, desc, icon, badge} <- [
               {"Messages",
-               "Soft-deleted on reply (N=1 invariant). Hard-purged 24 hours after soft-delete by the daily maintenance worker at 03:00 UTC. No message ever persists beyond this window.",
+               "Hard-deleted immediately on reply (N=1 invariant). The previous message row is permanently removed from the database in the same transaction that inserts the new message. No deferred purge, no soft-delete window.",
                "message_circle",
-               "24h TTL"},
+               "Instant Delete"},
               {"Rooms",
-               "Expire at their configured TTL. An hourly background worker checks for and deactivates expired rooms. Room data is cleaned up on the next purge cycle.",
+               "Expire at their configured TTL. An hourly background worker checks for and deactivates expired rooms, hard-deleting all their messages in the same transaction.",
                "door_open",
                "Hourly Check"},
               {"Sessions",

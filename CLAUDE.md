@@ -40,7 +40,7 @@ Single context module ([rooms.ex](lib/stelgano/rooms.ex)) owns all business logi
 Schemas in [lib/stelgano/rooms/](lib/stelgano/rooms/):
 - `Room` — identified by `room_hash` (SHA-256 hex), has `is_active` flag and optional `ttl_expires_at`
 - `RoomAccess` — `(room_hash, access_hash)` pairs with failed-attempt lockout (10 attempts → 30min lock)
-- `Message` — opaque `ciphertext` + `iv` (binary), `sender_hash`, soft-delete via `deleted_at`
+- `Message` — opaque `ciphertext` + `iv` (binary), `sender_hash`; hard-deleted immediately on reply (N=1)
 
 ### Real-time: Phoenix Channels (not LiveView sockets)
 
@@ -93,8 +93,7 @@ The `can_type?/1` helper enforces turn-based input: you can type when the room i
 
 ### Background jobs (Oban)
 
-- `PurgeMessages` — hard-deletes soft-deleted messages older than 24h (daily 03:00 UTC)
-- `ExpireTtlRooms` — expires rooms past their TTL (hourly)
+- `ExpireTtlRooms` — expires rooms past their TTL and hard-deletes all their messages (hourly)
 - Queue: `:maintenance` with 2 workers
 
 ### Security plugs
@@ -109,6 +108,8 @@ The `can_type?/1` helper enforces turn-based input: you can type when the room i
 ### Routes
 
 - `/` — homepage; `/security`, `/privacy`, `/terms`, `/about` — static pages
+- `/spec` — sTELgano-std-1 protocol specification
+- `/blog` — blog index; `/blog/:slug` — individual blog posts
 - `/chat` — anonymous chat LiveView; accepts optional `?phone=<e164>` query param to pre-populate phone field
 - `/steg-number` — steg number generator
 - `/admin` — admin dashboard (behind `:admin_auth` pipeline)

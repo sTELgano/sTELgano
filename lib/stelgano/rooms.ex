@@ -10,7 +10,7 @@ defmodule Stelgano.Rooms do
 
   - **Server blindness** — no function here accepts or stores a plaintext phone
     number or PIN. All inputs are opaque hashes derived client-side.
-  - **Atomic N=1 enforcement** — `send_message/4` soft-deletes the previous
+  - **Atomic N=1 enforcement** — `send_message/4` hard-deletes the previous
     message and inserts the new one in a single DB transaction.
   - **Enumeration resistance** — `join_room/2` returns the same public error
     regardless of whether the room doesn't exist, the hash is wrong, or the
@@ -154,7 +154,7 @@ defmodule Stelgano.Rooms do
   end
 
   @doc """
-  Permanently expires a room: sets `is_active = false` and soft-deletes all
+  Permanently expires a room: sets `is_active = false` and hard-deletes all
   messages in a single atomic transaction. Access records are retained.
 
   Returns `{:ok, room}` on success, `{:error, reason}` on failure.
@@ -163,12 +163,8 @@ defmodule Stelgano.Rooms do
   def expire_room(room_id) when is_binary(room_id) do
     Repo.transaction(fn ->
       room = Repo.get!(Room, room_id)
-      now = DateTime.truncate(DateTime.utc_now(), :second)
 
-      Repo.update_all(
-        from(m in Message, where: m.room_id == ^room_id and is_nil(m.deleted_at)),
-        set: [deleted_at: now, updated_at: now]
-      )
+      Repo.delete_all(from(m in Message, where: m.room_id == ^room_id))
 
       room
       |> Room.expire_changeset()
@@ -181,12 +177,12 @@ defmodule Stelgano.Rooms do
   # ---------------------------------------------------------------------------
 
   @doc """
-  Returns the current non-deleted message for a room, or `nil` if none.
+  Returns the current message for a room, or `nil` if none.
   """
   @spec current_message(Ecto.UUID.t()) :: Message.t() | nil
   def current_message(room_id) when is_binary(room_id) do
     Message
-    |> where([m], m.room_id == ^room_id and is_nil(m.deleted_at))
+    |> where([m], m.room_id == ^room_id)
     |> limit(1)
     |> Repo.one()
   end
@@ -196,7 +192,7 @@ defmodule Stelgano.Rooms do
 
   Within a single transaction:
   1. If the sender already has the live message → rollback with `:sender_blocked`.
-  2. Soft-delete any existing message (the other party's reply).
+  2. Hard-delete any existing message (the other party's previous message).
   3. Insert the new encrypted message.
 
   Returns `{:ok, message}` or `{:error, :sender_blocked}`.
@@ -214,9 +210,7 @@ defmodule Stelgano.Rooms do
         end
 
         if existing do
-          existing
-          |> Message.soft_delete_changeset()
-          |> Repo.update!()
+          Repo.delete!(existing)
         end
 
         %{sender_hash: sender_hash, ciphertext: ciphertext, iv: iv}
@@ -254,8 +248,9 @@ defmodule Stelgano.Rooms do
   @doc """
   Replaces the ciphertext + IV of a sent message before the recipient reads it.
 
-  Editing is only permitted when `read_at` and `deleted_at` are both nil and
-  the `sender_hash` matches the caller.
+  Editing is only permitted when `read_at` is nil and the `sender_hash` matches
+  the caller. Deleted messages no longer exist in the database and will return
+  `:not_found`.
   """
   @spec edit_message(Ecto.UUID.t(), Ecto.UUID.t(), String.t(), binary(), binary()) ::
           {:ok, Message.t()} | {:error, :not_editable | :not_found}
@@ -264,8 +259,7 @@ defmodule Stelgano.Rooms do
       nil ->
         {:error, :not_found}
 
-      %Message{read_at: read_at, deleted_at: deleted_at}
-      when not is_nil(read_at) or not is_nil(deleted_at) ->
+      %Message{read_at: read_at} when not is_nil(read_at) ->
         {:error, :not_editable}
 
       %Message{} = message ->
@@ -277,10 +271,10 @@ defmodule Stelgano.Rooms do
   end
 
   @doc """
-  Soft-deletes a sent message before the recipient reads it.
+  Hard-deletes a sent message before the recipient reads it.
 
-  Deletion is only permitted when `read_at` and `deleted_at` are both nil
-  and the `sender_hash` matches the caller.
+  Deletion is only permitted when `read_at` is nil and the `sender_hash`
+  matches the caller. The message row is permanently removed from the database.
   """
   @spec delete_message(Ecto.UUID.t(), Ecto.UUID.t(), String.t()) ::
           {:ok, Message.t()} | {:error, :not_deletable | :not_found}
@@ -289,17 +283,12 @@ defmodule Stelgano.Rooms do
       nil ->
         {:error, :not_found}
 
-      %Message{read_at: read_at, deleted_at: deleted_at}
-      when not is_nil(read_at) or not is_nil(deleted_at) ->
+      %Message{read_at: read_at} when not is_nil(read_at) ->
         {:error, :not_deletable}
 
       %Message{} = message ->
-        updated =
-          message
-          |> Message.soft_delete_changeset()
-          |> Repo.update!()
-
-        {:ok, updated}
+        Repo.delete!(message)
+        {:ok, message}
     end
   end
 
@@ -360,22 +349,6 @@ defmodule Stelgano.Rooms do
   # ---------------------------------------------------------------------------
   # Cleanup — called by Oban jobs
   # ---------------------------------------------------------------------------
-
-  @doc """
-  Hard-deletes soft-deleted messages older than `older_than_seconds`.
-  Returns the count of rows deleted.
-  """
-  @spec purge_deleted_messages(non_neg_integer()) :: non_neg_integer()
-  def purge_deleted_messages(older_than_seconds \\ 86_400) do
-    cutoff = DateTime.add(DateTime.utc_now(), -older_than_seconds, :second)
-
-    {count, _rows} =
-      Message
-      |> where([m], not is_nil(m.deleted_at) and m.deleted_at < ^cutoff)
-      |> Repo.delete_all()
-
-    count
-  end
 
   @doc """
   Finds and expires all rooms whose `ttl_expires_at` is in the past.

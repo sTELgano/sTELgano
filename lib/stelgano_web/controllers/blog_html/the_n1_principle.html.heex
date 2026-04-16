@@ -117,27 +117,17 @@
 
         <div class="glass-card p-8 sm:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
-            This isn't a "mark as deleted" with the data still sitting on disk. The delete operation has two stages, both designed for data minimisation:
+            This isn't a "mark as deleted" with the data still sitting on disk. There is no soft-delete, no deferred purge, no 24-hour window. The old message is gone the instant the new one arrives.
           </p>
 
           <div class="space-y-4">
             <div class="p-5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
               <div class="flex items-center gap-3">
-                <span class="text-xs font-black text-primary font-mono uppercase tracking-wider">Stage 1: Soft Delete</span>
-                <span class="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">Immediate</span>
+                <span class="text-xs font-black text-primary font-mono uppercase tracking-wider">Immediate Hard Delete</span>
+                <span class="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">Same Transaction</span>
               </div>
               <p class="text-sm text-slate-400 leading-relaxed font-medium">
-                When a reply is sent, the previous message's <span class="font-mono text-slate-300">deleted_at</span> timestamp is set in the same database transaction. The message is immediately invisible to all queries. The ciphertext exists on disk but is inaccessible through any application pathway.
-              </p>
-            </div>
-
-            <div class="p-5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
-              <div class="flex items-center gap-3">
-                <span class="text-xs font-black text-primary font-mono uppercase tracking-wider">Stage 2: Hard Purge</span>
-                <span class="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">Within 24 hours</span>
-              </div>
-              <p class="text-sm text-slate-400 leading-relaxed font-medium">
-                A background worker (<span class="font-mono text-slate-300">PurgeMessages</span>) runs daily at 03:00 UTC and permanently removes all soft-deleted messages older than 24 hours. The rows are deleted from PostgreSQL. The data is gone.
+                When a reply is sent, the previous message row is permanently deleted from PostgreSQL in the same database transaction that inserts the new message. One atomic operation: the old row is removed and the new row is written. No ghost data, no lingering ciphertext, no background cleanup required.
               </p>
             </div>
           </div>
