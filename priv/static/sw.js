@@ -11,7 +11,7 @@
 
 "use strict";
 
-const CACHE_NAME = "stelgano-v1";
+const CACHE_NAME = "stelgano-v2";
 
 // App shell resources to pre-cache on install
 const PRECACHE_URLS = [
@@ -110,12 +110,14 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          // Cache successful navigation responses for offline fallback
+          // If response is valid, update the cache and return it
           if (response && response.status === 200) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            return response;
           }
-          return response;
+          // If response is not valid (e.g. 404, 500), try fallback to cache
+          return caches.match(event.request).then((cached) => cached || response);
         })
         .catch(() => caches.match(event.request))
     );

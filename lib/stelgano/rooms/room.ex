@@ -67,7 +67,6 @@ defmodule Stelgano.Rooms.Room do
   """
   @spec expire_changeset(t()) :: Ecto.Changeset.t()
   def expire_changeset(%__MODULE__{} = room) do
-    room
-    |> change(is_active: false)
+    change(room, is_active: false)
   end
 end

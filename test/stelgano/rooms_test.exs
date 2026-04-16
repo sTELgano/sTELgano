@@ -12,7 +12,9 @@ defmodule Stelgano.RoomsTest do
   use Stelgano.DataCase, async: true
 
   alias Stelgano.Rooms
-  alias Stelgano.Rooms.{Message, Room, RoomAccess}
+  alias Stelgano.Rooms.Message
+  alias Stelgano.Rooms.Room
+  alias Stelgano.Rooms.RoomAccess
 
   # ---------------------------------------------------------------------------
   # Fixtures
@@ -20,8 +22,8 @@ defmodule Stelgano.RoomsTest do
 
   # Valid SHA-256 hex strings (64 chars)
   defp hex64(seed) do
-    :crypto.hash(:sha256, "test-seed-#{seed}")
-    |> Base.encode16(case: :lower)
+    hash = :crypto.hash(:sha256, "test-seed-#{seed}")
+    Base.encode16(hash, case: :lower)
   end
 
   defp room_hash, do: hex64(1)
@@ -62,7 +64,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "room_exists?/1" do
     test "returns false for unknown room" do
-      refute Rooms.room_exists?(hex64(20))
+      refute 20 |> hex64() |> Rooms.room_exists?()
     end
 
     test "returns true for an active room" do
@@ -151,7 +153,7 @@ defmodule Stelgano.RoomsTest do
       Rooms.join_room(rh, ah_correct2)
 
       # Attempt many times with the 3rd (wrong) hash
-      for _ <- 1..(RoomAccess.max_attempts() - 1) do
+      for _attempt <- 1..(RoomAccess.max_attempts() - 1) do
         assert {:error, :unauthorized, _remaining} = Rooms.join_room(rh, ah_wrong)
       end
 
@@ -171,11 +173,11 @@ defmodule Stelgano.RoomsTest do
       Rooms.join_room(rh, ah_wrong)
       Rooms.join_room(rh, ah_wrong)
 
-      # One of the records should have failures now. 
-      # We check both and verify that at least one is non-zero, 
+      # One of the records should have failures now.
+      # We check both and verify that at least one is non-zero,
       # or we just joining with both to ensure both are reset.
-      assert {:ok, _} = Rooms.join_room(rh, ah1)
-      assert {:ok, _} = Rooms.join_room(rh, ah2)
+      assert {:ok, _room1} = Rooms.join_room(rh, ah1)
+      assert {:ok, _room2} = Rooms.join_room(rh, ah2)
 
       access1 = Repo.get_by(RoomAccess, room_hash: rh, access_hash: ah1)
       access2 = Repo.get_by(RoomAccess, room_hash: rh, access_hash: ah2)
@@ -222,13 +224,12 @@ defmodule Stelgano.RoomsTest do
       Rooms.send_message(room.id, sh1, ciphertext(), iv())
       Rooms.send_message(room.id, sh2, ciphertext(), iv())
 
-      live_count =
-        Repo.aggregate(
-          from(m in Message,
-            where: m.room_id == ^room.id and is_nil(m.deleted_at)
-          ),
-          :count
+      query =
+        from(m in Message,
+          where: m.room_id == ^room.id and is_nil(m.deleted_at)
         )
+
+      live_count = Repo.aggregate(query, :count)
 
       assert live_count == 1
     end
@@ -236,7 +237,7 @@ defmodule Stelgano.RoomsTest do
     test "blocks sender if they already have the live message", %{room: room} do
       sh = sender_hash()
 
-      {:ok, _} = Rooms.send_message(room.id, sh, ciphertext(), iv())
+      {:ok, _msg} = Rooms.send_message(room.id, sh, ciphertext(), iv())
 
       assert {:error, :sender_blocked} =
                Rooms.send_message(room.id, sh, ciphertext(), iv())
@@ -249,7 +250,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "current_message/1" do
     setup do
-      {:ok, room} = Rooms.find_or_create_room(hex64(90))
+      {:ok, room} = 90 |> hex64() |> Rooms.find_or_create_room()
       %{room: room}
     end
 
@@ -270,7 +271,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "mark_read/1" do
     setup do
-      {:ok, room} = Rooms.find_or_create_room(hex64(100))
+      {:ok, room} = 100 |> hex64() |> Rooms.find_or_create_room()
       {:ok, msg} = Rooms.send_message(room.id, sender_hash(), ciphertext(), iv())
       %{room: room, msg: msg}
     end
@@ -329,7 +330,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "delete_message/3" do
     setup do
-      {:ok, room} = Rooms.find_or_create_room(hex64(120))
+      {:ok, room} = 120 |> hex64() |> Rooms.find_or_create_room()
       sh = sender_hash()
       {:ok, msg} = Rooms.send_message(room.id, sh, ciphertext(), iv())
       %{room: room, msg: msg, sh: sh}
@@ -357,7 +358,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "expire_room/1" do
     test "sets is_active = false and soft-deletes messages" do
-      {:ok, room} = Rooms.find_or_create_room(hex64(130))
+      {:ok, room} = 130 |> hex64() |> Rooms.find_or_create_room()
       {:ok, msg} = Rooms.send_message(room.id, sender_hash(), ciphertext(), iv())
 
       assert {:ok, expired} = Rooms.expire_room(room.id)
@@ -391,7 +392,7 @@ defmodule Stelgano.RoomsTest do
 
     test "active_rooms count increments on room creation" do
       before = Rooms.aggregate_metrics().active_rooms
-      Rooms.find_or_create_room(hex64(140))
+      140 |> hex64() |> Rooms.find_or_create_room()
       after_ = Rooms.aggregate_metrics().active_rooms
       assert after_ == before + 1
     end

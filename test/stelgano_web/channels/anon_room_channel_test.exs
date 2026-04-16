@@ -11,19 +11,27 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   use StelganoWeb.ChannelCase, async: true
 
-  alias StelganoWeb.AnonSocket
   alias Stelgano.Rooms
+  alias StelganoWeb.AnonSocket
 
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
 
   defp hex64(seed) do
-    :crypto.hash(:sha256, "ch-test-#{seed}") |> Base.encode16(case: :lower)
+    hash = :crypto.hash(:sha256, "ch-test-#{seed}")
+    Base.encode16(hash, case: :lower)
   end
 
-  defp valid_iv, do: :crypto.strong_rand_bytes(12) |> Base.encode64()
-  defp valid_ct, do: :crypto.strong_rand_bytes(64) |> Base.encode64()
+  defp valid_iv do
+    bytes = :crypto.strong_rand_bytes(12)
+    Base.encode64(bytes)
+  end
+
+  defp valid_ct do
+    bytes = :crypto.strong_rand_bytes(64)
+    Base.encode64(bytes)
+  end
 
   # Connect an anonymous socket and join a room in one step.
   defp connect_and_join(rh, ah, sh) do
@@ -167,7 +175,8 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
     test "rejects oversized ciphertext" do
       socket = connect_and_join(hex64(80 + 2000), hex64(81 + 2000), hex64(82 + 2000))
-      huge_ct = :crypto.strong_rand_bytes(10_000) |> Base.encode64()
+      huge_bytes = :crypto.strong_rand_bytes(10_000)
+      huge_ct = Base.encode64(huge_bytes)
       ref = push(socket, "send_message", %{"ciphertext" => huge_ct, "iv" => valid_iv()})
       assert_reply ref, :error, %{reason: "message_too_large"}
     end

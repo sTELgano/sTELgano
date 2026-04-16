@@ -20,7 +20,9 @@ defmodule Stelgano.Rooms do
   import Ecto.Query, warn: false
 
   alias Stelgano.Repo
-  alias Stelgano.Rooms.{Message, Room, RoomAccess}
+  alias Stelgano.Rooms.Message
+  alias Stelgano.Rooms.Room
+  alias Stelgano.Rooms.RoomAccess
 
   # ---------------------------------------------------------------------------
   # Room lifecycle
@@ -66,7 +68,7 @@ defmodule Stelgano.Rooms do
       when is_binary(room_hash) and is_binary(access_hash) do
     case find_or_create_room(room_hash) do
       {:ok, room} -> handle_access(room, access_hash)
-      {:error, _} -> {:error, :not_found}
+      {:error, _changeset} -> {:error, :not_found}
     end
   end
 
@@ -101,10 +103,9 @@ defmodule Stelgano.Rooms do
           | {:error, :unauthorized, non_neg_integer()}
   defp handle_access_miss(%Room{room_hash: room_hash} = room, access_hash) do
     existing_count =
-      Repo.aggregate(
-        from(a in RoomAccess, where: a.room_hash == ^room_hash),
-        :count
-      )
+      RoomAccess
+      |> where([a], a.room_hash == ^room_hash)
+      |> Repo.aggregate(:count)
 
     if existing_count < 2 do
       %{room_hash: room_hash, access_hash: access_hash}
@@ -116,12 +117,11 @@ defmodule Stelgano.Rooms do
       # Wrong PIN — increment the counter on the record with the most failures
       # so we don't reveal which access_hash is "yours".
       access =
-        Repo.one!(
-          from a in RoomAccess,
-            where: a.room_hash == ^room_hash,
-            order_by: [desc: a.failed_attempts],
-            limit: 1
-        )
+        RoomAccess
+        |> where([a], a.room_hash == ^room_hash)
+        |> order_by([a], desc: a.failed_attempts)
+        |> limit(1)
+        |> Repo.one!()
 
       if RoomAccess.locked?(access) do
         {:error, :locked, 0}
@@ -148,10 +148,9 @@ defmodule Stelgano.Rooms do
   """
   @spec room_exists?(String.t()) :: boolean()
   def room_exists?(room_hash) when is_binary(room_hash) do
-    Repo.exists?(
-      from r in Room,
-        where: r.room_hash == ^room_hash and r.is_active == true
-    )
+    Room
+    |> where([r], r.room_hash == ^room_hash and r.is_active == true)
+    |> Repo.exists?()
   end
 
   @doc """
@@ -186,11 +185,10 @@ defmodule Stelgano.Rooms do
   """
   @spec current_message(Ecto.UUID.t()) :: Message.t() | nil
   def current_message(room_id) when is_binary(room_id) do
-    Repo.one(
-      from m in Message,
-        where: m.room_id == ^room_id and is_nil(m.deleted_at),
-        limit: 1
-    )
+    Message
+    |> where([m], m.room_id == ^room_id and is_nil(m.deleted_at))
+    |> limit(1)
+    |> Repo.one()
   end
 
   @doc """
@@ -207,29 +205,27 @@ defmodule Stelgano.Rooms do
           {:ok, Message.t()} | {:error, :sender_blocked} | {:error, Ecto.Changeset.t()}
   def send_message(room_id, sender_hash, ciphertext, iv)
       when is_binary(room_id) and is_binary(sender_hash) do
-    Repo.transaction(fn ->
-      existing = current_message(room_id)
+    result =
+      Repo.transaction(fn ->
+        existing = current_message(room_id)
 
-      if existing && existing.sender_hash == sender_hash do
-        Repo.rollback(:sender_blocked)
-      end
+        if existing && existing.sender_hash == sender_hash do
+          Repo.rollback(:sender_blocked)
+        end
 
-      if existing do
-        existing
-        |> Message.soft_delete_changeset()
-        |> Repo.update!()
-      end
+        if existing do
+          existing
+          |> Message.soft_delete_changeset()
+          |> Repo.update!()
+        end
 
-      %{sender_hash: sender_hash, ciphertext: ciphertext, iv: iv}
-      |> Message.create_changeset()
-      |> Ecto.Changeset.put_change(:room_id, room_id)
-      |> Repo.insert!()
-    end)
-    |> case do
-      {:ok, message} -> {:ok, message}
-      {:error, :sender_blocked} -> {:error, :sender_blocked}
-      {:error, changeset} -> {:error, changeset}
-    end
+        %{sender_hash: sender_hash, ciphertext: ciphertext, iv: iv}
+        |> Message.create_changeset()
+        |> Ecto.Changeset.put_change(:room_id, room_id)
+        |> Repo.insert!()
+      end)
+
+    normalize_transaction_result(result)
   end
 
   @doc """
@@ -310,20 +306,26 @@ defmodule Stelgano.Rooms do
   # Returns a message that belongs to `room_id` and was sent by `sender_hash`.
   @spec get_owned_message(Ecto.UUID.t(), Ecto.UUID.t(), String.t()) :: Message.t() | nil
   defp get_owned_message(message_id, room_id, sender_hash) do
-    Repo.one(
-      from m in Message,
-        where:
-          m.id == ^message_id and
-            m.room_id == ^room_id and
-            m.sender_hash == ^sender_hash
+    Message
+    |> where(
+      [m],
+      m.id == ^message_id and
+        m.room_id == ^room_id and
+        m.sender_hash == ^sender_hash
     )
+    |> Repo.one()
   end
 
   # Normalises Repo.update/1 result to the types in the edit_message typespec.
   @spec normalize_update_result({:ok, Message.t()} | {:error, Ecto.Changeset.t()}) ::
           {:ok, Message.t()} | {:error, Ecto.Changeset.t()}
-  defp normalize_update_result({:ok, _} = ok), do: ok
-  defp normalize_update_result({:error, _} = err), do: err
+  defp normalize_update_result({:ok, _msg} = ok), do: ok
+  defp normalize_update_result({:error, _changeset} = err), do: err
+
+  # Normalises Repo.transaction/1 result for send_message.
+  defp normalize_transaction_result({:ok, message}), do: {:ok, message}
+  defp normalize_transaction_result({:error, :sender_blocked}), do: {:error, :sender_blocked}
+  defp normalize_transaction_result({:error, changeset}), do: {:error, changeset}
 
   # ---------------------------------------------------------------------------
   # Analytics — server-side aggregate metrics only
@@ -347,12 +349,11 @@ defmodule Stelgano.Rooms do
     ninety_days_ago = DateTime.add(now, -90 * 86_400, :second)
 
     %{
-      active_rooms: Repo.aggregate(from(r in Room, where: r.is_active == true), :count),
-      rooms_today: Repo.aggregate(from(r in Room, where: r.inserted_at >= ^day_ago), :count),
-      messages_today:
-        Repo.aggregate(from(m in Message, where: m.inserted_at >= ^day_ago), :count),
+      active_rooms: Room |> where([r], r.is_active == true) |> Repo.aggregate(:count),
+      rooms_today: Room |> where([r], r.inserted_at >= ^day_ago) |> Repo.aggregate(:count),
+      messages_today: Message |> where([m], m.inserted_at >= ^day_ago) |> Repo.aggregate(:count),
       rooms_last_90_days:
-        Repo.aggregate(from(r in Room, where: r.inserted_at >= ^ninety_days_ago), :count)
+        Room |> where([r], r.inserted_at >= ^ninety_days_ago) |> Repo.aggregate(:count)
     }
   end
 
@@ -368,11 +369,10 @@ defmodule Stelgano.Rooms do
   def purge_deleted_messages(older_than_seconds \\ 86_400) do
     cutoff = DateTime.add(DateTime.utc_now(), -older_than_seconds, :second)
 
-    {count, _} =
-      Repo.delete_all(
-        from m in Message,
-          where: not is_nil(m.deleted_at) and m.deleted_at < ^cutoff
-      )
+    {count, _rows} =
+      Message
+      |> where([m], not is_nil(m.deleted_at) and m.deleted_at < ^cutoff)
+      |> Repo.delete_all()
 
     count
   end
@@ -386,14 +386,15 @@ defmodule Stelgano.Rooms do
     now = DateTime.utc_now()
 
     expired =
-      Repo.all(
-        from r in Room,
-          where:
-            r.is_active == true and
-              not is_nil(r.ttl_expires_at) and
-              r.ttl_expires_at <= ^now,
-          select: r.id
+      Room
+      |> where(
+        [r],
+        r.is_active == true and
+          not is_nil(r.ttl_expires_at) and
+          r.ttl_expires_at <= ^now
       )
+      |> select([r], r.id)
+      |> Repo.all()
 
     Enum.each(expired, &expire_room/1)
     expired

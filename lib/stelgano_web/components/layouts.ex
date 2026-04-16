@@ -20,6 +20,7 @@ defmodule StelganoWeb.Layouts do
   attr :flash, :map, required: true
   slot :inner_block, required: true
 
+  @spec app(map()) :: Phoenix.LiveView.Rendered.t()
   def app(assigns) do
     ~H"""
     <nav class="fixed top-0 left-0 right-0 z-50 border-b border-white/5 backdrop-blur-2xl bg-slate-950/40">
@@ -67,12 +68,13 @@ defmodule StelganoWeb.Layouts do
   attr :flash, :map, required: true
   attr :id, :string, default: "flash-group"
 
+  @spec flash_group(map()) :: Phoenix.LiveView.Rendered.t()
   def flash_group(assigns) do
     ~H"""
     <div
       id={@id}
       aria-live="polite"
-      class="fixed top-6 right-6 z-[100] flex flex-col gap-3 w-full max-w-sm pointer-events-none"
+      class="fixed top-6 right-6 z-100 flex flex-col gap-3 w-full max-w-sm pointer-events-none"
     >
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
@@ -107,6 +109,7 @@ defmodule StelganoWeb.Layouts do
   @doc """
   Three-way theme toggle: system / light / dark.
   """
+  @spec theme_toggle(map()) :: Phoenix.LiveView.Rendered.t()
   def theme_toggle(assigns) do
     ~H"""
     <div class="flex items-center gap-1 p-1 bg-white/5 rounded-full border border-white/5 shadow-inner">

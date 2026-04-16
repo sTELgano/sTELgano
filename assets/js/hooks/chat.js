@@ -458,16 +458,20 @@ export const PhoneGenerator = {
     }
 
     generateBtn.addEventListener("click", () => {
-      const selected = countrySelect.value;
-      const config = selected ? { countryName: CountryNames[selected] } : {};
-      const number = generatePhoneNumber(config);
-      this.pushEvent("number_generated", { number: number, display: number });
+      this.pushEvent("start_generation", {});
 
-      // Auto-copy to clipboard on generation
-      navigator.clipboard.writeText(number).then(
-        () => this.pushEvent("copied", {}),
-        () => {}
-      );
+      setTimeout(() => {
+        const selected = countrySelect.value;
+        const config = selected ? { countryName: CountryNames[selected] } : {};
+        const number = generatePhoneNumber(config);
+        this.pushEvent("number_generated", { number: number, display: number });
+
+        // Auto-copy to clipboard on generation
+        navigator.clipboard.writeText(number).then(
+          () => this.pushEvent("copied", {}),
+          () => {}
+        );
+      }, 1200); // 1.2s synthetic delay for "derivation" feel
     });
 
     this.el.addEventListener("click", (e) => {

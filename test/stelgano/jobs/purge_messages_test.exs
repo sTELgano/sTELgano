@@ -10,25 +10,28 @@ defmodule Stelgano.Jobs.PurgeMessagesTest do
   alias Stelgano.Rooms
   alias Stelgano.Rooms.Message
 
-  defp hex64(seed), do: :crypto.hash(:sha256, "job-test-#{seed}") |> Base.encode16(case: :lower)
+  defp hex64(seed) do
+    hash = :crypto.hash(:sha256, "job-test-#{seed}")
+    Base.encode16(hash, case: :lower)
+  end
+
   defp iv, do: :crypto.strong_rand_bytes(12)
   defp ciphertext, do: :crypto.strong_rand_bytes(32)
 
   describe "perform/1" do
     test "hard-deletes soft-deleted messages older than 24 hours" do
-      {:ok, room} = Rooms.find_or_create_room(hex64(1))
+      {:ok, room} = 1 |> hex64() |> Rooms.find_or_create_room()
       {:ok, msg} = Rooms.send_message(room.id, hex64(2), ciphertext(), iv())
 
       # Soft-delete the message
       Rooms.delete_message(msg.id, room.id, hex64(2))
 
       # Backdate deleted_at to 25 hours ago
-      now_minus_25h = DateTime.add(DateTime.utc_now(), -25 * 3600, :second)
+      now = DateTime.utc_now()
+      now_minus_25h = DateTime.add(now, -25 * 3600, :second)
 
-      Repo.update_all(
-        from(m in Message, where: m.id == ^msg.id),
-        set: [deleted_at: now_minus_25h]
-      )
+      query = from(m in Message, where: m.id == ^msg.id)
+      Repo.update_all(query, set: [deleted_at: now_minus_25h])
 
       # Job should purge it
       assert :ok = PurgeMessages.perform(%Oban.Job{args: %{}})
@@ -38,7 +41,7 @@ defmodule Stelgano.Jobs.PurgeMessagesTest do
     end
 
     test "does not purge recently soft-deleted messages" do
-      {:ok, room} = Rooms.find_or_create_room(hex64(10))
+      {:ok, room} = 10 |> hex64() |> Rooms.find_or_create_room()
       {:ok, msg} = Rooms.send_message(room.id, hex64(11), ciphertext(), iv())
       Rooms.delete_message(msg.id, room.id, hex64(11))
 
@@ -50,7 +53,7 @@ defmodule Stelgano.Jobs.PurgeMessagesTest do
     end
 
     test "does not purge live (non-deleted) messages" do
-      {:ok, room} = Rooms.find_or_create_room(hex64(20))
+      {:ok, room} = 20 |> hex64() |> Rooms.find_or_create_room()
       {:ok, msg} = Rooms.send_message(room.id, hex64(21), ciphertext(), iv())
 
       assert :ok = PurgeMessages.perform(%Oban.Job{args: %{}})

@@ -17,8 +17,6 @@ defmodule Stelgano.Jobs.ExpireTtlRooms do
 
   use Oban.Worker, queue: :maintenance, max_attempts: 3
 
-  require Logger
-
   import Ecto.Query, warn: false
 
   alias Stelgano.Repo
@@ -26,20 +24,23 @@ defmodule Stelgano.Jobs.ExpireTtlRooms do
   alias Stelgano.Rooms.Room
   alias StelganoWeb.Endpoint
 
+  require Logger
+
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     # Fetch rooms BEFORE expiring so we have the room_hash for PubSub
     now = DateTime.utc_now()
 
     rooms_to_expire =
-      Repo.all(
-        from r in Room,
-          where:
-            r.is_active == true and
-              not is_nil(r.ttl_expires_at) and
-              r.ttl_expires_at <= ^now,
-          select: %{id: r.id, room_hash: r.room_hash}
+      Room
+      |> where(
+        [r],
+        r.is_active == true and
+          not is_nil(r.ttl_expires_at) and
+          r.ttl_expires_at <= ^now
       )
+      |> select([r], %{id: r.id, room_hash: r.room_hash})
+      |> Repo.all()
 
     Enum.each(rooms_to_expire, fn %{id: room_id, room_hash: room_hash} ->
       case Rooms.expire_room(room_id) do

@@ -36,7 +36,7 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
     end
 
     test "returns 401 with wrong password", %{conn: conn} do
-      conn = wrong_conn(conn) |> get("/admin")
+      conn = conn |> wrong_conn() |> get("/admin")
       assert conn.status == 401
     end
 
@@ -64,10 +64,10 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
 
     test "shows all metric cards", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/admin")
-      assert html =~ "Active rooms"
-      assert html =~ "Rooms today"
-      assert html =~ "Messages"
-      assert html =~ "90-Day Range"
+      assert html =~ "Active Handshakes"
+      assert html =~ "Inbound Streams"
+      assert html =~ "Ciphertext Flow"
+      assert html =~ "Historical Range"
     end
 
     test "shows last-updated timestamp", %{conn: conn} do
@@ -90,7 +90,7 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
 
     test "refresh_now event updates the view", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/admin")
-      view |> element("button", "Synchronize Now") |> render_click()
+      view |> element("button", "Synchronize Matrix") |> render_click()
       assert render(view) =~ "Synced"
     end
 

@@ -42,6 +42,7 @@ defmodule StelganoWeb.PanicController do
 
   use StelganoWeb, :controller
 
+  @spec clear(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def clear(conn, _params) do
     conn
     |> clear_session()
