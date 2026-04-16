@@ -21,7 +21,7 @@
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Derivation Chain
         </h2>
-        <div class="h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent"></div>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
       <.premium_card class="p-0 overflow-hidden ring-1 ring-white/5 shadow-2xl">
@@ -105,7 +105,7 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
           <p class="text-slate-400 text-sm leading-relaxed font-medium">
             We employ <span class="text-white">600,000 PBKDF2 iterations</span>, aligning with modern standards to defeat brute-force attempts at the edge.
           </p>
-          <div class="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+          <div class="p-6 rounded-2xl bg-white/2 border border-white/5 space-y-4">
             <div class="flex items-center justify-between">
               <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">
                 Resource Drain
@@ -113,7 +113,7 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
               <span class="text-[10px] font-mono font-bold text-primary">~2.0s</span>
             </div>
             <div class="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/5">
-              <div class="h-full bg-gradient-to-r from-primary to-emerald-400 animate-progress w-full">
+              <div class="h-full bg-linear-to-r from-primary to-emerald-400 animate-progress w-full">
               </div>
             </div>
           </div>
@@ -127,11 +127,11 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Threat Model
         </h2>
-        <div class="h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent"></div>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div class="glass-card p-10 space-y-8 border-primary/20 bg-primary/[0.02] group transition-all hover:bg-primary/[0.04]">
+        <div class="glass-card p-10 space-y-8 border-primary/20 bg-primary/2 group transition-all hover:bg-primary/4">
           <div class="flex items-center gap-4 text-primary">
             <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center">
               <.icon name="hero-check-badge-mini" class="size-6" />
@@ -163,7 +163,7 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
           </ul>
         </div>
 
-        <div class="glass-card p-10 space-y-8 border-danger/20 bg-danger/[0.02] group transition-all hover:bg-danger/[0.04]">
+        <div class="glass-card p-10 space-y-8 border-danger/20 bg-danger/2 group transition-all hover:bg-danger/4">
           <div class="flex items-center gap-4 text-danger">
             <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center">
               <.icon name="hero-exclamation-triangle-mini" class="size-6" />
@@ -200,14 +200,14 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Persistence Audit
         </h2>
-        <div class="h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent"></div>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
       <.premium_card class="p-0 overflow-hidden shadow-2xl">
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
-              <tr class="bg-white/[0.02] border-b border-white/5">
+              <tr class="bg-white/2 border-b border-white/5">
                 <th class="p-8 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 font-mono">
                   Artifact Vector
                 </th>
@@ -226,7 +226,7 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
                     {"sender_hash", "Volatile Ephemeral Reference (Null)"}
                   ]
                 }
-                class="group hover:bg-white/[0.03] transition-all"
+                class="group hover:bg-white/3 transition-all"
               >
                 <td class="p-8 font-mono text-xs font-black text-white tracking-[0.2em]">
                   {item}

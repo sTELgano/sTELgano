@@ -10,7 +10,8 @@ defmodule StelganoWeb.WellKnownTest do
     test "returns 200 with correct content-type", %{conn: conn} do
       conn = get(conn, ~p"/.well-known/security.txt")
       assert conn.status == 200
-      assert get_resp_header(conn, "content-type") |> Enum.join() =~ "text/plain"
+      content_type = get_resp_header(conn, "content-type")
+      assert Enum.join(content_type) =~ "text/plain"
     end
 
     test "contains required security.txt fields", %{conn: conn} do
@@ -24,7 +25,8 @@ defmodule StelganoWeb.WellKnownTest do
 
     test "has no-cache header", %{conn: conn} do
       conn = get(conn, ~p"/.well-known/security.txt")
-      cache = get_resp_header(conn, "cache-control") |> Enum.join()
+      headers = get_resp_header(conn, "cache-control")
+      cache = Enum.join(headers)
       assert cache =~ "no-cache"
     end
   end

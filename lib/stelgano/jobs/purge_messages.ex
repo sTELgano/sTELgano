@@ -27,9 +27,9 @@ defmodule Stelgano.Jobs.PurgeMessages do
 
   use Oban.Worker, queue: :maintenance, max_attempts: 3
 
-  require Logger
-
   alias Stelgano.Rooms
+
+  require Logger
 
   @twenty_four_hours 86_400
 

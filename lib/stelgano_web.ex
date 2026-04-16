@@ -20,9 +20,11 @@ defmodule StelganoWeb do
   those modules here.
   """
 
+  @spec static_paths() :: [String.t()]
   def static_paths,
     do: ~w(assets fonts images favicon.ico robots.txt manifest.json sw.js .well-known)
 
+  @spec router() :: Macro.t()
   def router do
     quote do
       use Phoenix.Router, helpers: false
@@ -34,12 +36,14 @@ defmodule StelganoWeb do
     end
   end
 
+  @spec channel() :: Macro.t()
   def channel do
     quote do
       use Phoenix.Channel
     end
   end
 
+  @spec controller() :: Macro.t()
   def controller do
     quote do
       use Phoenix.Controller, formats: [:html, :json]
@@ -52,6 +56,7 @@ defmodule StelganoWeb do
     end
   end
 
+  @spec live_view() :: Macro.t()
   def live_view do
     quote do
       use Phoenix.LiveView
@@ -60,6 +65,7 @@ defmodule StelganoWeb do
     end
   end
 
+  @spec live_component() :: Macro.t()
   def live_component do
     quote do
       use Phoenix.LiveComponent
@@ -68,6 +74,7 @@ defmodule StelganoWeb do
     end
   end
 
+  @spec html() :: Macro.t()
   def html do
     quote do
       use Phoenix.Component
@@ -100,6 +107,7 @@ defmodule StelganoWeb do
     end
   end
 
+  @spec verified_routes() :: Macro.t()
   def verified_routes do
     quote do
       use Phoenix.VerifiedRoutes,

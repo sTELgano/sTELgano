@@ -17,11 +17,11 @@ defmodule StelganoWeb.AnonSocket do
 
   channel "anon_room:*", StelganoWeb.AnonRoomChannel
 
-  @impl true
+  @impl Phoenix.Socket
   def connect(_params, socket, _connect_info) do
     {:ok, socket}
   end
 
-  @impl true
+  @impl Phoenix.Socket
   def id(_socket), do: nil
 end

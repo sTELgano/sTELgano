@@ -20,7 +20,7 @@ defmodule StelganoWeb.StegNumberLive do
 
   use StelganoWeb, :live_view
 
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     socket =
       socket
@@ -28,40 +28,47 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:generated_number, nil)
       |> assign(:copied, false)
       |> assign(:availability, :idle)
+      |> assign(:generating, false)
 
     {:ok, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("number_generated", %{"number" => number, "display" => display}, socket) do
     socket =
       socket
       |> assign(:generated_number, %{e164: number, display: display})
       |> assign(:copied, false)
       |> assign(:availability, :idle)
+      |> assign(:generating, false)
 
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
+  def handle_event("start_generation", _params, socket) do
+    {:noreply, assign(socket, :generating, true)}
+  end
+
+  @impl Phoenix.LiveView
   def handle_event("check_availability", %{"room_hash" => room_hash}, socket) do
     availability = if Stelgano.Rooms.room_exists?(room_hash), do: :taken, else: :available
     {:noreply, assign(socket, :availability, availability)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("copied", _params, socket) do
     socket = assign(socket, :copied, true)
     Process.send_after(self(), :clear_copied, 2_000)
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info(:clear_copied, socket) do
     {:noreply, assign(socket, :copied, false)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
@@ -115,75 +122,98 @@ defmodule StelganoWeb.StegNumberLive do
 
                 <%!-- High-Impact Number Display --%>
                 <div class="relative py-12 px-8 rounded-3xl bg-slate-950/50 border border-white/5 shadow-inner overflow-hidden group">
-                  <div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+                  <div class="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700">
                   </div>
 
-                  <%= if @generated_number do %>
-                    <div class="relative z-10 text-center space-y-6">
-                      <div class="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/60">
-                        Assigned Number
-                      </div>
-                      <div
-                        id="generated-display"
-                        class="text-4xl sm:text-5xl md:text-6xl font-mono font-black text-white tracking-[0.1em] drop-shadow-[0_0_20px_rgba(0,255,163,0.3)]"
-                      >
-                        {@generated_number && @generated_number.display}
-                      </div>
-                      <div class="flex flex-col items-center gap-6 pt-2">
-                        <button
-                          id="copy-btn"
-                          type="button"
-                          phx-click="copied"
-                          data-number={@generated_number && @generated_number.e164}
-                          class={[
-                            "inline-flex items-center gap-3 px-8 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all active:scale-95",
-                            if(@copied,
-                              do: "bg-emerald-500 text-slate-950",
-                              else: "bg-white/5 text-white hover:bg-white/10 border border-white/10"
-                            )
-                          ]}
-                        >
-                          <%= if @copied do %>
-                            <.icon name="hero-check-circle-mini" class="size-4" /> Copied to Clipboard
-                          <% else %>
-                            <.icon name="hero-clipboard-document-mini" class="size-4" />
-                            Copy Key Artifact
-                          <% end %>
-                        </button>
-
-                        <div
-                          id="availability-check"
-                          class="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 border border-white/5 animate-in"
-                        >
-                          <%= cond do %>
-                            <% @availability == :available -> %>
-                              <div class="size-1.5 rounded-full bg-emerald-500"></div>
-                              <span class="text-[9px] font-black uppercase tracking-widest text-emerald-500">
-                                Vector Available
-                              </span>
-                            <% @availability == :taken -> %>
-                              <div class="size-1.5 rounded-full bg-danger animate-pulse"></div>
-                              <span class="text-[9px] font-black uppercase tracking-widest text-danger">
-                                Active Room Detected
-                              </span>
-                            <% true -> %>
-                              <div class="size-1.5 rounded-full bg-slate-700"></div>
-                              <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                Awaiting Analysis
-                              </span>
-                          <% end %>
+                  <%= if @generating do %>
+                    <div class="relative z-10 py-12 text-center space-y-8 animate-in">
+                      <div class="relative size-20 mx-auto">
+                        <div class="absolute inset-0 rounded-full border-2 border-primary/20 border-t-primary animate-spin">
                         </div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                          <.icon name="hero-cpu-chip-mini" class="size-10 text-primary animate-pulse" />
+                        </div>
+                      </div>
+                      <div class="space-y-2">
+                        <div class="text-[10px] font-black uppercase tracking-[0.4em] text-primary">
+                          Initializing Matrix
+                        </div>
+                        <p class="text-xs text-slate-500 font-mono">Randomizing entropy seed...</p>
                       </div>
                     </div>
                   <% else %>
-                    <div class="relative z-10 py-10 text-center">
-                      <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6">
-                        <.icon name="hero-phone-mini" class="size-10 text-slate-700" />
+                    <%= if @generated_number do %>
+                      <div class="relative z-10 text-center space-y-6 animate-in">
+                        <div class="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/60">
+                          Assigned Identity Vector
+                        </div>
+                        <div
+                          id="generated-display"
+                          class="text-4xl sm:text-5xl md:text-6xl font-mono font-black text-white tracking-widest drop-shadow-[0_0_20px_rgba(0,255,163,0.3)]"
+                        >
+                          {@generated_number && @generated_number.display}
+                        </div>
+                        <div class="flex flex-col items-center gap-6 pt-2">
+                          <button
+                            id="copy-btn"
+                            type="button"
+                            phx-click="copied"
+                            data-number={@generated_number && @generated_number.e164}
+                            class={[
+                              "inline-flex items-center gap-3 px-8 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all active:scale-95",
+                              if(@copied,
+                                do:
+                                  "bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.4)]",
+                                else: "bg-white/5 text-white hover:bg-white/10 border border-white/10"
+                              )
+                            ]}
+                          >
+                            <%= if @copied do %>
+                              <.icon name="hero-check-circle-mini" class="size-4" />
+                              Copied to Clipboard
+                            <% else %>
+                              <.icon name="hero-clipboard-document-mini" class="size-4" />
+                              Copy Key Artifact
+                            <% end %>
+                          </button>
+
+                          <div
+                            id="availability-check"
+                            class="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 border border-white/5"
+                          >
+                            <%= cond do %>
+                              <% @availability == :available -> %>
+                                <div class="size-1.5 rounded-full bg-emerald-500"></div>
+                                <span class="text-[9px] font-black uppercase tracking-widest text-emerald-500">
+                                  Vector Available
+                                </span>
+                              <% @availability == :taken -> %>
+                                <div class="size-1.5 rounded-full bg-danger animate-pulse"></div>
+                                <span class="text-[9px] font-black uppercase tracking-widest text-danger">
+                                  Active Room Detected
+                                </span>
+                              <% true -> %>
+                                <div class="size-1.5 rounded-full bg-slate-700"></div>
+                                <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                  Awaiting Analysis
+                                </span>
+                            <% end %>
+                          </div>
+                        </div>
                       </div>
-                      <p class="text-slate-500 font-bold uppercase tracking-[0.2em] text-sm">
-                        Vector Pending Initialization
-                      </p>
-                    </div>
+                    <% else %>
+                      <div class="relative z-10 py-10 text-center animate-in">
+                        <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6 group-hover:border-primary/20 transition-colors">
+                          <.icon
+                            name="hero-phone-mini"
+                            class="size-10 text-slate-700 group-hover:text-slate-500 transition-colors"
+                          />
+                        </div>
+                        <p class="text-slate-500 font-bold uppercase tracking-[0.2em] text-sm group-hover:text-slate-400 transition-colors">
+                          Vector Pending Initialization
+                        </p>
+                      </div>
+                    <% end %>
                   <% end %>
                 </div>
 
@@ -191,13 +221,20 @@ defmodule StelganoWeb.StegNumberLive do
                   type="button"
                   id="generate-btn"
                   phx-click="generate"
-                  class="btn-primary w-full py-5 text-lg group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+                  disabled={@generating}
+                  class={[
+                    "btn-primary w-full py-5 text-lg group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]",
+                    @generating && "opacity-50 grayscale cursor-not-allowed shadow-none"
+                  ]}
                 >
                   <span class="relative z-10 flex items-center gap-3">
                     {if(@generated_number, do: "Re-roll Identity", else: "Initialize Artifact")}
                     <.icon
                       name="hero-arrow-path-mini"
-                      class="size-6 group-hover:rotate-180 transition-transform duration-700"
+                      class={[
+                        "size-6 transition-transform duration-700",
+                        if(@generating, do: "animate-spin", else: "group-hover:rotate-180")
+                      ]}
                     />
                   </span>
                 </button>
@@ -266,7 +303,7 @@ defmodule StelganoWeb.StegNumberLive do
               }
               class="glass-card p-8 group relative overflow-hidden transition-all hover:border-primary/30"
             >
-              <div class="absolute -right-4 -bottom-4 text-7xl font-black text-white/[0.03] group-hover:text-primary/[0.05] transition-colors italic">
+              <div class="absolute -right-4 -bottom-4 text-7xl font-black text-white/3 group-hover:text-primary/5 transition-colors italic">
                 {step}
               </div>
               <h4 class="text-white font-bold mb-3 flex items-center gap-2">

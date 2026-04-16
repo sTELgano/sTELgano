@@ -114,7 +114,8 @@ defmodule StelganoWeb.ChatLiveTest do
       view |> element("button[phx-click='lock_chat']") |> render_click()
 
       html = render(view)
-      assert html =~ "Session Locked"
+      assert html =~ "Workspace"
+      assert html =~ "Locked."
       assert html =~ "unlock-form"
     end
 
@@ -125,7 +126,7 @@ defmodule StelganoWeb.ChatLiveTest do
       view |> element("button[phx-click='lock_chat']") |> render_click()
 
       html = render(view)
-      assert html =~ "Clear Session Artifacts"
+      assert html =~ "Terminate All Artifacts"
     end
   end
 

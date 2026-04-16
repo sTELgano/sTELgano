@@ -6,9 +6,15 @@ defmodule Stelgano.Rooms.SchemaTest do
 
   use Stelgano.DataCase, async: true
 
-  alias Stelgano.Rooms.{Message, Room, RoomAccess}
+  alias Stelgano.Rooms.Message
+  alias Stelgano.Rooms.Room
+  alias Stelgano.Rooms.RoomAccess
 
-  defp valid_hex64, do: :crypto.hash(:sha256, "schema-test") |> Base.encode16(case: :lower)
+  defp valid_hex64 do
+    hash = :crypto.hash(:sha256, "schema-test")
+    Base.encode16(hash, case: :lower)
+  end
+
   defp valid_iv, do: :crypto.strong_rand_bytes(12)
 
   # ---------------------------------------------------------------------------
@@ -33,7 +39,8 @@ defmodule Stelgano.Rooms.SchemaTest do
     end
 
     test "invalid with uppercase hex" do
-      h = :crypto.hash(:sha256, "test") |> Base.encode16(case: :upper)
+      hash = :crypto.hash(:sha256, "test")
+      h = Base.encode16(hash, case: :upper)
       cs = Room.create_changeset(%{room_hash: h})
       refute cs.valid?
     end

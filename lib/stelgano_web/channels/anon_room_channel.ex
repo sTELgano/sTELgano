@@ -41,9 +41,9 @@ defmodule StelganoWeb.AnonRoomChannel do
 
   use StelganoWeb, :channel
 
-  require Logger
-
   alias Stelgano.Rooms
+
+  require Logger
 
   # Maximum base64-encoded ciphertext length accepted per message.
   # Covers up to 4,000 UTF-8 chars of plaintext + AES-GCM overhead.
@@ -53,7 +53,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   # Join
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.Channel
   def join("anon_room:" <> room_hash, payload, socket) do
     access_hash = Map.get(payload, "access_hash", "")
     raw_sender = Map.get(payload, "sender_hash", "")
@@ -69,9 +69,7 @@ defmodule StelganoWeb.AnonRoomChannel do
 
       current = Rooms.current_message(room.id)
 
-      reply =
-        %{room_id: room.id}
-        |> maybe_put_current_message(current)
+      reply = maybe_put_current_message(%{room_id: room.id}, current)
 
       {:ok, reply, socket}
     else
@@ -84,7 +82,7 @@ defmodule StelganoWeb.AnonRoomChannel do
       {:error, :not_found} ->
         {:error, %{reason: "not_found"}}
 
-      {:error, :locked, _} ->
+      {:error, :locked, _remaining} ->
         {:error, %{reason: "locked"}}
 
       {:error, :unauthorized, remaining} ->
@@ -98,7 +96,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   # handle_in — send_message
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.Channel
   def handle_in("send_message", %{"ciphertext" => ct_b64, "iv" => iv_b64}, socket) do
     with {:ok, ciphertext} <- decode_base64(ct_b64),
          {:ok, iv} <- decode_base64(iv_b64),
@@ -120,7 +118,7 @@ defmodule StelganoWeb.AnonRoomChannel do
       {:error, :sender_blocked} -> {:reply, {:error, %{reason: "not_your_turn"}}, socket}
       {:error, :too_large} -> {:reply, {:error, %{reason: "message_too_large"}}, socket}
       {:error, :bad_base64} -> {:reply, {:error, %{reason: "invalid_encoding"}}, socket}
-      {:error, _} -> {:reply, {:error, %{reason: "send_failed"}}, socket}
+      {:error, _reason} -> {:reply, {:error, %{reason: "send_failed"}}, socket}
     end
   end
 
@@ -128,7 +126,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   # handle_in — read_receipt
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.Channel
   def handle_in("read_receipt", %{"message_id" => message_id}, socket) do
     case Rooms.mark_read(message_id) do
       {:ok, _message} ->
@@ -145,7 +143,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   # handle_in — edit_message
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.Channel
   def handle_in(
         "edit_message",
         %{"message_id" => message_id, "ciphertext" => ct_b64, "iv" => iv_b64},
@@ -172,7 +170,6 @@ defmodule StelganoWeb.AnonRoomChannel do
       {:error, :not_found} -> {:reply, {:error, %{reason: "not_found"}}, socket}
       {:error, :not_editable} -> {:reply, {:error, %{reason: "not_editable"}}, socket}
       {:error, :bad_base64} -> {:reply, {:error, %{reason: "invalid_encoding"}}, socket}
-      {:error, _} -> {:reply, {:error, %{reason: "edit_failed"}}, socket}
     end
   end
 
@@ -180,7 +177,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   # handle_in — delete_message
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.Channel
   def handle_in("delete_message", %{"message_id" => message_id}, socket) do
     case Rooms.delete_message(message_id, socket.assigns.room_id, socket.assigns.sender_hash) do
       {:ok, _message} ->
@@ -199,7 +196,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   # handle_in — typing
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.Channel
   def handle_in("typing", _payload, socket) do
     broadcast_from!(socket, "counterparty_typing", %{})
     {:noreply, socket}
@@ -209,7 +206,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   # handle_in — expire_room
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.Channel
   def handle_in("expire_room", _payload, socket) do
     case Rooms.expire_room(socket.assigns.room_id) do
       {:ok, _room} ->
@@ -226,7 +223,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   end
 
   # Catch-all for unrecognised events — log and ignore
-  @impl true
+  @impl Phoenix.Channel
   def handle_in(event, _payload, socket) do
     Logger.warning("AnonRoomChannel: unrecognised event #{inspect(event)}")
     {:noreply, socket}
@@ -247,12 +244,12 @@ defmodule StelganoWeb.AnonRoomChannel do
     end
   end
 
-  defp validate_hex64(_, tag), do: {:error, tag}
+  defp validate_hex64(_other, tag), do: {:error, tag}
 
   # Checks that the ciphertext binary is within the allowed size limit.
   @spec check_size(binary()) :: :ok | {:error, :too_large}
   defp check_size(bytes) when byte_size(bytes) <= @max_ciphertext_bytes, do: :ok
-  defp check_size(_), do: {:error, :too_large}
+  defp check_size(_bytes), do: {:error, :too_large}
 
   # Decodes a base64 string. Returns {:ok, binary} or {:error, :bad_base64}.
   @spec decode_base64(String.t()) :: {:ok, binary()} | {:error, :bad_base64}
@@ -263,7 +260,7 @@ defmodule StelganoWeb.AnonRoomChannel do
     end
   end
 
-  defp decode_base64(_), do: {:error, :bad_base64}
+  defp decode_base64(_other), do: {:error, :bad_base64}
 
   # Merges current_message into the join reply map when one exists.
   @spec maybe_put_current_message(map(), Rooms.Message.t() | nil) :: map()

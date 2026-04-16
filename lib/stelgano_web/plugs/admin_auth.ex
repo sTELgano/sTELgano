@@ -37,7 +37,7 @@ defmodule StelganoWeb.Plugs.AdminAuth do
          true <- secure_compare(supplied_pass, expected_pass) do
       conn
     else
-      _ -> request_credentials(conn)
+      _error -> request_credentials(conn)
     end
   end
 
@@ -51,7 +51,7 @@ defmodule StelganoWeb.Plugs.AdminAuth do
          [user, pass] <- String.split(decoded, ":", parts: 2) do
       {:ok, user, pass}
     else
-      _ -> :error
+      _error -> :error
     end
   end
 
@@ -75,5 +75,5 @@ defmodule StelganoWeb.Plugs.AdminAuth do
     ha == hb
   end
 
-  defp secure_compare(_, _), do: false
+  defp secure_compare(_a, _b), do: false
 end

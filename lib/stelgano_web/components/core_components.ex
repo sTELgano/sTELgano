@@ -27,6 +27,7 @@ defmodule StelganoWeb.CoreComponents do
   use Phoenix.Component
   use Gettext, backend: StelganoWeb.Gettext
 
+  alias Phoenix.HTML.Form, as: HtmlForm
   alias Phoenix.LiveView.JS
 
   @doc """
@@ -40,6 +41,7 @@ defmodule StelganoWeb.CoreComponents do
 
   slot :inner_block, doc: "the optional inner block that renders the flash message"
 
+  @spec flash(map()) :: Phoenix.LiveView.Rendered.t()
   def flash(assigns) do
     assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
 
@@ -53,9 +55,9 @@ defmodule StelganoWeb.CoreComponents do
       {@rest}
     >
       <div class={[
-        "glass-card p-4 w-80 sm:w-96 flex gap-4 items-start border-l-4 shadow-2xl animate-in",
-        @kind == :info && "border-l-primary",
-        @kind == :error && "border-l-danger"
+        "glass-card p-4 w-80 sm:w-96 flex gap-4 items-start border-l-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in",
+        @kind == :info && "border-l-primary shadow-primary/10",
+        @kind == :error && "border-l-danger shadow-danger/10"
       ]}>
         <.icon
           :if={@kind == :info}
@@ -91,6 +93,7 @@ defmodule StelganoWeb.CoreComponents do
   attr :variant, :string, values: ~w(primary secondary ghost)
   slot :inner_block, required: true
 
+  @spec button(map()) :: Phoenix.LiveView.Rendered.t()
   def button(%{rest: rest} = assigns) do
     variants = %{
       "primary" => "btn-primary",
@@ -157,7 +160,7 @@ defmodule StelganoWeb.CoreComponents do
   ```
 
   For more information on what kind of data can be passed to `options` see
-  [`options_for_select`](https://hexdocs.pm/phoenix_html/Phoenix.HTML.Form.html#options_for_select/2).
+  [`options_for_select`](https://hexdocs.pm/phoenix_html/HtmlForm.html#options_for_select/2).
   """
   attr :id, :any, default: nil
   attr :name, :any, default: nil
@@ -179,7 +182,7 @@ defmodule StelganoWeb.CoreComponents do
 
   attr :options, :list,
     default: [],
-    doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2"
+    doc: "the options to pass to HtmlForm.options_for_select/2"
 
   attr :multiple, :boolean, default: false, doc: "the multiple flag for select inputs"
   attr :class, :any, default: nil, doc: "the input class to use over defaults"
@@ -189,6 +192,7 @@ defmodule StelganoWeb.CoreComponents do
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
                 multiple pattern placeholder readonly required rows size step)
 
+  @spec input(map()) :: Phoenix.LiveView.Rendered.t()
   def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
 
@@ -209,7 +213,7 @@ defmodule StelganoWeb.CoreComponents do
   def input(%{type: "checkbox"} = assigns) do
     assigns =
       assign_new(assigns, :checked, fn ->
-        Phoenix.HTML.Form.normalize_value("checkbox", assigns[:value])
+        HtmlForm.normalize_value("checkbox", assigns[:value])
       end)
 
     ~H"""
@@ -273,7 +277,7 @@ defmodule StelganoWeb.CoreComponents do
           {@rest}
         >
           <option :if={@prompt} value="">{@prompt}</option>
-          {Phoenix.HTML.Form.options_for_select(@options, @value)}
+          {HtmlForm.options_for_select(@options, @value)}
         </select>
         <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-primary transition-colors">
           <.icon name="hero-chevron-down-micro" class="size-4" />
@@ -302,7 +306,7 @@ defmodule StelganoWeb.CoreComponents do
           @errors != [] && "border-danger ring-danger/10"
         ]}
         {@rest}
-      >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
+      >{HtmlForm.normalize_value("textarea", @value)}</textarea>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
@@ -323,15 +327,16 @@ defmodule StelganoWeb.CoreComponents do
           type={@type}
           name={@name}
           id={@id}
-          value={Phoenix.HTML.Form.normalize_value(@type, @value)}
+          value={HtmlForm.normalize_value(@type, @value)}
           class={[
             "glass-input w-full transition-all duration-300",
-            @errors != [] && "border-danger ring-danger/10 focus:ring-danger/20"
+            @errors != [] && "border-danger ring-danger/10 focus:ring-danger/20",
+            "group-focus-within:border-primary/40 group-focus-within:bg-slate-950/50"
           ]}
           {@rest}
         />
         <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
-          <div class="size-1.5 rounded-full bg-primary shadow-[0_0_8px_var(--color-primary)]"></div>
+          <div class="size-1.5 rounded-full bg-primary shadow-[0_0_12px_var(--color-primary)]"></div>
         </div>
       </div>
       <.error :for={msg <- @errors}>{msg}</.error>
@@ -355,6 +360,7 @@ defmodule StelganoWeb.CoreComponents do
   slot :subtitle
   slot :actions
 
+  @spec header(map()) :: Phoenix.LiveView.Rendered.t()
   def header(assigns) do
     ~H"""
     <header class={[
@@ -381,9 +387,10 @@ defmodule StelganoWeb.CoreComponents do
   attr :rest, :global
   slot :inner_block, required: true
 
+  @spec premium_card(map()) :: Phoenix.LiveView.Rendered.t()
   def premium_card(assigns) do
     ~H"""
-    <div class={["glass-card p-6 sm:p-8 animate-in", @class]} {@rest}>
+    <div class={["glass-card-premium p-8 sm:p-10 animate-in", @class]} {@rest}>
       {render_slot(@inner_block)}
     </div>
     """
@@ -404,6 +411,7 @@ defmodule StelganoWeb.CoreComponents do
 
   slot :action
 
+  @spec table(map()) :: Phoenix.LiveView.Rendered.t()
   def table(assigns) do
     assigns =
       with %{rows: %Phoenix.LiveView.LiveStream{}} <- assigns do
@@ -437,7 +445,7 @@ defmodule StelganoWeb.CoreComponents do
           <tr
             :for={row <- @rows}
             id={@row_id && @row_id.(row)}
-            class="group hover:bg-white/[0.02] transition-colors"
+            class="group hover:bg-white/2 transition-colors"
           >
             <td
               :for={col <- @col}
@@ -470,6 +478,7 @@ defmodule StelganoWeb.CoreComponents do
     attr :title, :string, required: true
   end
 
+  @spec list(map()) :: Phoenix.LiveView.Rendered.t()
   def list(assigns) do
     ~H"""
     <ul class="divide-y divide-white/5">
@@ -508,7 +517,8 @@ defmodule StelganoWeb.CoreComponents do
   attr :name, :string, required: true
   attr :class, :any, default: "size-4"
 
-  def icon(%{name: "hero-" <> _} = assigns) do
+  @spec icon(map()) :: Phoenix.LiveView.Rendered.t()
+  def icon(%{name: "hero-" <> _icon_name} = assigns) do
     ~H"""
     <span class={[@name, @class]} />
     """
@@ -516,6 +526,7 @@ defmodule StelganoWeb.CoreComponents do
 
   ## JS Commands
 
+  @spec show(Phoenix.LiveView.JS.t(), String.t()) :: Phoenix.LiveView.JS.t()
   def show(js \\ %JS{}, selector) do
     JS.show(js,
       to: selector,
@@ -527,6 +538,7 @@ defmodule StelganoWeb.CoreComponents do
     )
   end
 
+  @spec hide(Phoenix.LiveView.JS.t(), String.t()) :: Phoenix.LiveView.JS.t()
   def hide(js \\ %JS{}, selector) do
     JS.hide(js,
       to: selector,
@@ -540,6 +552,7 @@ defmodule StelganoWeb.CoreComponents do
   @doc """
   Translates an error message using gettext.
   """
+  @spec translate_error({String.t(), keyword()}) :: String.t()
   def translate_error({msg, opts}) do
     # When using gettext, we typically pass the strings we want
     # to translate as a static argument:
@@ -561,6 +574,7 @@ defmodule StelganoWeb.CoreComponents do
   @doc """
   Translates the errors for a field from a keyword list of errors.
   """
+  @spec translate_errors(keyword(), atom()) :: [String.t()]
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
   end

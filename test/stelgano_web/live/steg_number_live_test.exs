@@ -66,7 +66,8 @@ defmodule StelganoWeb.StegNumberLiveTest do
         "display" => "+44 7700 900 000"
       })
 
-      fresh_hash = :crypto.hash(:sha256, "unused-steg-number") |> Base.encode16(case: :lower)
+      hash = :crypto.hash(:sha256, "unused-steg-number")
+      fresh_hash = Base.encode16(hash, case: :lower)
       render_hook(view, "check_availability", %{"room_hash" => fresh_hash})
 
       html = render(view)
@@ -75,7 +76,8 @@ defmodule StelganoWeb.StegNumberLiveTest do
 
     test "shows taken message for existing active room", %{conn: conn} do
       # Create an active room
-      existing_hash = :crypto.hash(:sha256, "taken-steg-number") |> Base.encode16(case: :lower)
+      hash = :crypto.hash(:sha256, "taken-steg-number")
+      existing_hash = Base.encode16(hash, case: :lower)
       Stelgano.Rooms.find_or_create_room(existing_hash)
 
       {:ok, view, _html} = live(conn, ~p"/steg-number")

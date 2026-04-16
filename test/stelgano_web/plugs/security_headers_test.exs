@@ -31,13 +31,15 @@ defmodule StelganoWeb.Plugs.SecurityHeadersTest do
   describe "Cache-Control on sensitive routes" do
     test "sets no-store on /chat", %{conn: conn} do
       conn = get(conn, ~p"/chat")
-      cache = get_resp_header(conn, "cache-control") |> Enum.join(", ")
+      headers = get_resp_header(conn, "cache-control")
+      cache = Enum.join(headers, ", ")
       assert cache =~ "no-store"
     end
 
     test "sets no-store on /steg-number", %{conn: conn} do
       conn = get(conn, ~p"/steg-number")
-      cache = get_resp_header(conn, "cache-control") |> Enum.join(", ")
+      headers = get_resp_header(conn, "cache-control")
+      cache = Enum.join(headers, ", ")
       assert cache =~ "no-store"
     end
   end
@@ -81,7 +83,8 @@ defmodule StelganoWeb.Plugs.SecurityHeadersTest do
 
     test "returns no-store cache header", %{conn: conn} do
       conn = get(conn, ~p"/x")
-      cache = get_resp_header(conn, "cache-control") |> Enum.join(", ")
+      headers = get_resp_header(conn, "cache-control")
+      cache = Enum.join(headers, ", ")
       assert cache =~ "no-store"
     end
   end

@@ -46,7 +46,7 @@ defmodule StelganoWeb.ChatLive do
     |> assign(:counter_danger_at, @counter_danger_at)
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def mount(params, _session, socket) do
     prefilled_phone = Map.get(params, "phone", "")
 
@@ -80,7 +80,7 @@ defmodule StelganoWeb.ChatLive do
   # Events
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("entry_submit", %{"phone" => phone, "pin" => pin}, socket) do
     socket =
       socket
@@ -91,17 +91,17 @@ defmodule StelganoWeb.ChatLive do
     {:noreply, push_event(socket, "channel_join", %{action: "join", phone: phone, pin: pin})}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("entry_change", %{"phone" => phone, "pin" => pin}, socket) do
     {:noreply, socket |> assign(:_pending_phone, phone) |> assign(:_pending_pin, pin)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("toggle_phone_visibility", _params, socket) do
     {:noreply, assign(socket, :phone_visible, !socket.assigns.phone_visible)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("channel_authenticate", params, socket) do
     %{"room_hash" => room_hash, "access_hash" => access_hash, "sender_hash" => sender_hash} =
       params
@@ -143,7 +143,7 @@ defmodule StelganoWeb.ChatLive do
 
         {:noreply, socket}
 
-      {:error, _} ->
+      {:error, _reason} ->
         socket =
           socket
           |> assign(:state, :entry)
@@ -153,7 +153,7 @@ defmodule StelganoWeb.ChatLive do
     end
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("channel_join_error", _params, socket) do
     socket =
       socket
@@ -163,17 +163,17 @@ defmodule StelganoWeb.ChatLive do
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("key_derivation_start", _params, socket) do
     {:noreply, assign(socket, :state, :connecting)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("key_derivation_complete", _params, socket) do
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("key_derivation_error", _params, socket) do
     socket =
       socket
@@ -183,7 +183,7 @@ defmodule StelganoWeb.ChatLive do
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("join_with_message", params, socket) do
     msg = %{
       id: params["id"],
@@ -204,7 +204,7 @@ defmodule StelganoWeb.ChatLive do
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("join_empty", params, socket) do
     socket =
       socket
@@ -215,7 +215,7 @@ defmodule StelganoWeb.ChatLive do
     {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("message_received", params, socket) do
     msg = %{
       id: params["id"],
@@ -230,19 +230,19 @@ defmodule StelganoWeb.ChatLive do
     {:noreply, socket |> assign(:message, msg) |> assign(:typing_visible, false)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("message_read_confirmed", %{"message_id" => _mid}, socket) do
     msg = socket.assigns.message
 
     if msg do
       {:noreply,
-       assign(socket, :message, %{msg | read_at: DateTime.utc_now() |> DateTime.to_iso8601()})}
+       assign(socket, :message, %{msg | read_at: DateTime.to_iso8601(DateTime.utc_now())})}
     else
       {:noreply, socket}
     end
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event(
         "message_edit_received",
         %{"message_id" => _mid, "plaintext" => plaintext},
@@ -257,12 +257,12 @@ defmodule StelganoWeb.ChatLive do
     end
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("message_delete_received", _params, socket) do
     {:noreply, assign(socket, :message, nil)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("edit_success", %{"message_id" => _mid}, socket) do
     msg = socket.assigns.message
 
@@ -271,45 +271,45 @@ defmodule StelganoWeb.ChatLive do
       else: {:noreply, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("typing_indicator", _params, socket) do
     Process.send_after(self(), :clear_typing, 3_000)
     {:noreply, assign(socket, :typing_visible, true)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("room_expired_received", _params, socket) do
     {:noreply, socket |> assign(:state, :expired) |> assign(:message, nil)}
   end
 
   # No-ops for JS-handled events
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("send_error", _p, socket), do: {:noreply, socket}
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("edit_error", _p, socket), do: {:noreply, socket}
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("delete_error", _p, socket), do: {:noreply, socket}
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("decrypt_error", _p, socket), do: {:noreply, socket}
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("read_receipt_js", _p, socket), do: {:noreply, socket}
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("send_message", _params, socket) do
     {:noreply, push_event(socket, "send_encrypted", %{})}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("input_change", %{"value" => value}, socket) do
     {:noreply, assign(socket, :char_count, String.length(value || ""))}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("lock_chat", _params, socket) do
     {:noreply, assign(socket, :state, :locked)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("unlock_chat", %{"pin" => pin}, socket) do
     {:noreply,
      push_event(socket, "rederive_key", %{
@@ -318,7 +318,7 @@ defmodule StelganoWeb.ChatLive do
      })}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("rederive_success", _params, socket) do
     {:noreply,
      socket
@@ -331,7 +331,7 @@ defmodule StelganoWeb.ChatLive do
      })}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("rederive_failed", _params, socket) do
     remaining = socket.assigns.lock_attempts - 1
 
@@ -355,7 +355,7 @@ defmodule StelganoWeb.ChatLive do
     end
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("leave_chat", _params, socket) do
     {:noreply,
      socket
@@ -371,7 +371,7 @@ defmodule StelganoWeb.ChatLive do
      |> push_event("disconnect_channel", %{})}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("clear_session", _params, socket) do
     {:noreply,
      socket
@@ -384,17 +384,17 @@ defmodule StelganoWeb.ChatLive do
      |> push_event("disconnect_channel", %{})}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("confirm_expire", _params, socket) do
     {:noreply, assign(socket, :confirm_expire, true)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("cancel_expire", _params, socket) do
     {:noreply, assign(socket, :confirm_expire, false)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("expire_room", _params, socket) do
     {:noreply,
      socket
@@ -402,7 +402,7 @@ defmodule StelganoWeb.ChatLive do
      |> push_event("expire_room_js", %{})}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("back_to_entry", _params, socket) do
     {:noreply,
      socket
@@ -418,7 +418,7 @@ defmodule StelganoWeb.ChatLive do
   # Info handlers
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info(:clear_typing, socket) do
     {:noreply, assign(socket, :typing_visible, false)}
   end
@@ -427,7 +427,7 @@ defmodule StelganoWeb.ChatLive do
   # Render — delegates to state-specific renderers
   # ---------------------------------------------------------------------------
 
-  @impl true
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
@@ -490,7 +490,7 @@ defmodule StelganoWeb.ChatLive do
                   <div class="size-24 mx-auto relative group">
                     <div class="absolute inset-0 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-all">
                     </div>
-                    <div class="relative size-24 rounded-[2rem] bg-slate-900 border border-white/10 flex items-center justify-center">
+                    <div class="relative size-24 rounded-4xl bg-slate-900 border border-white/10 flex items-center justify-center">
                       <.icon name="hero-no-symbol-mini" class="size-12 text-slate-500" />
                     </div>
                   </div>
@@ -622,31 +622,40 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_deriving(assigns) do
     ~H"""
-    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6">
-      <div class="w-full max-w-sm text-center space-y-12">
-        <div class="relative size-40 mx-auto">
-          <div class="absolute inset-0 rounded-full border-2 border-white/5 border-t-primary animate-spin duration-[2000ms]">
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 animate-in">
+      <div class="w-full max-w-sm text-center space-y-16">
+        <div class="relative size-48 mx-auto">
+          <div class="absolute inset-0 rounded-full border-2 border-primary/5 border-t-primary animate-spin duration-1000">
           </div>
-          <div class="absolute inset-4 rounded-full border-2 border-white/5 border-r-primary animate-spin-reverse duration-[3000ms]">
+          <div class="absolute inset-4 rounded-full border-2 border-primary/5 border-r-primary animate-spin-reverse duration-2000">
           </div>
-          <div class="absolute inset-8 rounded-full border-2 border-white/5 border-l-primary animate-spin duration-[4000ms]">
+          <div class="absolute inset-8 rounded-full border-2 border-primary/5 border-l-primary animate-spin duration-3000">
           </div>
           <div class="absolute inset-0 flex items-center justify-center">
-            <.icon name="hero-cpu-chip-mini" class="size-12 text-primary animate-pulse" />
+            <div class="size-24 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center shadow-2xl">
+              <.icon
+                name="hero-cpu-chip-mini"
+                class="size-12 text-primary animate-pulse drop-shadow-[0_0_15px_var(--color-primary-glow)]"
+              />
+            </div>
           </div>
         </div>
 
-        <div class="space-y-4">
-          <h3 class="text-3xl font-bold text-white font-display text-gradient">Deriving Keys</h3>
-          <p class="text-slate-400 font-medium leading-relaxed">
-            Executing Argon2id sequence locally. This may take a few moments based on your hardware.
+        <div class="space-y-6">
+          <h3 class="text-4xl font-extrabold text-white font-display tracking-tight uppercase">
+            Deriving <span class="text-gradient">Key Matrix.</span>
+          </h3>
+          <p class="text-slate-500 font-medium leading-relaxed">
+            Executing Argon2id sequence locally. Your browser is performing {if @confirm_expire,
+              do: "a secure wipe-derivation",
+              else: "the cryptographic heavy lifting"}.
           </p>
         </div>
 
-        <div class="flex justify-center gap-2">
-          <div class="size-1.5 rounded-full bg-primary/40 animate-ping"></div>
-          <div class="size-1.5 rounded-full bg-primary/40 animate-ping [animation-delay:0.3s]"></div>
-          <div class="size-1.5 rounded-full bg-primary/40 animate-ping [animation-delay:0.6s]"></div>
+        <div class="flex justify-center items-center gap-3">
+          <div class="size-1.5 rounded-full bg-primary animate-ping"></div>
+          <div class="size-1.5 rounded-full bg-primary animate-ping [animation-delay:0.3s]"></div>
+          <div class="size-1.5 rounded-full bg-primary animate-ping [animation-delay:0.6s]"></div>
         </div>
       </div>
     </div>
@@ -742,7 +751,7 @@ defmodule StelganoWeb.ChatLive do
       <%!-- TTL (Session Entropy) Bar --%>
       <div class="h-1 w-full bg-slate-900 border-b border-white/5 overflow-hidden">
         <div
-          class="h-full bg-gradient-to-r from-primary via-emerald-400 to-primary/40 transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(0,255,163,0.5)]"
+          class="h-full bg-linear-to-r from-primary via-emerald-400 to-primary/40 transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(0,255,163,0.5)]"
           id="ttl-bar-fill"
           style="width: 100%;"
         >
@@ -761,9 +770,9 @@ defmodule StelganoWeb.ChatLive do
         <% else %>
           <div class="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto animate-in space-y-8">
             <div class="relative size-24">
-              <div class="absolute inset-0 rounded-3xl bg-white/[0.02] border border-white/5 rotate-6">
+              <div class="absolute inset-0 rounded-3xl bg-white/2 border border-white/5 rotate-6">
               </div>
-              <div class="absolute inset-0 rounded-3xl bg-white/[0.02] border border-white/5 -rotate-3">
+              <div class="absolute inset-0 rounded-3xl bg-white/2 border border-white/5 -rotate-3">
               </div>
               <div class="absolute inset-0 rounded-3xl bg-slate-900 border border-white/10 flex items-center justify-center">
                 <.icon name="hero-shield-check-mini" class="size-12 text-slate-700" />
@@ -821,7 +830,7 @@ defmodule StelganoWeb.ChatLive do
             <div class="absolute -right-10 -bottom-10 size-40 bg-danger/5 rounded-full blur-3xl">
             </div>
 
-            <div class="size-20 rounded-[2rem] bg-danger/10 flex items-center justify-center mb-8 border border-danger/20">
+            <div class="size-20 rounded-4xl bg-danger/10 flex items-center justify-center mb-8 border border-danger/20">
               <.icon name="hero-fire-mini" class="size-10 text-danger" />
             </div>
 
@@ -871,33 +880,17 @@ defmodule StelganoWeb.ChatLive do
         if(@msg.is_mine, do: "flex flex-col items-end", else: "flex flex-col items-start")
       ]}>
         <div class={[
-          "relative p-6 sm:p-8 rounded-[2rem] group-hover:shadow-2xl transition-all duration-500 border overflow-hidden",
+          "relative p-6 sm:p-8 rounded-4xl transition-all duration-500 border overflow-hidden",
           if(@msg.is_mine,
             do:
-              "bg-gradient-to-br from-primary/20 via-primary/5 to-emerald-500/10 border-primary/20 rounded-tr-none text-white",
+              "bg-linear-to-br from-primary/10 to-emerald-500/5 border-primary/20 rounded-tr-none text-white shadow-[0_10px_30px_-10px_rgba(0,255,163,0.1)]",
             else:
-              "bg-slate-900/80 backdrop-blur-xl border-white/10 rounded-tl-none text-slate-200 shadow-inner"
+              "bg-slate-900/50 backdrop-blur-xl border-white/5 rounded-tl-none text-slate-200 shadow-inner"
           )
         ]}>
-          <%!-- Glass Reflect Effect --%>
-          <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent">
-          </div>
-
           <p class="relative z-10 whitespace-pre-wrap text-base sm:text-lg leading-relaxed font-medium tracking-tight">
             {@msg.plaintext}
           </p>
-
-          <%!-- Ambient Glow --%>
-          <div
-            :if={@msg.is_mine}
-            class="absolute -right-20 -top-20 size-40 bg-primary/10 rounded-full blur-[80px]"
-          >
-          </div>
-          <div
-            :if={!@msg.is_mine}
-            class="absolute -left-20 -top-20 size-40 bg-white/5 rounded-full blur-[80px]"
-          >
-          </div>
         </div>
 
         <div class="flex items-center gap-4 px-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
@@ -944,13 +937,13 @@ defmodule StelganoWeb.ChatLive do
     ~H"""
     <div class="relative group">
       <%!-- Glow focus effect --%>
-      <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 via-emerald-400/20 to-primary/20 rounded-[2.5rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700">
+      <div class="absolute -inset-1 bg-linear-to-r from-primary/20 via-emerald-400/20 to-primary/20 rounded-[2.5rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700">
       </div>
 
       <div class="relative flex items-end gap-3 p-3 sm:p-4 rounded-[2.2rem] bg-slate-900 border border-white/10 group-focus-within:border-primary/40 group-focus-within:bg-slate-950/80 transition-all duration-300 shadow-2xl">
         <textarea
           id="chat-textarea"
-          class="flex-1 bg-transparent border-none text-white placeholder-slate-600 focus:ring-0 py-4 px-4 resize-none max-h-60 min-h-[56px] scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
+          class="flex-1 bg-transparent border-none text-white placeholder-slate-600 focus:ring-0 py-4 px-4 resize-none max-h-60 min-h-14 scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
           placeholder="Construct secure message…"
           rows="1"
           maxlength={@max_chars}
@@ -1004,39 +997,66 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_locked(assigns) do
     ~H"""
-    <div class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-2xl animate-in">
-      <div class="w-full max-w-sm text-center">
-        <div class="size-20 rounded-3xl bg-primary/10 flex items-center justify-center mx-auto mb-8 shadow-inner ring-1 ring-primary/20 animate-in stagger-1">
-          <.icon name="hero-lock-closed-mini" class="size-10 text-primary" />
+    <div class="fixed inset-0 z-100 flex items-center justify-center p-6 bg-slate-950/95 backdrop-blur-3xl animate-in">
+      <div class="w-full max-w-sm text-center space-y-12">
+        <div class="relative size-24 mx-auto">
+          <div class="absolute -inset-4 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
+          <div class="relative size-24 rounded-4xl bg-slate-900 border border-primary/20 flex items-center justify-center shadow-inner group">
+            <.icon
+              name="hero-lock-closed-mini"
+              class="size-12 text-primary drop-shadow-[0_0_10px_var(--color-primary-glow)]"
+            />
+          </div>
         </div>
-        <h3 class="text-3xl font-extrabold text-white mb-2 font-display animate-in stagger-2 text-gradient">
-          Session Locked
-        </h3>
-        <p class="text-slate-400 font-medium mb-10 animate-in stagger-3">
-          Enter your PIN to re-secure the channel
-        </p>
 
-        <form id="unlock-form" phx-submit="unlock_chat" class="animate-in stagger-3">
-          <.input
-            name="pin"
-            type="password"
-            inputmode="numeric"
-            pattern="[0-9]*"
-            placeholder="••••"
-            class="text-center text-2xl tracking-[0.5em] font-mono py-4"
-            autofocus
-          />
-          <%= if @lock_error do %>
-            <p class="mt-4 text-sm font-bold text-danger animate-bounce">{@lock_error}</p>
-          <% end %>
-          <button type="submit" class="btn-primary w-full py-4 mt-6 text-lg">Unlock Channel</button>
+        <div class="space-y-4">
+          <h1 class="text-4xl font-extrabold text-white font-display tracking-tight uppercase">
+            Workspace <span class="text-gradient">Locked.</span>
+          </h1>
+          <p class="text-slate-500 font-medium text-sm leading-relaxed max-w-[280px] mx-auto">
+            Encryption artifacts are suspended. Re-derive the key matrix to restore the link.
+          </p>
+        </div>
+
+        <form id="unlock-form" phx-submit="unlock_chat" class="space-y-8">
+          <div class="space-y-4">
+            <div class="flex items-center justify-between px-1">
+              <label class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
+                Local PIN Verification
+              </label>
+              <div class="flex gap-1">
+                <div :for={_ <- 1..@lock_attempts} class="size-1 rounded-full bg-primary/40"></div>
+              </div>
+            </div>
+            <.input
+              name="pin"
+              type="password"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              placeholder="••••"
+              class="text-center text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10 focus:border-primary/40"
+              autofocus
+            />
+            <%= if @lock_error do %>
+              <div class="p-3 rounded-xl bg-danger/10 border border-danger/20 text-xs font-bold text-danger animate-bounce uppercase tracking-widest">
+                {@lock_error}
+              </div>
+            <% end %>
+          </div>
+
+          <button
+            type="submit"
+            class="btn-primary w-full py-5 text-xl shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+          >
+            Reconnect Vector
+          </button>
         </form>
 
         <button
           phx-click="clear_session"
-          class="mt-8 text-sm font-bold uppercase tracking-widest text-slate-500 hover:text-white transition-colors animate-in stagger-3"
+          class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 hover:text-white transition-colors flex items-center gap-2 mx-auto py-2 px-4 rounded-xl hover:bg-white/5"
         >
-          Clear Session Artifacts
+          <.icon name="hero-trash-mini" class="size-3" /> Terminate All Artifacts
         </button>
       </div>
     </div>
@@ -1080,5 +1100,5 @@ defmodule StelganoWeb.ChatLive do
   defp can_type?(%{state: :chat, message: nil}), do: true
   defp can_type?(%{state: :chat, message: %{is_mine: true}}), do: false
   defp can_type?(%{state: :chat, message: %{is_mine: false}}), do: true
-  defp can_type?(_), do: false
+  defp can_type?(_assigns), do: false
 end

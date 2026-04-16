@@ -10,7 +10,10 @@ defmodule Stelgano.Jobs.ExpireTtlRoomsTest do
   alias Stelgano.Rooms
   alias Stelgano.Rooms.Room
 
-  defp hex64(seed), do: :crypto.hash(:sha256, "ttl-test-#{seed}") |> Base.encode16(case: :lower)
+  defp hex64(seed) do
+    hash = :crypto.hash(:sha256, "ttl-test-#{seed}")
+    Base.encode16(hash, case: :lower)
+  end
 
   describe "perform/1" do
     test "expires rooms whose TTL has passed" do

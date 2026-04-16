@@ -78,14 +78,14 @@ defmodule Stelgano.Rooms.RoomAccess do
 
     locked_until =
       if new_count >= @max_attempts do
-        DateTime.add(DateTime.utc_now(), @lockout_minutes * 60, :second)
+        DateTime.utc_now()
+        |> DateTime.add(@lockout_minutes * 60, :second)
         |> DateTime.truncate(:second)
       else
         access.locked_until
       end
 
-    access
-    |> change(failed_attempts: new_count, locked_until: locked_until)
+    change(access, failed_attempts: new_count, locked_until: locked_until)
   end
 
   @doc """
