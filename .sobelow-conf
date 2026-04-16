@@ -1,4 +1,4 @@
-%{
+[
   version: "1.0",
   # Paths to scan
   root: ".",
@@ -16,4 +16,4 @@
   format: "txt",
   # Checks to run (all by default)
   skip: []
-}
+]

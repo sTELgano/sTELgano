@@ -4,732 +4,407 @@
 /**
  * @fileoverview chat.js — LiveView hooks for the sTELgano chat interface.
  *
- * Imports from ../crypto/anon.js (the canonical crypto implementation) and
- * ../crypto/phone-gen.js. No other npm dependencies.
+ * Consolidated hook architecture matching the production design:
  *
- * ## Hook overview
- *
- * - ChatEntry     — entry form; drives PBKDF2 derivation + channel join
- * - ChatSession   — manages the open chat: messages, input, inactivity lock
- * - LockScreen    — PIN re-entry on the lock screen
- * - ThemeToggle   — light/dark theme toggle with localStorage persistence
- * - ExpireRoom    — room expiry confirmation
- * - PhoneGenerator — steg number generation (delegates to phone-gen.js)
- * - CustomNumberCheck — availability check on the steg-number page
+ * - AnonChat         — main orchestrator: entry → channel join → messaging
+ * - AutoResize       — auto-growing textarea
+ * - IntersectionReader — read receipts via viewport observation
+ * - ThemeToggle      — light/dark theme toggle
+ * - PhoneGenerator   — steg number generation with country selector (phone-number-generator-js)
  */
 
 "use strict";
 
 import { AnonCrypto } from "../crypto/anon.js";
-import { generateStegNumber, normalisePhone, isPlausiblePhone } from "../crypto/phone-gen.js";
+import { generatePhoneNumber, CountryNames } from "phone-number-generator-js";
 import { Socket } from "phoenix";
 
 // ---------------------------------------------------------------------------
-// Module-level state
+// Module-level state (mutable closure singletons)
 // ---------------------------------------------------------------------------
-
-/** Phoenix Socket for the anonymous room channel. */
-let _socket = null;
-
-/** Active Phoenix Channel instance. */
-let _channel = null;
 
 /** Derived AES-256-GCM CryptoKey (JS memory only, never serialised). */
-let _encKey = null;
+let encKey = null;
 
-/** Inactivity timer handle. */
-let _inactivityTimer = null;
+/** Phoenix Socket for the anonymous room channel. */
+let socket = null;
 
-/** Typing indicator broadcast timer handle. */
-let _typingTimer = null;
-
-// ---------------------------------------------------------------------------
-// Session storage helpers
-// ---------------------------------------------------------------------------
-
-function sessionSet(key, value) {
-  try { sessionStorage.setItem(key, value); } catch (_) {}
-}
-
-function sessionGet(key) {
-  try { return sessionStorage.getItem(key); } catch (_) { return null; }
-}
-
-function sessionClear() {
-  try { sessionStorage.clear(); } catch (_) {}
-  _encKey = null;
-}
+/** Active Phoenix Channel instance. */
+let channel = null;
 
 // ---------------------------------------------------------------------------
-// Inactivity timer
+// AutoResize hook — auto-growing textarea
 // ---------------------------------------------------------------------------
 
-const TIMEOUT_MAP = {
-  "30s":  30_000,
-  "1min": 60_000,
-  "5min": 300_000,
-  "15min": 900_000,
-  "30min": 1_800_000,
-  "never": null,
-};
-
-function startInactivityTimer(hook) {
-  clearInactivityTimer();
-  const raw = hook.el.dataset.inactivityTimeout || "5min";
-  const ms = TIMEOUT_MAP[raw];
-  if (ms === null) return;
-  _inactivityTimer = setTimeout(() => {
-    hook.pushEvent("lock_session", {});
-  }, ms);
-}
-
-function resetInactivityTimer(hook) {
-  startInactivityTimer(hook);
-}
-
-function clearInactivityTimer() {
-  if (_inactivityTimer) { clearTimeout(_inactivityTimer); _inactivityTimer = null; }
-}
-
-// ---------------------------------------------------------------------------
-// Message rendering helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Formats an ISO timestamp as a short locale time string.
- * @param {string|null} ts
- * @returns {string}
- */
-function formatTime(ts) {
-  if (!ts) return "";
-  try {
-    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch (_) { return ""; }
-}
-
-/**
- * Renders a message bubble into the messages container.
- * @param {object} opts
- * @param {string}  opts.id          - Message UUID
- * @param {string}  opts.text        - Decrypted plaintext
- * @param {boolean} opts.isSent      - True = right bubble, false = left bubble
- * @param {string|null} opts.readAt  - ISO timestamp if read, else null
- * @param {string|null} opts.time    - ISO insertion timestamp
- * @param {boolean} opts.edited      - Whether the message has been edited
- */
-function renderMessage({ id, text, isSent, readAt, time, edited = false }) {
-  const container = document.getElementById("messages-container");
-  if (!container) return;
-
-  // Remove existing bubble with same ID (for edits)
-  const existing = document.getElementById(`msg-${id}`);
-  if (existing) existing.remove();
-
-  const wrapper = document.createElement("div");
-  wrapper.id = `msg-${id}`;
-  wrapper.className = `flex ${isSent ? "justify-end" : "justify-start"} mb-2`;
-  wrapper.dataset.messageId = id;
-  wrapper.dataset.sent = isSent ? "true" : "false";
-
-  const bubble = document.createElement("div");
-  bubble.className = "max-w-xs sm:max-w-sm lg:max-w-md px-4 py-3 relative group";
-  bubble.style.cssText = isSent
-    ? "background: var(--accent-soft); color: var(--accent-fg); border-radius: 20px 20px 4px 20px;"
-    : "background: var(--received); color: var(--received-fg); border-radius: 20px 20px 20px 4px;";
-
-  const textEl = document.createElement("p");
-  textEl.className = "text-sm whitespace-pre-wrap break-words";
-  textEl.textContent = text;
-  bubble.appendChild(textEl);
-
-  // Meta row (time + tick + edited)
-  const meta = document.createElement("div");
-  meta.className = "flex items-center gap-1 mt-1";
-  meta.style.justifyContent = "flex-end";
-
-  if (edited) {
-    const editedLabel = document.createElement("span");
-    editedLabel.className = "text-xs opacity-60";
-    editedLabel.textContent = "edited";
-    meta.appendChild(editedLabel);
-  }
-
-  if (time) {
-    const timeEl = document.createElement("span");
-    timeEl.className = "text-xs opacity-60";
-    timeEl.textContent = formatTime(time);
-    meta.appendChild(timeEl);
-  }
-
-  if (isSent) {
-    const tick = document.createElement("span");
-    tick.id = `tick-${id}`;
-    tick.className = "text-xs opacity-70 select-none";
-    tick.textContent = readAt ? "✓✓" : "✓";
-    meta.appendChild(tick);
-  }
-
-  bubble.appendChild(meta);
-
-  // Context menu for own unread messages (edit / delete)
-  if (isSent && !readAt) {
-    bubble.addEventListener("contextmenu", e => {
-      e.preventDefault();
-      showContextMenu(id, bubble);
-    });
-    // Long-press for mobile
-    let longPressTimer;
-    bubble.addEventListener("pointerdown", () => {
-      longPressTimer = setTimeout(() => showContextMenu(id, bubble), 600);
-    });
-    bubble.addEventListener("pointerup", () => clearTimeout(longPressTimer));
-    bubble.addEventListener("pointermove", () => clearTimeout(longPressTimer));
-  }
-
-  wrapper.appendChild(bubble);
-  container.appendChild(wrapper);
-
-  // Scroll to bottom
-  wrapper.scrollIntoView({ behavior: "smooth", block: "end" });
-
-  // Animate in
-  bubble.style.opacity = "0";
-  bubble.style.transform = "scale(0.95)";
-  bubble.style.transition = "opacity 150ms ease, transform 150ms ease";
-  requestAnimationFrame(() => {
-    bubble.style.opacity = "1";
-    bubble.style.transform = "scale(1)";
-  });
-}
-
-/**
- * Shows a context menu near the given bubble element.
- * @param {string} messageId
- * @param {HTMLElement} bubble
- */
-function showContextMenu(messageId, bubble) {
-  // Remove any existing context menu
-  document.querySelectorAll(".steg-ctx-menu").forEach(el => el.remove());
-
-  const menu = document.createElement("div");
-  menu.className = "steg-ctx-menu absolute right-0 top-0 z-50 rounded-xl shadow-lg overflow-hidden";
-  menu.style.cssText = "background: var(--bg-surface); border: 1px solid var(--border); transform: translateY(-100%);";
-
-  const editBtn = document.createElement("button");
-  editBtn.className = "block w-full text-left px-4 py-3 text-sm hover:opacity-70 transition-opacity";
-  editBtn.style.color = "var(--text-primary)";
-  editBtn.textContent = "Edit";
-  editBtn.onclick = () => {
-    menu.remove();
-    window._stelganoStartEdit && window._stelganoStartEdit(messageId);
-  };
-
-  const deleteBtn = document.createElement("button");
-  deleteBtn.className = "block w-full text-left px-4 py-3 text-sm hover:opacity-70 transition-opacity";
-  deleteBtn.style.color = "var(--danger)";
-  deleteBtn.textContent = "Delete";
-  deleteBtn.onclick = () => {
-    menu.remove();
-    if (confirm("Delete this message?")) {
-      window._stelganoDeleteMessage && window._stelganoDeleteMessage(messageId);
-    }
-  };
-
-  menu.appendChild(editBtn);
-  menu.appendChild(deleteBtn);
-  bubble.style.position = "relative";
-  bubble.appendChild(menu);
-
-  // Dismiss on outside click
-  const dismiss = e => {
-    if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("click", dismiss); }
-  };
-  setTimeout(() => document.addEventListener("click", dismiss), 0);
-}
-
-/**
- * Updates the tick/read receipt for a sent message.
- * @param {string} messageId
- */
-function markMessageRead(messageId) {
-  const tick = document.getElementById(`tick-${messageId}`);
-  if (tick) tick.textContent = "✓✓";
-}
-
-/**
- * Removes a message bubble from the DOM.
- * @param {string} messageId
- */
-function removeMessageBubble(messageId) {
-  const el = document.getElementById(`msg-${messageId}`);
-  if (el) el.remove();
-}
-
-// ---------------------------------------------------------------------------
-// Input area state management
-// ---------------------------------------------------------------------------
-
-/**
- * Switches the input area to "waiting" state (sender's turn is over).
- */
-function showWaitingState() {
-  const active = document.getElementById("active-input");
-  const waiting = document.getElementById("waiting-state");
-  if (active) active.classList.add("hidden");
-  if (waiting) { waiting.classList.remove("hidden"); waiting.classList.add("flex"); }
-}
-
-/**
- * Switches the input area to "active" state (ready to send).
- */
-function showActiveInput() {
-  const active = document.getElementById("active-input");
-  const waiting = document.getElementById("waiting-state");
-  if (active) active.classList.remove("hidden");
-  if (waiting) { waiting.classList.add("hidden"); waiting.classList.remove("flex"); }
-}
-
-// ---------------------------------------------------------------------------
-// ChatEntry hook
-// ---------------------------------------------------------------------------
-
-/**
- * Drives the entry form: collects steg number + PIN, runs PBKDF2 derivation,
- * and joins the Phoenix Channel.  All crypto runs in the browser.
- */
-export const ChatEntry = {
+export const AutoResize = {
   mounted() {
-    const submitBtn = document.getElementById("entry-submit");
-    const numberInput = document.getElementById("steg-number-input");
-    const pinInput = document.getElementById("pin-input");
+    this.resize();
+    this.el.addEventListener("input", () => this.resize());
+  },
 
-    if (!submitBtn || !numberInput || !pinInput) return;
-
-    const handleSubmit = async () => {
-      const rawPhone = numberInput.value.trim();
-      const rawPin   = pinInput.value.trim();
-
-      if (!rawPhone || !rawPin) return;
-
-      // Signal deriving state to LiveView
-      this.pushEvent("set_deriving", { value: "true" });
-
-      try {
-        const phone      = AnonCrypto.normalise(rawPhone);
-        const rHash      = await AnonCrypto.roomHash(phone);
-        const aHash      = await AnonCrypto.accessHash(phone, rawPin);
-        const sHash      = await AnonCrypto.senderHash(phone, rHash);
-
-        // Persist to sessionStorage (enc_key goes to JS memory only)
-        sessionSet("steg_phone", phone);
-        sessionSet("room_hash", rHash);
-        sessionSet("sender_hash", sHash);
-
-        // Connect socket and join channel
-        await joinChannel(phone, rHash, aHash, sHash, this);
-
-      } catch (err) {
-        console.error("ChatEntry derivation error:", err);
-        this.pushEvent("set_deriving", { value: "false" });
-        this.pushEvent("channel_error", { reason: "unknown" });
-      }
-    };
-
-    submitBtn.addEventListener("click", handleSubmit);
-
-    // Allow Enter key to submit from either field
-    [numberInput, pinInput].forEach(input => {
-      input.addEventListener("keydown", e => {
-        if (e.key === "Enter") handleSubmit();
-      });
-    });
+  resize() {
+    this.el.style.height = "auto";
+    this.el.style.height = Math.min(this.el.scrollHeight, 140) + "px";
   },
 };
 
-/**
- * Connects to the Phoenix Socket and joins the anonymous room channel.
- *
- * @param {string} phone   - Normalised phone number
- * @param {string} rHash   - room_hash hex
- * @param {string} aHash   - access_hash hex
- * @param {string} sHash   - sender_hash hex
- * @param {object} hook    - The hook instance (for pushEvent)
- */
-async function joinChannel(phone, rHash, aHash, sHash, hook) {
-  // Disconnect existing socket if any
-  if (_socket) {
-    _socket.disconnect();
-    _socket = null;
-    _channel = null;
-  }
-
-  const csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content") || "";
-
-  _socket = new Socket("/anon_socket", { params: { _csrf_token: csrfToken } });
-  _socket.connect();
-
-  _channel = _socket.channel(`anon_room:${rHash}`, {
-    access_hash: aHash,
-    sender_hash: sHash,
-  });
-
-  _channel.join()
-    .receive("ok", async resp => {
-      const roomId = resp.room_id;
-      sessionSet("room_id", roomId);
-
-      // Derive enc_key AFTER getting room_id (never transmitted)
-      _encKey = await AnonCrypto.deriveKey(phone, roomId);
-
-      hook.pushEvent("set_deriving", { value: "false" });
-      hook.pushEvent("channel_joined", { room_id: roomId });
-
-      // If a message was waiting, it's in resp.current_message
-      if (resp.current_message) {
-        window._stelganoHandleNewMessage && window._stelganoHandleNewMessage(resp.current_message);
-      }
-    })
-    .receive("error", resp => {
-      hook.pushEvent("set_deriving", { value: "false" });
-      hook.pushEvent("channel_error", {
-        reason: resp.reason || "unknown",
-        attempts_remaining: resp.attempts_remaining || null,
-      });
-      if (_socket) { _socket.disconnect(); _socket = null; }
-    });
-}
-
 // ---------------------------------------------------------------------------
-// ChatSession hook
+// IntersectionReader hook — read receipts via viewport observation
 // ---------------------------------------------------------------------------
 
-/**
- * Manages the open chat session: message rendering, send/edit/delete,
- * typing indicator, IntersectionObserver for read receipts, and inactivity lock.
- */
-export const ChatSession = {
+export const IntersectionReader = {
   mounted() {
-    const sessionHook = this;
+    const messageId = this.el.dataset.messageId;
+    if (!messageId) return;
 
-    startInactivityTimer(this);
+    let dwellTimer = null;
 
-    // Reset timer on user activity
-    ["click", "keydown", "pointerdown"].forEach(evt => {
-      this.el.addEventListener(evt, () => resetInactivityTimer(sessionHook), { passive: true });
-    });
-
-    // Track visibility for inactivity (tab hidden = not reset)
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        clearInactivityTimer();
-      } else {
-        resetInactivityTimer(sessionHook);
-      }
-    });
-
-    // ---------------------------------------------------------------------------
-    // Incoming channel events
-    // ---------------------------------------------------------------------------
-
-    if (!_channel) return;
-
-    /**
-     * Handle an incoming new_message event.
-     * Decrypts and renders the bubble; marks as read via IntersectionObserver.
-     */
-    const handleNewMessage = async (payload) => {
-      const senderHash = sessionGet("sender_hash");
-      const isSent = payload.sender_hash === senderHash;
-
-      let text;
-      try {
-        const iv         = AnonCrypto.fromBase64(payload.iv);
-        const ciphertext = AnonCrypto.fromBase64(payload.ciphertext);
-        text = await AnonCrypto.decrypt(_encKey, iv, ciphertext);
-      } catch (err) {
-        console.error("Decryption failed:", err);
-        text = "[Unable to decrypt message]";
-      }
-
-      renderMessage({
-        id: payload.id,
-        text,
-        isSent,
-        readAt: payload.read_at,
-        time: payload.inserted_at,
-        edited: false,
-      });
-
-      // If received (not sent), update input state and trigger read receipt
-      if (!isSent) {
-        showActiveInput();
-
-        // IntersectionObserver with 500ms dwell confirms the message was viewed
-        const msgEl = document.getElementById(`msg-${payload.id}`);
-        if (msgEl && _channel) {
-          let dwellTimer = null;
-          const observer = new IntersectionObserver(entries => {
-            entries.forEach(entry => {
-              if (entry.isIntersecting) {
-                dwellTimer = setTimeout(() => {
-                  _channel.push("read_receipt", { message_id: payload.id });
-                  observer.disconnect();
-                }, 500);
-              } else {
-                if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; }
-              }
-            });
-          }, { threshold: 0.5 });
-          observer.observe(msgEl);
-        }
-      } else {
-        // Own message: show waiting state
-        showWaitingState();
-      }
-
-      // Hide empty state
-      const emptyState = document.getElementById("empty-state");
-      if (emptyState) emptyState.classList.add("hidden");
-    };
-
-    window._stelganoHandleNewMessage = handleNewMessage;
-
-    _channel.on("new_message", handleNewMessage);
-
-    _channel.on("message_read", ({ message_id }) => {
-      markMessageRead(message_id);
-      // Re-enable input when our sent message is read — recipient is now reading
-      // (They'll send a reply which will arrive via new_message)
-    });
-
-    _channel.on("message_edited", async ({ message_id, ciphertext, iv }) => {
-      let text;
-      try {
-        const ivBytes  = AnonCrypto.fromBase64(iv);
-        const ctBytes  = AnonCrypto.fromBase64(ciphertext);
-        text = await AnonCrypto.decrypt(_encKey, ivBytes, ctBytes);
-      } catch {
-        text = "[Unable to decrypt edited message]";
-      }
-
-      const senderHash = sessionGet("sender_hash");
-      // Re-render edited bubble (we don't know sender_hash from this event,
-      // so check existing bubble's data attribute)
-      const existing = document.getElementById(`msg-${message_id}`);
-      const isSent = existing ? existing.dataset.sent === "true" : false;
-
-      renderMessage({
-        id: message_id,
-        text,
-        isSent,
-        readAt: null,
-        time: null,
-        edited: true,
-      });
-    });
-
-    _channel.on("message_deleted", ({ message_id }) => {
-      removeMessageBubble(message_id);
-      showActiveInput();
-      const container = document.getElementById("messages-container");
-      if (container && !container.hasChildNodes()) {
-        const emptyState = document.getElementById("empty-state");
-        if (emptyState) emptyState.classList.remove("hidden");
-      }
-    });
-
-    _channel.on("counterparty_typing", () => {
-      const indicator = document.getElementById("typing-indicator");
-      if (indicator) {
-        indicator.classList.remove("hidden");
-        clearTimeout(window._stelganoTypingHideTimer);
-        window._stelganoTypingHideTimer = setTimeout(() => {
-          indicator.classList.add("hidden");
-        }, 3_000);
-      }
-    });
-
-    _channel.on("room_expired", () => {
-      sessionClear();
-      if (_socket) { _socket.disconnect(); _socket = null; }
-      this.pushEvent("room_expired", {});
-    });
-
-    // ---------------------------------------------------------------------------
-    // Send / edit / delete logic
-    // ---------------------------------------------------------------------------
-
-    const messageInput = document.getElementById("message-input");
-    const sendBtn = document.getElementById("send-btn");
-    const charCountEl = document.getElementById("char-count");
-    const charCounter = document.getElementById("char-counter");
-
-    let editingMessageId = null;
-
-    const sendMessage = async () => {
-      if (!messageInput || !_channel || !_encKey) return;
-      const text = messageInput.value.trim();
-      if (!text) return;
-
-      try {
-        const { iv, ciphertext } = await AnonCrypto.encrypt(_encKey, text);
-        const ivB64 = AnonCrypto.toBase64(iv);
-        const ctB64 = AnonCrypto.toBase64(ciphertext);
-
-        if (editingMessageId) {
-          _channel.push("edit_message", {
-            message_id: editingMessageId,
-            ciphertext: ctB64,
-            iv: ivB64,
-          }).receive("ok", () => {
-            editingMessageId = null;
-            messageInput.value = "";
-            messageInput.style.height = "";
-            showWaitingState();
-          }).receive("error", resp => {
-            console.error("Edit failed:", resp);
-          });
-        } else {
-          _channel.push("send_message", { ciphertext: ctB64, iv: ivB64 })
-            .receive("ok", () => {
-              messageInput.value = "";
-              messageInput.style.height = "";
-              if (charCounter) charCounter.classList.add("hidden");
-            })
-            .receive("error", resp => {
-              console.error("Send failed:", resp);
-            });
-        }
-      } catch (err) {
-        console.error("Encryption error:", err);
-      }
-    };
-
-    if (sendBtn) sendBtn.addEventListener("click", sendMessage);
-
-    if (messageInput) {
-      messageInput.addEventListener("keydown", e => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
-
-      // Auto-resize textarea
-      messageInput.addEventListener("input", () => {
-        messageInput.style.height = "auto";
-        messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
-
-        // Character counter
-        const len = messageInput.value.length;
-        if (charCountEl) charCountEl.textContent = len;
-        if (charCounter) {
-          if (len >= 3500) {
-            charCounter.classList.remove("hidden");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            dwellTimer = setTimeout(() => {
+              this.pushEvent("read_receipt_js", { message_id: messageId });
+              observer.disconnect();
+            }, 500); // 500ms dwell before read receipt fires
           } else {
-            charCounter.classList.add("hidden");
+            clearTimeout(dwellTimer);
           }
-        }
+        });
+      },
+      { threshold: 0.8 } // 80% visible threshold
+    );
 
-        // Typing indicator broadcast (debounced)
-        if (_channel) {
-          clearTimeout(_typingTimer);
-          _typingTimer = setTimeout(() => {
-            _channel.push("typing", {});
-          }, 200);
-        }
-      });
-    }
-
-    // Expose edit/delete handlers to context menu
-    window._stelganoStartEdit = (messageId) => {
-      editingMessageId = messageId;
-      // Pre-populate textarea with current displayed text
-      const bubble = document.querySelector(`#msg-${messageId} p`);
-      if (bubble && messageInput) {
-        messageInput.value = bubble.textContent;
-        messageInput.focus();
-        showActiveInput();
-      }
+    observer.observe(this.el);
+    this.cleanup = () => {
+      observer.disconnect();
+      clearTimeout(dwellTimer);
     };
-
-    window._stelganoDeleteMessage = (messageId) => {
-      if (_channel) {
-        _channel.push("delete_message", { message_id: messageId });
-      }
-    };
-
-    // ---------------------------------------------------------------------------
-    // Expire room
-    // ---------------------------------------------------------------------------
-
-    const expireBtn = document.getElementById("expire-room-btn");
-    if (expireBtn) {
-      expireBtn.addEventListener("click", () => {
-        if (confirm("End this conversation? This cannot be undone.")) {
-          if (_channel) _channel.push("expire_room", {});
-        }
-      });
-    }
   },
 
   destroyed() {
-    clearInactivityTimer();
-    window._stelganoHandleNewMessage = null;
-    window._stelganoStartEdit = null;
-    window._stelganoDeleteMessage = null;
+    if (this.cleanup) this.cleanup();
   },
 };
 
 // ---------------------------------------------------------------------------
-// LockScreen hook
+// AnonChat hook — main orchestrator
 // ---------------------------------------------------------------------------
 
-/**
- * Handles PIN re-entry on the lock screen.
- * Derives access_hash client-side and compares with stored sender_hash
- * (proxy: we re-derive the full set and compare room_hash consistency).
- */
-export const LockScreen = {
+export const AnonChat = {
   mounted() {
-    const pinInput = document.getElementById("lock-pin-input");
-    const unlockBtn = document.getElementById("lock-unlock-btn");
+    this.boundHandleServerEvent = this.handleServerEvent.bind(this);
 
-    if (!pinInput || !unlockBtn) return;
+    // Server → Client event listeners
+    this.handleEvent("channel_join", this.boundHandleServerEvent);
+    this.handleEvent("send_encrypted", () => this.sendEncrypted());
+    this.handleEvent("send_encrypted_trigger", () => this.sendEncrypted());
+    this.handleEvent("disconnect_channel", () => this.disconnectChannel());
+    this.handleEvent("rederive_key", ({ room_id, pin }) => this.rederiveKey(room_id, pin));
+    this.handleEvent("read_receipt_js", ({ message_id }) => this.sendReadReceipt(message_id));
+    this.handleEvent("channel_join_now", async (data) => await this.joinChannel(data));
+    this.handleEvent("expire_room_js", () => this.expireRoom());
+    this.handleEvent("edit_message_js", ({ message_id, plaintext }) =>
+      this.editMessage(message_id, plaintext)
+    );
+    this.handleEvent("delete_message_js", ({ message_id }) =>
+      this.deleteMessage(message_id)
+    );
 
-    const attempt = async () => {
-      const pin = pinInput.value.trim();
-      if (!pin) return;
+    // Typing detection on textarea
+    this.el.addEventListener("input", (e) => {
+      if (e.target?.id === "chat-textarea") this.sendTyping();
+    });
+  },
 
-      const phone    = sessionGet("steg_phone");
-      const rHash    = sessionGet("room_hash");
-      const sHash    = sessionGet("sender_hash");
+  destroyed() {
+    this.disconnectChannel();
+  },
 
-      if (!phone || !rHash || !sHash) {
-        // Session data missing — force full logout
-        this.pushEvent("unlock_attempt", { correct: "false" });
-        return;
+  // -------------------------------------------------------------------------
+  // Entry form → hash computation → server auth
+  // -------------------------------------------------------------------------
+
+  async handleServerEvent(data) {
+    if (data.action !== "join") return;
+
+    const { phone, pin } = data;
+    const rHash = await AnonCrypto.roomHash(phone);
+    const aHash = await AnonCrypto.accessHash(phone, pin);
+    const sHash = await AnonCrypto.senderHash(phone, aHash, rHash);
+
+    this.pushEvent("channel_authenticate", {
+      room_hash: rHash,
+      access_hash: aHash,
+      sender_hash: sHash,
+    });
+
+    this._pendingPhone = phone;
+    this._pendingRoomHash = rHash;
+    this._pendingSenderHash = sHash;
+    sessionSet("stelegano_access_hash", aHash);
+  },
+
+  // -------------------------------------------------------------------------
+  // Channel join (called after server validates access)
+  // -------------------------------------------------------------------------
+
+  async joinChannel({ room_id, sender_hash, room_hash, phone }) {
+    this.pushEvent("key_derivation_start", {});
+    encKey = await AnonCrypto.deriveKey(phone, room_id);
+    this.pushEvent("key_derivation_complete", {});
+
+    // Persist to sessionStorage for lock-screen re-auth
+    sessionSet("stelegano_phone", AnonCrypto.normalise(phone));
+    sessionSet("stelegano_room_id", room_id);
+    sessionSet("stelegano_room_hash", room_hash);
+    sessionSet("stelegano_sender_hash", sender_hash);
+
+    socket = new Socket("/anon_socket", {});
+    socket.connect();
+
+    channel = socket.channel(`anon_room:${room_hash}`, {
+      access_hash: sessionGet("stelegano_access_hash") || "",
+      sender_hash,
+    });
+
+    this._setupChannelHandlers(sender_hash);
+
+    channel
+      .join()
+      .receive("ok", (resp) => this._handleJoinOk(resp, sender_hash))
+      .receive("error", (err) => this.pushEvent("channel_join_error", err));
+  },
+
+  // -------------------------------------------------------------------------
+  // Channel event handlers
+  // -------------------------------------------------------------------------
+
+  _setupChannelHandlers(mySenderHash) {
+    channel.on("new_message", async (payload) => {
+      let plaintext;
+      try {
+        plaintext = await AnonCrypto.decrypt(
+          encKey,
+          AnonCrypto.fromBase64(payload.iv),
+          AnonCrypto.fromBase64(payload.ciphertext)
+        );
+      } catch (err) {
+        console.error("Decryption failed:", err);
+        plaintext = "[Unable to decrypt message]";
       }
 
-      // Verify by re-deriving sender_hash and comparing
-      const derivedSHash = await AnonCrypto.senderHash(phone, rHash);
-      const correct = derivedSHash === sHash;
+      const isMine = payload.sender_hash === mySenderHash;
+      this.pushEvent("message_received", {
+        id: payload.id,
+        plaintext,
+        sender_hash: payload.sender_hash,
+        is_mine: isMine,
+        inserted_at: payload.inserted_at,
+      });
+    });
 
-      if (correct && _encKey === null) {
-        // Re-derive enc_key if session was cleared from memory
-        const roomId = sessionGet("room_id");
-        if (roomId) {
-          _encKey = await AnonCrypto.deriveKey(phone, roomId);
-        }
+    channel.on("message_read", (payload) => {
+      this.pushEvent("message_read_confirmed", { message_id: payload.message_id });
+    });
+
+    channel.on("message_edited", async (payload) => {
+      let plaintext;
+      try {
+        plaintext = await AnonCrypto.decrypt(
+          encKey,
+          AnonCrypto.fromBase64(payload.iv),
+          AnonCrypto.fromBase64(payload.ciphertext)
+        );
+      } catch {
+        plaintext = "[Unable to decrypt edited message]";
+      }
+      this.pushEvent("message_edit_received", {
+        message_id: payload.message_id,
+        plaintext,
+      });
+    });
+
+    channel.on("message_deleted", (payload) => {
+      this.pushEvent("message_delete_received", { message_id: payload.message_id });
+    });
+
+    channel.on("counterparty_typing", () => {
+      this.pushEvent("typing_indicator", {});
+    });
+
+    channel.on("room_expired", () => {
+      this.pushEvent("room_expired_received", {});
+      this.clearSession();
+    });
+  },
+
+  // -------------------------------------------------------------------------
+  // Join OK — existing message decrypted from channel join response
+  // -------------------------------------------------------------------------
+
+  async _handleJoinOk(resp, mySenderHash) {
+    const { room_id, current_message, ttl_expires_at } = resp;
+
+    if (current_message) {
+      let plaintext;
+      try {
+        plaintext = await AnonCrypto.decrypt(
+          encKey,
+          AnonCrypto.fromBase64(current_message.iv),
+          AnonCrypto.fromBase64(current_message.ciphertext)
+        );
+      } catch {
+        plaintext = "[Unable to decrypt message]";
       }
 
-      pinInput.value = "";
-      this.pushEvent("unlock_attempt", { correct: correct ? "true" : "false" });
-    };
+      const isMine = current_message.sender_hash === mySenderHash;
+      this.pushEvent("join_with_message", {
+        id: current_message.id,
+        plaintext,
+        sender_hash: current_message.sender_hash,
+        is_mine: isMine,
+        read_at: current_message.read_at,
+        inserted_at: current_message.inserted_at,
+        ttl_expires_at,
+      });
+    } else {
+      this.pushEvent("join_empty", { room_id, ttl_expires_at });
+    }
+  },
 
-    unlockBtn.addEventListener("click", attempt);
-    pinInput.addEventListener("keydown", e => { if (e.key === "Enter") attempt(); });
-    pinInput.focus();
+  // -------------------------------------------------------------------------
+  // Send message
+  // -------------------------------------------------------------------------
+
+  async sendEncrypted() {
+    const textarea = document.getElementById("chat-textarea");
+    const plaintext = textarea?.value ?? "";
+    if (!plaintext.trim()) {
+      this.pushEvent("send_error", { reason: "empty_message" });
+      return;
+    }
+    await this.sendMessage(plaintext);
+    textarea.value = "";
+    this.pushEvent("input_change", { value: "" });
+  },
+
+  async sendMessage(plaintext) {
+    const { iv, ciphertext } = await AnonCrypto.encrypt(encKey, plaintext);
+    const ivB64 = AnonCrypto.toBase64(iv);
+    const ctB64 = AnonCrypto.toBase64(ciphertext);
+
+    channel
+      .push("send_message", { ciphertext: ctB64, iv: ivB64 })
+      .receive("ok", () => {})
+      .receive("error", (err) => this.pushEvent("send_error", err))
+      .receive("timeout", () => this.pushEvent("send_error", { reason: "timeout" }));
+  },
+
+  // -------------------------------------------------------------------------
+  // Read receipt (sent via channel)
+  // -------------------------------------------------------------------------
+
+  sendReadReceipt(messageId) {
+    if (!channel) return;
+    channel.push("read_receipt", { message_id: messageId });
+  },
+
+  // -------------------------------------------------------------------------
+  // Typing indicator (1-second debounce)
+  // -------------------------------------------------------------------------
+
+  sendTyping() {
+    if (!channel) return;
+    const now = Date.now();
+    if (!this._lastTypingSent || now - this._lastTypingSent > 1000) {
+      this._lastTypingSent = now;
+      channel.push("typing", {});
+    }
+  },
+
+  // -------------------------------------------------------------------------
+  // Edit / Delete
+  // -------------------------------------------------------------------------
+
+  async editMessage(messageId, plaintext) {
+    const { iv, ciphertext } = await AnonCrypto.encrypt(encKey, plaintext);
+    const ivB64 = AnonCrypto.toBase64(iv);
+    const ctB64 = AnonCrypto.toBase64(ciphertext);
+
+    channel
+      .push("edit_message", { message_id: messageId, ciphertext: ctB64, iv: ivB64 })
+      .receive("ok", () => this.pushEvent("edit_success", { message_id: messageId }))
+      .receive("error", (err) => this.pushEvent("edit_error", err));
+  },
+
+  deleteMessage(messageId) {
+    channel
+      .push("delete_message", { message_id: messageId })
+      .receive("ok", () => this.pushEvent("delete_success", { message_id: messageId }))
+      .receive("error", (err) => this.pushEvent("delete_error", err));
+  },
+
+  // -------------------------------------------------------------------------
+  // Expire room
+  // -------------------------------------------------------------------------
+
+  expireRoom() {
+    if (!channel) return;
+    channel
+      .push("expire_room", {})
+      .receive("ok", () => this.clearSession())
+      .receive("error", (err) => console.error("expire_room error", err));
+  },
+
+  // -------------------------------------------------------------------------
+  // Lock-screen re-authentication (re-derives key without re-joining)
+  // -------------------------------------------------------------------------
+
+  async rederiveKey(roomId, pin) {
+    const phone = sessionGet("stelegano_phone");
+    const storedAccessHash = sessionGet("stelegano_access_hash");
+
+    if (!phone || phone.trim() === "") {
+      this.pushEvent("rederive_failed", {});
+      return;
+    }
+
+    const computedAccessHash = await AnonCrypto.accessHash(phone, pin);
+    if (computedAccessHash !== storedAccessHash) {
+      this.pushEvent("rederive_failed", {});
+      return;
+    }
+
+    encKey = await AnonCrypto.deriveKey(phone, roomId);
+    this.pushEvent("rederive_success", {});
+  },
+
+  // -------------------------------------------------------------------------
+  // Session clear (used by panic, logout, and room_expired)
+  // -------------------------------------------------------------------------
+
+  clearSession() {
+    encKey = null;
+    try {
+      sessionStorage.removeItem("stelegano_phone");
+      sessionStorage.removeItem("stelegano_room_id");
+      sessionStorage.removeItem("stelegano_room_hash");
+      sessionStorage.removeItem("stelegano_sender_hash");
+      sessionStorage.removeItem("stelegano_access_hash");
+    } catch (_) {}
+    this.disconnectChannel();
+  },
+
+  disconnectChannel() {
+    if (channel) {
+      channel.leave();
+      channel = null;
+    }
+    if (socket) {
+      socket.disconnect();
+      socket = null;
+    }
   },
 };
 
@@ -737,16 +412,27 @@ export const LockScreen = {
 // ThemeToggle hook
 // ---------------------------------------------------------------------------
 
+const STORAGE_KEY = "stelgano:theme";
+
 export const ThemeToggle = {
   mounted() {
     this.el.addEventListener("click", () => {
       const current = document.documentElement.getAttribute("data-theme");
       const next = current === "dark" ? "light" : "dark";
-      localStorage.setItem("phx:theme", next);
-      document.documentElement.setAttribute("data-theme", next);
+      setTheme(next);
     });
   },
 };
+
+function setTheme(theme) {
+  if (theme === "system") {
+    localStorage.removeItem(STORAGE_KEY);
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    localStorage.setItem(STORAGE_KEY, theme);
+    document.documentElement.setAttribute("data-theme", theme);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // PhoneGenerator hook (steg-number page)
@@ -755,73 +441,63 @@ export const ThemeToggle = {
 export const PhoneGenerator = {
   mounted() {
     const generateBtn = document.getElementById("generate-btn");
-    if (!generateBtn) return;
+    const countrySelect = document.getElementById("country-select");
+    if (!generateBtn || !countrySelect) return;
+
+    // Populate country dropdown from the package's CountryNames enum
+    const countries = Object.keys(CountryNames)
+      .filter(k => isNaN(k))
+      .map(k => ({ value: k, label: k.replace(/_/g, " ").replace(/'/g, "'") }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+
+    for (const c of countries) {
+      const opt = document.createElement("option");
+      opt.value = c.value;
+      opt.textContent = c.label;
+      countrySelect.appendChild(opt);
+    }
 
     generateBtn.addEventListener("click", () => {
-      const result = generateStegNumber();
-      this.pushEvent("number_generated", { number: result.e164, display: result.display });
+      const selected = countrySelect.value;
+      const config = selected ? { countryName: CountryNames[selected] } : {};
+      const number = generatePhoneNumber(config);
+      this.pushEvent("number_generated", { number: number, display: number });
+
+      // Auto-copy to clipboard on generation
+      navigator.clipboard.writeText(number).then(
+        () => this.pushEvent("copied", {}),
+        () => {}
+      );
     });
 
-    // Copy button
-    this.el.addEventListener("click", e => {
+    this.el.addEventListener("click", (e) => {
       const copyBtn = e.target.closest("#copy-btn");
       if (!copyBtn) return;
       const number = copyBtn.dataset.number;
       if (!number) return;
 
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(number).catch(() => fallbackCopy(number));
-      } else {
-        fallbackCopy(number);
-      }
-    });
-
-    function fallbackCopy(text) {
-      const el = document.createElement("textarea");
-      el.value = text;
-      el.style.position = "fixed";
-      el.style.opacity = "0";
-      document.body.appendChild(el);
-      el.select();
-      try { document.execCommand("copy"); } catch (_) {}
-      document.body.removeChild(el);
-    }
-  },
-};
-
-// ---------------------------------------------------------------------------
-// CustomNumberCheck hook (steg-number page)
-// ---------------------------------------------------------------------------
-
-export const CustomNumberCheck = {
-  mounted() {
-    const checkBtn = document.getElementById("check-availability-btn");
-    const input    = document.getElementById("custom-number-input");
-
-    if (!checkBtn || !input) return;
-
-    input.addEventListener("input", () => {
-      this.pushEvent("custom_number_change", { value: input.value });
-    });
-
-    checkBtn.addEventListener("click", async () => {
-      const raw = input.value.trim();
-      if (!isPlausiblePhone(raw)) {
-        this.pushEvent("custom_number_change", { value: raw });
-        return;
-      }
-
-      const phone  = normalisePhone(raw);
-      const rHash  = await AnonCrypto.roomHash(phone);
-      this.pushEvent("check_availability", { room_hash: rHash });
+      navigator.clipboard.writeText(number).then(
+        () => this.pushEvent("copied", {}),
+        () => {}
+      );
     });
   },
 };
 
 // ---------------------------------------------------------------------------
-// ChatRoot hook — no-op container for phx-hook requirement
+// Session storage helpers
 // ---------------------------------------------------------------------------
 
-export const ChatRoot = {
-  mounted() {},
-};
+function sessionSet(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch (_) {}
+}
+
+function sessionGet(key) {
+  try {
+    return sessionStorage.getItem(key);
+  } catch (_) {
+    return null;
+  }
+}

@@ -56,7 +56,9 @@ defmodule Stelgano.Rooms.Room do
     |> cast(attrs, [:room_hash, :ttl_expires_at])
     |> validate_required([:room_hash])
     |> validate_length(:room_hash, is: 64)
-    |> validate_format(:room_hash, ~r/\A[0-9a-f]{64}\z/, message: "must be a lowercase hex SHA-256 digest")
+    |> validate_format(:room_hash, ~r/\A[0-9a-f]{64}\z/,
+      message: "must be a lowercase hex SHA-256 digest"
+    )
     |> unique_constraint(:room_hash)
   end
 

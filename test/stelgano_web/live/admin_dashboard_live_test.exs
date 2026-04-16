@@ -14,7 +14,7 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
 
   # Adds a valid Basic Auth header using the test-env credentials.
   defp authed_conn(conn) do
-    creds    = Application.get_env(:stelgano, :admin_credentials, [])
+    creds = Application.get_env(:stelgano, :admin_credentials, [])
     username = Keyword.get(creds, :username, "test_admin")
     password = Keyword.get(creds, :password, "test_password")
 

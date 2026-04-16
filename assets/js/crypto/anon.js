@@ -15,7 +15,7 @@
  *   access_hash = SHA-256(phone + ":" + PIN + ":" + ACCESS_SALT)
  *   enc_key     = PBKDF2(password: phone, salt: room_id + ENC_SALT,
  *                        iterations: 600_000, hash: SHA-256, keylen: 256)
- *   sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
+ *   sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)
  *
  * ## Why salts are public constants
  *
@@ -132,17 +132,19 @@ async function accessHash(phone, pin) {
 /**
  * Derives the sender_hash for bubble-side rendering.
  *
- * sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
+ * sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)
  *
  * Stored in sessionStorage. Determines which bubble side (sent/received) to
- * render. Not linked to any persistent identity; changes if room_hash changes.
+ * render. The access_hash is mixed in so that two users with the same phone
+ * but different PINs produce different sender_hashes.
  *
- * @param {string} phone     - Normalised phone number.
- * @param {string} roomHash_ - The room_hash hex string (64 chars).
+ * @param {string} phone       - Normalised phone number.
+ * @param {string} accessHash_ - The access_hash hex string (64 chars).
+ * @param {string} roomHash_   - The room_hash hex string (64 chars).
  * @returns {Promise<string>} 64-character lowercase hex string.
  */
-async function senderHash(phone, roomHash_) {
-  return sha256hex(`${normalise(phone)}:${roomHash_}:${SENDER_SALT}`);
+async function senderHash(phone, accessHash_, roomHash_) {
+  return sha256hex(`${normalise(phone)}:${accessHash_}:${roomHash_}:${SENDER_SALT}`);
 }
 
 /**

@@ -94,29 +94,36 @@ defmodule Stelgano.Rooms.SchemaTest do
 
   describe "Message.create_changeset/1" do
     test "valid with correct fields" do
-      cs = Message.create_changeset(%{
-        sender_hash: valid_hex64(),
-        ciphertext: :crypto.strong_rand_bytes(32),
-        iv: valid_iv()
-      })
+      cs =
+        Message.create_changeset(%{
+          sender_hash: valid_hex64(),
+          ciphertext: :crypto.strong_rand_bytes(32),
+          iv: valid_iv()
+        })
+
       assert cs.valid?
     end
 
     test "invalid with wrong IV length" do
-      cs = Message.create_changeset(%{
-        sender_hash: valid_hex64(),
-        ciphertext: :crypto.strong_rand_bytes(32),
-        iv: :crypto.strong_rand_bytes(8)  # must be 12
-      })
+      cs =
+        Message.create_changeset(%{
+          sender_hash: valid_hex64(),
+          ciphertext: :crypto.strong_rand_bytes(32),
+          # must be 12
+          iv: :crypto.strong_rand_bytes(8)
+        })
+
       refute cs.valid?
       assert cs.errors[:iv]
     end
 
     test "invalid when ciphertext missing" do
-      cs = Message.create_changeset(%{
-        sender_hash: valid_hex64(),
-        iv: valid_iv()
-      })
+      cs =
+        Message.create_changeset(%{
+          sender_hash: valid_hex64(),
+          iv: valid_iv()
+        })
+
       refute cs.valid?
     end
   end

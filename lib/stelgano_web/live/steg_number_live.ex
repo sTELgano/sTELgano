@@ -6,9 +6,10 @@ defmodule StelganoWeb.StegNumberLive do
   LiveView for the `/steg-number` page.
 
   Provides:
-  - A generated steg number (via client-side JS hook using `crypto.getRandomValues`)
+  - Country selector for targeted number generation
+  - A generated steg number (via client-side JS hook using phone-number-generator-js)
   - Copy-to-clipboard with 2-second confirmation
-  - Custom number entry with availability check
+  - "Open Channel" button that navigates to `/chat` with the number pre-populated
   - The "hidden in plain sight" setup guide
 
   ## Passcode Test
@@ -19,19 +20,12 @@ defmodule StelganoWeb.StegNumberLive do
 
   use StelganoWeb, :live_view
 
-  alias Stelgano.Rooms
-
   @impl true
   def mount(_params, _session, socket) do
     socket =
       socket
       |> assign(:page_title, "Steg Number — sTELgano")
       |> assign(:generated_number, nil)
-      |> assign(:custom_number, "")
-      |> assign(:custom_error, nil)
-      |> assign(:availability_result, nil)
-      |> assign(:checking_availability, false)
-      |> assign(:show_guide, false)
       |> assign(:copied, false)
 
     {:ok, socket}
@@ -43,7 +37,6 @@ defmodule StelganoWeb.StegNumberLive do
       socket
       |> assign(:generated_number, %{e164: number, display: display})
       |> assign(:copied, false)
-      |> assign(:availability_result, nil)
 
     {:noreply, socket}
   end
@@ -53,36 +46,6 @@ defmodule StelganoWeb.StegNumberLive do
     socket = assign(socket, :copied, true)
     Process.send_after(self(), :clear_copied, 2_000)
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("custom_number_change", %{"value" => value}, socket) do
-    socket =
-      socket
-      |> assign(:custom_number, value)
-      |> assign(:custom_error, nil)
-      |> assign(:availability_result, nil)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("check_availability", %{"room_hash" => room_hash}, socket) do
-    socket = assign(socket, :checking_availability, true)
-
-    available = !Rooms.room_exists?(room_hash)
-
-    socket =
-      socket
-      |> assign(:checking_availability, false)
-      |> assign(:availability_result, if(available, do: :available, else: :taken))
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("proceed_to_chat", _params, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/chat")}
   end
 
   @impl true
@@ -97,7 +60,11 @@ defmodule StelganoWeb.StegNumberLive do
       <div class="min-h-screen px-4 py-12 max-w-lg mx-auto">
         <%!-- Header --%>
         <div class="mb-10">
-          <.link navigate={~p"/"} class="text-sm hover:underline mb-6 inline-block" style="color: var(--text-muted);">
+          <.link
+            navigate={~p"/"}
+            class="text-sm hover:underline mb-6 inline-block"
+            style="color: var(--text-muted);"
+          >
             ← Back
           </.link>
           <h1 class="text-2xl font-medium mt-4 mb-2" style="color: var(--text-primary);">
@@ -116,6 +83,25 @@ defmodule StelganoWeb.StegNumberLive do
           class="rounded-2xl p-6 mb-6"
           style="background: var(--bg-surface); border: 1px solid var(--border);"
         >
+          <%!-- Country selector --%>
+          <div class="mb-4">
+            <label
+              for="country-select"
+              class="block text-xs uppercase tracking-wider mb-2"
+              style="color: var(--text-muted);"
+            >
+              Country
+            </label>
+            <select
+              id="country-select"
+              class="w-full px-4 py-3 rounded-lg text-base focus:outline-none focus:ring-2 transition-colors appearance-none"
+              style="background: var(--bg-raised); border: 1px solid var(--border);
+                     color: var(--text-primary); --tw-ring-color: var(--accent);"
+            >
+              <option value="">Any country (random)</option>
+            </select>
+          </div>
+
           <%= if @generated_number do %>
             <%!-- Display generated number --%>
             <div class="mb-4">
@@ -144,8 +130,7 @@ defmodule StelganoWeb.StegNumberLive do
                     <span class="text-accent-icon"><.icon name="hero-check" class="w-4 h-4" /></span>
                     <span style="color: var(--accent);">Copied</span>
                   <% else %>
-                    <.icon name="hero-clipboard" class="w-4 h-4" />
-                    Copy
+                    <.icon name="hero-clipboard" class="w-4 h-4" /> Copy
                   <% end %>
                 </button>
               </div>
@@ -156,7 +141,7 @@ defmodule StelganoWeb.StegNumberLive do
           <% else %>
             <div class="text-center py-6" style="color: var(--text-muted);">
               <.icon name="hero-phone" class="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p class="text-sm">Click generate to get a steg number</p>
+              <p class="text-sm">Select a country and click generate</p>
             </div>
           <% end %>
 
@@ -167,71 +152,40 @@ defmodule StelganoWeb.StegNumberLive do
                    hover:opacity-90 active:scale-95 mt-2"
             style="background: var(--accent); color: var(--accent-fg);"
           >
-            <%= if @generated_number, do: "Generate another", else: "Generate" %>
+            {if @generated_number, do: "Generate another", else: "Generate"}
           </button>
         </div>
 
-        <%!-- Custom number entry --%>
-        <div
-          class="rounded-2xl p-6 mb-6"
-          style="background: var(--bg-surface); border: 1px solid var(--border);"
-        >
-          <h2 class="text-sm font-medium mb-3" style="color: var(--text-primary);">
-            Have a number in mind?
-          </h2>
-
+        <%= if @generated_number do %>
+          <%!-- Save warning + Open Channel --%>
           <div
-            id="custom-number-form"
-            phx-hook="CustomNumberCheck"
-            class="space-y-3"
+            class="rounded-2xl p-6 mb-6"
+            style="background: var(--bg-surface); border: 1px solid var(--border);"
           >
-            <input
-              id="custom-number-input"
-              type="tel"
-              placeholder="+1 555 0100"
-              value={@custom_number}
-              class="w-full px-4 py-3 rounded-lg text-base focus:outline-none focus:ring-2 transition-colors"
-              style="background: var(--bg-raised); border: 1px solid var(--border);
-                     color: var(--text-primary); --tw-ring-color: var(--accent);"
-            />
+            <div class="flex gap-3 mb-4">
+              <span style="color: var(--warning); flex-shrink: 0; margin-top: 0.125rem;">
+                <.icon name="hero-exclamation-triangle" class="w-5 h-5" />
+              </span>
+              <p class="text-sm" style="color: var(--text-secondary);">
+                <strong style="color: var(--text-primary);">
+                  Save this number in your contacts before proceeding.
+                </strong>
+                Once you leave this page, the number cannot be recovered.
+                Both you and the other person must save the same number.
+              </p>
+            </div>
 
-            <%= if @custom_error do %>
-              <p class="text-xs" style="color: var(--danger);">{@custom_error}</p>
-            <% end %>
-
-            <%= if @availability_result do %>
-              <div class={[
-                "text-sm rounded-lg px-4 py-3",
-              ]}>
-                <%= if @availability_result == :available do %>
-                  <span style="color: var(--accent);">
-                    <.icon name="hero-check-circle" class="w-4 h-4 inline mr-1" />
-                    This number is available.
-                  </span>
-                <% else %>
-                  <span style="color: var(--warning);">
-                    <.icon name="hero-exclamation-circle" class="w-4 h-4 inline mr-1" />
-                    This number has an active room. Please choose another.
-                  </span>
-                <% end %>
-              </div>
-            <% end %>
-
-            <button
-              id="check-availability-btn"
-              type="button"
-              disabled={@checking_availability}
-              class={[
-                "w-full py-3 rounded-xl font-medium text-sm transition-all duration-150",
-                if(@checking_availability, do: "opacity-60 cursor-not-allowed", else: "hover:opacity-90 active:scale-95")
-              ]}
-              style="background: var(--bg-raised); color: var(--text-secondary);
-                     border: 1px solid var(--border);"
+            <.link
+              navigate={~p"/chat?phone=#{@generated_number.e164}"}
+              id="open-channel-btn"
+              class="block w-full text-center py-4 rounded-xl font-medium text-sm
+                     hover:opacity-90 active:scale-95 transition-all duration-150"
+              style="background: var(--accent); color: var(--accent-fg);"
             >
-              <%= if @checking_availability, do: "Checking…", else: "Check availability" %>
-            </button>
+              Open channel with this number
+            </.link>
           </div>
-        </div>
+        <% end %>
 
         <%!-- Setup guide --%>
         <div
@@ -245,7 +199,7 @@ defmodule StelganoWeb.StegNumberLive do
           <ol class="space-y-4">
             <li class="flex gap-3">
               <span
-                class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
+                class="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
                 style="background: var(--accent-soft); color: var(--accent);"
               >
                 1
@@ -256,7 +210,7 @@ defmodule StelganoWeb.StegNumberLive do
             </li>
             <li class="flex gap-3">
               <span
-                class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
+                class="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
                 style="background: var(--accent-soft); color: var(--accent);"
               >
                 2
@@ -268,7 +222,7 @@ defmodule StelganoWeb.StegNumberLive do
             </li>
             <li class="flex gap-3">
               <span
-                class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
+                class="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
                 style="background: var(--accent-soft); color: var(--accent);"
               >
                 3
@@ -280,16 +234,6 @@ defmodule StelganoWeb.StegNumberLive do
             </li>
           </ol>
         </div>
-
-        <%!-- Proceed CTA --%>
-        <.link
-          navigate={~p"/chat"}
-          class="block w-full text-center py-4 rounded-2xl font-medium text-base
-                 hover:opacity-90 active:scale-95 transition-all duration-150"
-          style="background: var(--accent); color: var(--accent-fg);"
-        >
-          Done — go to chat
-        </.link>
       </div>
     </Layouts.app>
     """

@@ -11,13 +11,11 @@ import { hooks as colocatedHooks } from "phoenix-colocated/stelgano"
 import topbar from "../vendor/topbar"
 
 import {
-  ChatEntry,
-  ChatSession,
-  LockScreen,
+  AnonChat,
+  AutoResize,
+  IntersectionReader,
   ThemeToggle,
   PhoneGenerator,
-  CustomNumberCheck,
-  ChatRoot,
 } from "./hooks/chat.js"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -27,17 +25,15 @@ const liveSocket = new LiveSocket("/live", Socket, {
   params: { _csrf_token: csrfToken },
   hooks: {
     ...colocatedHooks,
-    ChatEntry,
-    ChatSession,
-    LockScreen,
+    AnonChat,
+    AutoResize,
+    IntersectionReader,
     ThemeToggle,
     PhoneGenerator,
-    CustomNumberCheck,
-    ChatRoot,
   },
 })
 
-topbar.config({ barColors: { 0: "#2D6A4F" }, shadowColor: "rgba(0, 0, 0, .15)" })
+topbar.config({ barColors: { 0: "#10B981" }, shadowColor: "rgba(0, 0, 0, .3)" })
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
