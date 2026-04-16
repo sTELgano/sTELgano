@@ -72,7 +72,7 @@ sTELgano (Steganographic TELephone numbering) is a privacy-focused anonymous mes
 | Sub-tagline | *The key lives in your contacts.* |
 | Protocol identifier | sTELgano-std-1 |
 
-`stelgano.com` is the single canonical domain. No redirects. Browser history shows only `stelgano.com` — short, generic, reveals nothing about the nature of the service to a casual observer.
+`stelgano.com` is the single canonical domain. No redirects. Browser history shows only `stelgano.com` — short, generic, reveals nothing about the nature of the service to a casual observer. The name "sTELgano" is intentionally meaningless to anyone outside the steganography community. A name like "SecretChat" or "HiddenMessages" would fail the Passcode Test before the app even opens. The brand itself is steganographic — it hides the purpose of the tool in plain sight.
 
 ### 2.2 Tone of voice
 
