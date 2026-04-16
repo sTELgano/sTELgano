@@ -61,6 +61,9 @@ Thumbs.db
 .env
 .env.local
 
-# The project files
-/project/
+# Lost/scratch code (not part of the project)
 /lost_code/
+
+# Private project files (not for public repo)
+/project/launch_content.md
+/project/design-system.css

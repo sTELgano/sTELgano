@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>sTELgano Design System - Tokens</title>
+  <link rel="stylesheet" href="design-system.css">
+  <style>
+    body { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+    .section { margin-bottom: 3rem; }
+    .section-title { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 600; margin-bottom: 1rem; color: var(--text-main); }
+    .section-desc { color: var(--text-muted); font-size: var(--text-sm); margin-bottom: 1.5rem; line-height: 1.6; }
+    .grid { display: grid; gap: 1rem; }
+    .grid-2 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .token-card { padding: 1rem; border: 1px solid var(--color-surface-border); border-radius: var(--radius-xl); background: rgba(255,255,255,0.02); }
+    .token-label { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.5rem; }
+    .token-value { font-size: var(--text-sm); color: var(--text-main); margin-top: 0.25rem; }
+    .color-swatch { width: 100%; height: 60px; border-radius: var(--radius-lg); margin-bottom: 0.5rem; border: 1px solid rgba(255,255,255,0.05); }
+    .font-sample { margin-bottom: 0.25rem; }
+    .radius-demo { background: var(--color-primary-soft); border: 2px solid var(--color-primary); display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+    .spacing-bar { background: var(--color-primary); height: 24px; border-radius: 2px; }
+    hr { border: none; border-top: 1px solid var(--color-surface-border); margin: 2rem 0; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div style="margin-bottom: 3rem;">
+    <h1 class="text-display" style="font-size: var(--text-4xl); font-weight: 700; margin-bottom: 0.5rem;">
+      <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
+      <span style="color: var(--text-muted); font-weight: 300; font-size: var(--text-2xl);"> Design System</span>
+    </h1>
+    <p class="section-desc">Design tokens extracted from the lost codebase. Dark-first glassmorphism UI with emerald accent.</p>
+  </div>
+
+  <!-- Colors: Brand -->
+  <div class="section">
+    <h2 class="section-title">Brand Colors</h2>
+    <p class="section-desc">Core semantic colors used throughout the UI. Emerald green signals trust and safety.</p>
+    <div class="grid grid-3">
+      <div class="token-card">
+        <div class="color-swatch" style="background: #10B981;"></div>
+        <div class="token-label">--color-primary</div>
+        <div class="token-value">#10B981</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: #059669;"></div>
+        <div class="token-label">--color-primary-hover</div>
+        <div class="token-value">#059669</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: rgba(16, 185, 129, 0.15);"></div>
+        <div class="token-label">--color-primary-soft</div>
+        <div class="token-value">rgba(16, 185, 129, 0.15)</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: #030712;"></div>
+        <div class="token-label">--bg-dark</div>
+        <div class="token-value">#030712</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: #f9fafb;"></div>
+        <div class="token-label">--text-main</div>
+        <div class="token-value">#f9fafb</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: #9ca3af;"></div>
+        <div class="token-label">--text-muted</div>
+        <div class="token-value">#9ca3af</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Colors: Surface -->
+  <div class="section">
+    <h2 class="section-title">Surface Colors (Glassmorphism)</h2>
+    <div class="grid grid-3">
+      <div class="token-card">
+        <div class="color-swatch" style="background: rgba(17, 24, 39, 0.6); backdrop-filter: blur(16px);"></div>
+        <div class="token-label">--color-surface</div>
+        <div class="token-value">rgba(17, 24, 39, 0.6)</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: rgba(255, 255, 255, 0.1);"></div>
+        <div class="token-label">--color-surface-border</div>
+        <div class="token-value">rgba(255, 255, 255, 0.1)</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: rgba(16, 185, 129, 0.1);"></div>
+        <div class="token-label">--color-surface-glow</div>
+        <div class="token-value">rgba(16, 185, 129, 0.1)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Colors: Palette -->
+  <div class="section">
+    <h2 class="section-title">Extended Palette</h2>
+    <p class="section-desc">Full color palette using oklch color space from Tailwind.</p>
+    <div class="grid grid-4">
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(90.5% 0.093 164.15);"></div>
+        <div class="token-label">emerald-200</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(84.5% 0.143 164.978);"></div>
+        <div class="token-label">emerald-300</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(76.5% 0.177 163.223);"></div>
+        <div class="token-label">emerald-400</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(69.6% 0.17 162.48);"></div>
+        <div class="token-label">emerald-500</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(59.6% 0.145 163.225);"></div>
+        <div class="token-label">emerald-600</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(37.8% 0.077 168.94);"></div>
+        <div class="token-label">emerald-900</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(85.5% 0.138 181.071);"></div>
+        <div class="token-label">teal-300</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(70.4% 0.14 182.503);"></div>
+        <div class="token-label">teal-500</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(67.3% 0.182 276.935);"></div>
+        <div class="token-label">indigo-400</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(58.5% 0.233 277.117);"></div>
+        <div class="token-label">indigo-500</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(71.2% 0.194 13.428);"></div>
+        <div class="token-label">rose-400</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(64.5% 0.246 16.439);"></div>
+        <div class="token-label">rose-500</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(82.8% 0.189 84.429);"></div>
+        <div class="token-label">amber-400</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(96.7% 0.003 264.542);"></div>
+        <div class="token-label">gray-100</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(70.7% 0.022 261.325);"></div>
+        <div class="token-label">gray-400</div>
+      </div>
+      <div class="token-card">
+        <div class="color-swatch" style="background: oklch(27.8% 0.033 256.848);"></div>
+        <div class="token-label">gray-800</div>
+      </div>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- Typography -->
+  <div class="section">
+    <h2 class="section-title">Typography</h2>
+    <p class="section-desc">Three font families serve distinct purposes. Outfit for display/headings, Inter for body/UI, JetBrains Mono for code and hashes.</p>
+
+    <div class="grid grid-2" style="margin-bottom: 2rem;">
+      <div class="token-card">
+        <div class="font-sample" style="font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700;">Outfit Display</div>
+        <div class="font-sample" style="font-family: var(--font-display); font-weight: 300; font-style: italic;">Light italic for accents</div>
+        <div class="token-label">--font-display: 'Outfit'</div>
+        <div class="token-value">Headings, buttons, wordmark</div>
+      </div>
+      <div class="token-card">
+        <div class="font-sample" style="font-family: var(--font-sans); font-size: var(--text-lg);">Inter Body Text</div>
+        <div class="font-sample" style="font-family: var(--font-sans); color: var(--text-muted); font-size: var(--text-sm);">Secondary muted text</div>
+        <div class="token-label">--font-sans: 'Inter'</div>
+        <div class="token-value">Body copy, form labels, UI text</div>
+      </div>
+      <div class="token-card">
+        <div class="font-sample" style="font-family: var(--font-mono); font-size: var(--text-base); letter-spacing: 0.05em;">a1b2c3d4e5f6</div>
+        <div class="font-sample" style="font-family: var(--font-mono); color: var(--text-muted); font-size: var(--text-sm);">+1 (555) 012-3456</div>
+        <div class="token-label">--font-mono: 'JetBrains Mono'</div>
+        <div class="token-value">Hashes, phone numbers, code</div>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--font-display); font-size: var(--text-lg); margin-bottom: 1rem;">Type Scale</h3>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      <div style="display: flex; align-items: baseline; gap: 1rem;">
+        <span style="font-size: var(--text-7xl); font-family: var(--font-display); font-weight: 700; line-height: 1;">Aa</span>
+        <span class="token-label">--text-7xl: 4.5rem</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 1rem;">
+        <span style="font-size: var(--text-5xl); font-family: var(--font-display); font-weight: 700; line-height: 1;">Aa</span>
+        <span class="token-label">--text-5xl: 3rem</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 1rem;">
+        <span style="font-size: var(--text-3xl); font-family: var(--font-display); font-weight: 600;">Aa</span>
+        <span class="token-label">--text-3xl: 1.875rem</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 1rem;">
+        <span style="font-size: var(--text-xl);">Aa Body text at xl</span>
+        <span class="token-label">--text-xl: 1.25rem</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 1rem;">
+        <span style="font-size: var(--text-base);">Aa Base body text</span>
+        <span class="token-label">--text-base: 1rem</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 1rem;">
+        <span style="font-size: var(--text-sm); color: var(--text-muted);">Aa Small / muted text</span>
+        <span class="token-label">--text-sm: 0.875rem</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 1rem;">
+        <span style="font-size: var(--text-xs); color: var(--text-muted);">Aa Caption / label</span>
+        <span class="token-label">--text-xs: 0.75rem</span>
+      </div>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- Border Radius -->
+  <div class="section">
+    <h2 class="section-title">Border Radius</h2>
+    <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 1.5rem;">
+      <div style="text-align: center;">
+        <div class="radius-demo" style="border-radius: var(--radius-sm);">sm</div>
+        <div class="token-label">0.25rem</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-demo" style="border-radius: var(--radius-md);">md</div>
+        <div class="token-label">0.5rem</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-demo" style="border-radius: var(--radius-lg);">lg</div>
+        <div class="token-label">0.75rem</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-demo" style="border-radius: var(--radius-xl);">xl</div>
+        <div class="token-label">1rem</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-demo" style="border-radius: var(--radius-2xl);">2xl</div>
+        <div class="token-label">1.5rem</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-demo" style="border-radius: var(--radius-3xl);">3xl</div>
+        <div class="token-label">2rem</div>
+      </div>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- Spacing -->
+  <div class="section">
+    <h2 class="section-title">Spacing Scale</h2>
+    <p class="section-desc">Base unit: 0.25rem (4px). All spacing is multiples of this base.</p>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; max-width: 600px;">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="spacing-bar" style="width: 4px;"></div>
+        <span class="token-label">1 (4px)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="spacing-bar" style="width: 8px;"></div>
+        <span class="token-label">2 (8px)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="spacing-bar" style="width: 16px;"></div>
+        <span class="token-label">4 (16px)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="spacing-bar" style="width: 32px;"></div>
+        <span class="token-label">8 (32px)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="spacing-bar" style="width: 64px;"></div>
+        <span class="token-label">16 (64px)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="spacing-bar" style="width: 128px;"></div>
+        <span class="token-label">32 (128px)</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
