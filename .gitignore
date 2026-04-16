@@ -60,3 +60,6 @@ Thumbs.db
 # Secret env files
 .env
 .env.local
+
+# The project files
+/project/
