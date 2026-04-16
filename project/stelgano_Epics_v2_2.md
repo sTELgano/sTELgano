@@ -1,38 +1,36 @@
 # sTELgano — Epics & User Stories
 
 **Product:** sTELgano (stelgano.com)
-**Version:** 1.1
+**Version:** 2.2
 **Date:** April 2026
+**Status:** MVP implemented — core epics (E1–E4, E6–E7, E9–E11, E13–E14) are substantially complete. E5 (Lock/Session), E8 (Design), E12 (Analytics), E15 (Admin) are partially complete. E16–E19 are not yet started.
 
 ---
 
 ## Epic Index
 
-| # | Epic | Stories |
-|---|------|---------|
-| E1 | [Steg Number System](#e1-fake-number-system) | 6 |
-| E2 | [Room Access & Authentication](#e2-room-access--authentication) | 8 |
-| E3 | [N=1 Async Messaging](#e3-n1-async-messaging) | 10 |
-| E4 | [Chat UI & Real-Time Features](#e4-chat-ui--real-time-features) | 9 |
-| E5 | [Lock & Session Management](#e5-lock--session-management) | 7 |
-| E6 | [Multi-Device Access](#e6-multi-device-access) | 4 |
-| E7 | [Room Lifecycle & TTL](#e7-room-lifecycle--ttl) | 5 |
-| E8 | [Design System & Theming](#e8-design-system--theming) | 5 |
-| E9 | [Public Pages, Standard & Marketing Site](#e9-public-pages--marketing-site) | 7 |
-| E10 | [Cryptographic Architecture](#e10-cryptographic-architecture) | 6 |
-| E11 | [Security & Code Quality](#e11-security--code-quality) | 7 |
-| E12 | [Analytics & Observability](#e12-analytics--observability) | 4 |
-| E13 | [Deployment & Infrastructure](#e13-deployment--infrastructure) | 6 |
-| E14 | [Testing](#e14-testing) | 5 |
-| E15 | [Admin Dashboard](#e15-admin-dashboard) | 9 |
-| E17 | [Room Lifecycle & Cleanup](#e17-room-lifecycle--cleanup) | 6 |
-| E18 | [User-Defined TTL](#e18-user-defined-ttl) | 5 |
-| E19 | [Business Model & Monetisation](#e19-business-model--monetisation) | 7 |
-| E16 | [The sTELgano Standard](#e16-the-stelegano-standard) | 7 |
-| E17 | [Room Lifecycle & Cleanup](#e17-room-lifecycle--cleanup) | 6 |
-| E18 | [User-Defined TTL](#e18-user-defined-ttl) | 5 |
-| E19 | [Business Model & Monetisation](#e19-business-model--monetisation) | 7 |
-| **Total** | | **123** |
+| # | Epic | Stories | Status |
+|---|------|---------|--------|
+| E1 | [Steg Number System](#e1-fake-number-system) | 6 | **Done** |
+| E2 | [Room Access & Authentication](#e2-room-access--authentication) | 8 | **Done** |
+| E3 | [N=1 Async Messaging](#e3-n1-async-messaging) | 10 | **Done** |
+| E4 | [Chat UI & Real-Time Features](#e4-chat-ui--real-time-features) | 9 | **Done** |
+| E5 | [Lock & Session Management](#e5-lock--session-management) | 7 | **Partial** — lock screen built, inactivity timeout not yet configurable |
+| E6 | [Multi-Device Access](#e6-multi-device-access) | 4 | **Done** (by design — deterministic key derivation) |
+| E7 | [Room Lifecycle & TTL](#e7-room-lifecycle--ttl) | 5 | **Partial** — expiry works, TTL slider UI not built |
+| E8 | [Design System & Theming](#e8-design-system--theming) | 5 | **Partial** — dark-only (theme toggle removed), tokens defined |
+| E9 | [Public Pages, Standard & Marketing Site](#e9-public-pages--marketing-site) | 7 | **Done** — homepage, security, privacy, terms, about, spec, blog |
+| E10 | [Cryptographic Architecture](#e10-cryptographic-architecture) | 6 | **Done** |
+| E11 | [Security & Code Quality](#e11-security--code-quality) | 7 | **Done** |
+| E12 | [Analytics & Observability](#e12-analytics--observability) | 4 | **Partial** — aggregate metrics built, detailed observability not yet |
+| E13 | [Deployment & Infrastructure](#e13-deployment--infrastructure) | 6 | **Partial** — CI/CD built, Dockerfile built |
+| E14 | [Testing](#e14-testing) | 5 | **Partial** — unit + integration tests, no E2E/Wallaby yet |
+| E15 | [Admin Dashboard](#e15-admin-dashboard) | 9 | **Partial** — basic dashboard with HTTP Basic Auth, no TOTP/NL→SQL/charts |
+| E16 | [The sTELgano Standard](#e16-the-stelegano-standard) | 7 | **Not started** |
+| E17 | [Room Lifecycle & Cleanup](#e17-room-lifecycle--cleanup) | 6 | **Not started** |
+| E18 | [User-Defined TTL](#e18-user-defined-ttl) | 5 | **Not started** |
+| E19 | [Business Model & Monetisation](#e19-business-model--monetisation) | 7 | **Not started** |
+| **Total** | | **123** | |
 
 ---
 
@@ -826,32 +824,23 @@
 
 ---
 
-**US-E8-02 — Light and dark themes render correctly**
+**US-E8-02 — Dark-only theme renders correctly** *(updated — light theme and toggle removed)*
 
-> As a user with either a light or dark system preference,
-> I want the app to respect my preference and look great in both modes,
-> so that the UI is comfortable in any environment.
+> As a user,
+> I want the dark glassmorphism theme to render correctly on all devices,
+> so that the UI is consistent and legible.
 
 **Acceptance criteria:**
-- `prefers-color-scheme: dark` is respected on first load
-- All text meets WCAG AA contrast ratio in both modes
-- Chat bubbles, inputs, backgrounds, and icons all have correct dark mode variants
-- No element is invisible or unreadable in either mode
+- Dark theme is the only theme — no light mode, no toggle
+- All text meets WCAG AA contrast ratio against dark backgrounds
+- Chat bubbles, inputs, backgrounds, and icons render correctly in the dark theme
+- No element is invisible or unreadable
 
 ---
 
-**US-E8-03 — Toggle theme manually**
+**US-E8-03 — Theme toggle — REMOVED**
 
-> As a user who wants to override my system preference,
-> I want a theme toggle in the app,
-> so that I can switch between light and dark mode at will.
-
-**Acceptance criteria:**
-- A sun/moon icon button in the session header and on public pages
-- Toggle switches between light and dark themes instantly
-- Three-way toggle: system / light / dark
-- Preference stored in `localStorage` key `stelgano:theme`
-- On next visit, stored preference is applied before first render (no flash of wrong theme)
+> The theme toggle has been removed. sTELgano uses a dark-only design. This simplifies the UI, reduces code surface, and aligns with the glassmorphism design language.
 
 ---
 
@@ -1691,111 +1680,6 @@
 - Explains that third-party implementations exist and how to evaluate them (conformance checklist)
 - States that the reference implementation is the source of truth for ambiguous requirements
 
-
-
----
-
-## E16 — The sTELgano Standard
-
-**Goal:** Publish sTELgano-std-1 as a formal open protocol specification, enabling third-party developers to build conforming implementations, and establishing sTELgano as a category-defining standard for contact-layer steganographic messaging.
-
----
-
-**US-E16-01 — Publish the sTELgano-std-1 specification**
-
-> As a developer who wants to build a sTELgano-compatible application,
-> I want a formal, versioned protocol specification,
-> so that I know exactly what I must implement to claim conformance.
-
-**Acceptance criteria:**
-- The specification is published at `stelgano.com/standard` and in the GitHub repository as `STANDARD.md`
-- Version identifier: `sTELgano-std-1`
-- Specification covers: steg number format, normalisation algorithm, full derivation chain, N=1 invariant, lockout requirements, storage prohibitions, analytics prohibition, Passcode Test requirement, licence requirement
-- Conformance levels defined: `sTELgano-std-1 Compatible` (self-attested) and `sTELgano-std-1 Reference` (the reference implementation)
-- MUST / MUST NOT / SHOULD language used consistently per RFC 2119
-- Specification is versioned independently from the application — `std-1` is stable; changes require a new version identifier
-- Published under CC0 or a permissive licence — the Standard itself must be freely usable without restriction
-
----
-
-**US-E16-02 — Implement the conformance badge and registry**
-
-> As a developer who has built a sTELgano-compatible implementation,
-> I want a way to declare and display conformance,
-> so that users of my implementation know it meets the Standard.
-
-**Acceptance criteria:**
-- A compatibility badge is defined: wordmark (`s·TEL·gano`) + "std-1 compatible" in Protocol Amber
-- Badge assets are provided in SVG and PNG formats in the repository
-- A `IMPLEMENTATIONS.md` in the repository lists known conforming implementations with links
-- Process for adding an implementation: open a GitHub issue with source code link and self-attestation of all MUST requirements
-- The reference implementation (stelgano.com) is listed first with the "Reference" designation
-- No formal validation process is required for self-attestation — the AGPL-3.0 requirement ensures auditability
-
----
-
-**US-E16-03 — Publish the `/standard` public page**
-
-> As a developer discovering sTELgano,
-> I want a clear, readable page that explains the Standard,
-> so that I can evaluate whether to build a conforming implementation.
-
-**Acceptance criteria:**
-- `/standard` is a publicly accessible page at stelgano.com
-- Page structure: Introduction → Core Concepts → Conformance Requirements → Derivation Chain → The Passcode Test → Compatibility Badge → Known Implementations → Changelog
-- Protocol Amber visual treatment distinguishes Standard content from app content throughout
-- Full derivation chain shown with all salts, algorithms, and iteration counts
-- MUST/MUST NOT/SHOULD requirements presented in a scannable table
-- Links to `STANDARD.md` on GitHub and to `IMPLEMENTATIONS.md`
-- Page passes Passcode Test — nothing on the page reveals the user's own usage of the app
-
----
-
-**US-E16-04 — Rename the number generator to the steg number generator**
-
-> As a user setting up a private channel,
-> I want the number generator to use the sTELgano terminology,
-> so that the product's conceptual framing is consistent with the Standard.
-
-**Acceptance criteria:**
-- Route changed from `/number-generator` to `/steg-number`
-- All UI copy uses "steg number" in technical contexts and "the number in your contacts" or "your channel key" in user-facing copy
-- The generator page explains the contact-layer steganography concept in plain English
-- "Steg number" is defined on first use with a tooltip or inline explanation: "A steganographic telephone number — a real-looking phone number that exists only in your contacts, as your channel key"
-- Old `/number-generator` URL redirects to `/steg-number` — existing links continue to work
-
----
-
-**US-E16-05 — Update all product copy to sTELgano terminology**
-
-> As a user reading the homepage, security page, or help content,
-> I want consistent terminology that reflects the product's actual technique,
-> so that the product's claims are precise and auditable.
-
-**Acceptance criteria:**
-- "Fake phone number" replaced with "steg number" in all technical copy
-- "Fake phone number" replaced with "the number in your contacts" or "your channel key" in all user-facing copy
-- "Fake number system" in internal code references renamed to "steg number" or `steg_id`
-- "Conversation" replaced with "channel" in UI chrome (header, confirmations, error messages)
-- "Room" terminology retained in internal code, database schema, and protocol spec — it accurately describes the server-side construct
-- Homepage, `/security`, `/privacy`, `/standard`, and `/number-generator` (now `/steg-number`) all use consistent terminology
-- Glossary updated to include: `steg number`, `steg_id`, `contact-layer steganography`, `sTELgano-std-1`
-
----
-
-**US-E16-06 — Add the Standard section to the security page**
-
-> As a security researcher evaluating sTELgano,
-> I want the `/security` page to reference the Standard,
-> so that I understand whether the implementation is the canonical one or a third-party build.
-
-**Acceptance criteria:**
-- `/security` page includes a section: "This is the sTELgano-std-1 reference implementation"
-- Section explains the relationship between the Standard and this implementation
-- Links to `/standard` for the full protocol specification
-- Explains that third-party implementations exist and how to evaluate them (conformance checklist)
-- States that the reference implementation is the source of truth for ambiguous requirements
-
 ---
 
 **US-E16-07 — Implement the Standard changelog**
@@ -2118,7 +2002,7 @@
 
 ---
 
-*sTELgano Epics & User Stories v2.1 — April 2026*
+*sTELgano Epics & User Stories v2.2 — April 2026*
 *stelgano.com*
 *123 user stories across 19 epics*
 *sTELgano-std-1 · AGPL-3.0 · Hidden in the contact layer. Open by principle.*

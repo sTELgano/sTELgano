@@ -18,18 +18,34 @@ breaking protocol change increments the major version and requires a migration.
 - N=1 atomic messaging invariant enforced at database transaction level
 - AES-256-GCM client-side encryption via Web Crypto API (zero external libraries)
 - PBKDF2-HMAC-SHA256 key derivation at 600,000 iterations (OWASP 2023 recommendation)
-- Steg number generator: cryptographically random E.164 numbers via `crypto.getRandomValues`
+- Steg number generator: cryptographically random E.164 numbers via `phone-number-generator-js` with 19 curated countries
 - Phoenix Channel real-time: send, read receipts, edit before read, delete before read, typing indicator
-- Lock screen with inactivity timeout (30s / 1min / 5min / 15min / 30min / never)
+- Lock screen with PIN re-entry (re-derives encryption key without re-joining channel)
 - Multi-device access: deterministic key derivation across devices
-- Room TTL support (1h / 24h / 7d / 30d / custom / none)
+- Room TTL support with optional `ttl_expires_at` and automated expiry via Oban
 - Room expiry with atomic message deletion
-- Light / dark / system theme with `localStorage` persistence
 - Public pages: homepage, `/security` (full crypto spec), `/privacy`, `/terms`, `/about`
-- `/steg-number` generator page with clipboard copy and availability check
+- `/spec` — sTELgano-std-1 protocol specification page
+- `/blog` — blog section with index and slug-based article routing
+- `/steg-number` generator page with clipboard copy and room availability check
+- `/x` — panic route for instant session clear
+- Admin dashboard at `/admin` with HTTP Basic Auth and aggregate metrics (active chats, new today, messages today, total 90 days)
+- Service worker with privacy-first caching (network-only for `/chat`, `/steg-number`, `/admin`)
+- Rate limiting via PlugAttack (30 WebSocket upgrades/min, 200 HTTP requests/min per IP)
+- Security headers: CSP, HSTS, X-Frame-Options, CORP/COEP/COOP, Permissions-Policy
+- Oban background job for hourly TTL room expiry (`ExpireTtlRooms`)
 - AGPL-3.0 licence
 - Docker multi-stage build
-- CONTRIBUTING.md, SECURITY.md, COMMERCIAL.md
+- CI/CD via GitHub Actions (quality gates + deploy)
+- CONTRIBUTING.md, SECURITY.md, COMMERCIAL.md, CODE_OF_CONDUCT.md, AGENTS.md, CLAUDE.md
+
+### Changed
+- Replaced Heroicons with Lucide Icons (`lucide_icons` Elixir package)
+- Removed theme toggle — dark-only design (glassmorphism is inherently dark-first)
+- Switched message deletion from soft-delete (`deleted_at` column) to immediate hard-delete for N=1 invariant
+- Removed `deleted_at` column from messages table (migration `20260416000001`)
+- Updated UI copy throughout to use "steg number" terminology consistently
+- Improved code quality: added type specs, fixed Credo linting issues, refactored pipe chains
 
 ---
 

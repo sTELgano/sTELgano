@@ -3,9 +3,9 @@
 **Product:** sTELgano
 **Domain:** `stelgano.com`
 **Standard:** sTELgano-std-1
-**Version:** 2.1
+**Version:** 2.2
 **Date:** April 2026
-**Status:** Pre-development
+**Status:** MVP implemented — core messaging, crypto, chat UI, admin dashboard, blog, and public pages are live. Business model (Stripe/dedicated numbers), advanced room lifecycle cleanup, and user-defined TTL slider are not yet built.
 **Licence:** AGPL-3.0
 
 ---
@@ -160,11 +160,11 @@ All fonts loaded via Google Fonts CDN. TODO: self-host for stricter CSP.
 
 ### 3.6 Iconography
 
-Heroicons (micro/outline style). Used only where the icon unambiguously communicates faster than a word. Never decorative.
+Lucide Icons (via the `lucide_icons` Elixir package). Used only where the icon unambiguously communicates faster than a word. Never decorative.
 
 ### 3.7 Theme System
 
-Dark-first design. Three-way toggle available: system, light, dark. Preference stored in `localStorage` key `stelgano:theme` — nothing server-side, nothing that identifies the user. Theme applies via `data-theme` attribute on `<html>`. Cross-tab sync via `storage` event listener.
+**Dark-only design.** The theme toggle has been removed. sTELgano uses a single dark theme exclusively — this simplifies the UI, reduces code surface, and aligns with the glassmorphism design language which is inherently dark-first. No theme preference is stored; no toggle is exposed to the user.
 
 ### 3.8 Component Library
 
@@ -270,8 +270,8 @@ Alternatively, a returning user can go to `/steg-number`, regenerate/recall thei
 ### 7.1 Generator requirements
 
 - Generates internationally valid-format phone numbers in E.164 format: `+[country code][number]`
-- Powered by `phone-number-generator-js` npm package — supports 227 countries via the `CountryNames` enum
-- **Country selector dropdown** — users pick a specific country or leave it as "Any country (random)" for a fully random selection
+- Powered by `phone-number-generator-js` npm package
+- **Country selector dropdown** — 19 curated countries (Kenya, US, UK, Germany, France, Canada, Japan, Australia, India, Brazil, South Africa, Nigeria, Egypt, Morocco, Ethiopia, Ghana, Tanzania, Uganda, Rwanda). Users pick a specific country from the dropdown.
 - Display format: E.164 canonical form (the number is both displayed and copied in this format)
 - Generator is a standalone page at `/steg-number`
 - Number is automatically copied to clipboard on generation
@@ -532,11 +532,9 @@ When the other party is actively typing:
 - Permanently removes the message from the server
 - Room returns to empty state — both parties' inputs become active
 
-### 10.8 Theme toggle
+### 10.8 Theme toggle — removed
 
-- Icon button in the session header (sun/moon)
-- Toggles between light and dark mode
-- Preference stored in `localStorage`
+The theme toggle has been removed. sTELgano uses a dark-only design. See §3.7.
 
 ### 10.9 Expire room
 
@@ -581,14 +579,15 @@ The lock screen protects an open chat from anyone who finds an open browser tab.
 
 ### 11.2 Session storage model
 
-| Value | Storage location | Cleared when |
-|-------|-----------------|-------------|
-| Normalised phone number | `sessionStorage` | Tab close |
-| `room_id` | `sessionStorage` | Tab close |
-| `sender_hash` | `sessionStorage` | Tab close |
-| `enc_key` (CryptoKey object) | JS memory only | Tab close, lock screen clear |
-| Theme preference | `localStorage` | User-controlled |
-| PIN | **Never stored** | — |
+| Value | Storage key | Storage location | Cleared when |
+|-------|-------------|-----------------|-------------|
+| Normalised phone number | `stelegano_phone` | `sessionStorage` | Tab close, logout, panic |
+| `room_id` | `stelegano_room_id` | `sessionStorage` | Tab close, logout, panic |
+| `room_hash` | `stelegano_room_hash` | `sessionStorage` | Tab close, logout, panic |
+| `sender_hash` | `stelegano_sender_hash` | `sessionStorage` | Tab close, logout, panic |
+| `access_hash` | `stelegano_access_hash` | `sessionStorage` | Tab close, logout, panic |
+| `enc_key` (CryptoKey object) | — | JS memory only | Tab close, lock screen clear |
+| PIN | — | **Never stored** | — |
 
 On tab close, all session data is gone. Re-entry requires the steg number and PIN.
 
@@ -736,21 +735,19 @@ Terms of service. Plain English:
 
 ### 14.6 `/blog`
 
-Technical blog. Initial articles planned:
-- "Why we chose SHA-256 over Argon2 for the PIN gate"
-- "The phonebook trick: hiding keys in plain sight"
-- "N=1 messaging: why one message at a time is a security feature, not a limitation"
-- "PBKDF2 at 600,000 iterations: the OWASP recommendation and why it matters"
-- "What 'open source' actually proves — and what it doesn't"
-- "Why we don't use Google Analytics"
+Technical blog. Implemented with `BlogController` (index + show by slug). Articles are date-ordered with slug-based routing at `/blog/:slug`.
 
 ### 14.7 `/about`
 
-Who built this and why. Links to GitHub. Donation link. Sustainability model.
+Who built this and why. Links to GitHub.
 
-### 14.8 `/steg-number`
+### 14.8 `/spec`
 
-Standalone steg number generator page. Features a country selector dropdown (227 countries) and a generate button. The generated number is shown in E.164 format, automatically copied to clipboard, and accompanied by a warning to save the number in contacts before proceeding. An "Open channel with this number" button navigates directly to `/chat?phone=<e164>` with the phone field pre-populated. Includes the "hidden in plain sight" setup guide.
+The sTELgano-std-1 protocol specification page. Published at `/spec` (not `/standard` as originally planned). Contains the full protocol specification for contact-layer steganographic messaging.
+
+### 14.9 `/steg-number`
+
+Standalone steg number generator page. Features a country selector dropdown (19 curated countries: Kenya, US, UK, Germany, France, Canada, Japan, Australia, India, Brazil, South Africa, Nigeria, Egypt, Morocco, Ethiopia, Ghana, Tanzania, Uganda, Rwanda) and a generate button. The generated number is shown in E.164 format, automatically copied to clipboard, and accompanied by a warning to save the number in contacts before proceeding. An "Open channel with this number" button navigates directly to `/chat?phone=<e164>` with the phone field pre-populated. Includes the "hidden in plain sight" setup guide.
 
 ---
 
@@ -760,7 +757,7 @@ Standalone steg number generator page. Features a country selector dropdown (227
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Elixir 1.15+ |
+| Language | Elixir ~> 1.15 |
 | Framework | Phoenix 1.8 / LiveView 1.1 |
 | Real-time | Phoenix Channels (unauthenticated WebSocket) |
 | Database | PostgreSQL 16 via Ecto |
@@ -802,14 +799,16 @@ CREATE TABLE messages (
   room_id      UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   sender_hash  VARCHAR(64) NOT NULL,             -- SHA-256(phone:access_hash:room_hash:SENDER_SALT)
   ciphertext   BYTEA NOT NULL,
-  iv           BYTEA NOT NULL,                   -- 96-bit GCM nonce
+  iv           BYTEA NOT NULL,                   -- 96-bit GCM nonce (exactly 12 bytes)
   read_at      TIMESTAMPTZ,
-  deleted_at   TIMESTAMPTZ,                      -- soft delete for N=1 enforcement
   inserted_at  TIMESTAMPTZ NOT NULL,
   updated_at   TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX ON messages (room_id);
-CREATE INDEX ON messages (deleted_at);
+
+-- NOTE: Messages use immediate hard-delete (not soft-delete).
+-- When a reply is sent, the previous message is permanently removed
+-- from the database in the same atomic transaction. No deleted_at column.
 ```
 
 ### 15.3 Phoenix Channel protocol
@@ -819,7 +818,7 @@ Socket path:    /anon_socket   (no session, no auth cookie required)
 Channel topic:  anon_room:{room_hash}
 
 Client → Server events:
-  join            {sender_hash}                              join the room
+  join            {room_hash, access_hash, sender_hash}     join the room (all 64-char hex)
   send_message    {ciphertext, iv}                          N=1 enforced server-side
   read_receipt    {message_id}                              triggers double tick
   edit_message    {message_id, ciphertext, iv}              sender only, unread only
@@ -859,7 +858,7 @@ export const AnonCrypto = {
 
 The steg number generator uses the [`phone-number-generator-js`](https://www.npmjs.com/package/phone-number-generator-js) npm package (installed in `assets/package.json`). This replaces the former custom `phone-gen.js`.
 
-- Supports 227 countries via the `CountryNames` enum
+- Supports 227 countries via the `CountryNames` enum (19 curated in the UI dropdown)
 - E.164 format output
 - Country-specific generation via `generatePhoneNumber({ countryName: CountryNames.Kenya })`
 - Random country when no config is passed: `generatePhoneNumber()`
@@ -903,42 +902,45 @@ The salts published in the open-source client JS are the default values. Self-ho
 ### 15.8 Repository structure
 
 ```
-stelegano/
+stelgano/
 ├── .github/
-│   └── workflows/
-│       ├── ci.yml               quality gates on every push
-│       └── deploy.yml           auto-deploy main to Fly.io
+│   ├── workflows/
+│   │   ├── ci.yml                  quality gates on every push
+│   │   └── deploy.yml              auto-deploy main to Fly.io
+│   ├── dependabot.yml              automated dependency updates
+│   └── ISSUE_TEMPLATE/
+│       └── bug_report.yml          bug report template
 ├── assets/
 │   ├── css/
-│   │   └── app.css              Tailwind v4 — design tokens defined here
+│   │   └── app.css                 Tailwind v4 — design tokens defined here
 │   ├── js/
-│   │   ├── app.js               LiveSocket bootstrap
+│   │   ├── app.js                  LiveSocket bootstrap
 │   │   ├── crypto/
-│   │   │   └── anon.js          AnonCrypto — single source of truth for all crypto
+│   │   │   └── anon.js             AnonCrypto — single source of truth for all crypto
 │   │   └── hooks/
-│   │       └── chat.js          LiveView hooks — imports anon.js + phone-number-generator-js
+│   │       └── chat.js             LiveView hooks — imports anon.js + phone-number-generator-js
 │   ├── vendor/
 │   │   └── topbar.js
-│   ├── package.json             npm deps (phone-number-generator-js, phoenix file links)
+│   ├── package.json                npm deps (phone-number-generator-js, phoenix file links)
 │   └── node_modules/
 ├── config/
 │   ├── config.exs
 │   ├── dev.exs
 │   ├── prod.exs
-│   ├── runtime.exs              secrets from env — never committed
+│   ├── runtime.exs                 secrets from env — never committed
 │   └── test.exs
 ├── lib/
-│   ├── stelegano/
+│   ├── stelgano/
 │   │   ├── application.ex
 │   │   ├── repo.ex
+│   │   ├── rooms.ex                context — all business logic
 │   │   ├── rooms/
 │   │   │   ├── room.ex
 │   │   │   ├── room_access.ex
-│   │   │   ├── message.ex
-│   │   │   └── rooms.ex         context
+│   │   │   └── message.ex
 │   │   └── jobs/
-│   │       └── room_purge.ex    Oban job — TTL expiry
-│   └── stelegano_web/
+│   │       └── expire_ttl_rooms.ex Oban job — hourly TTL expiry
+│   └── stelgano_web/
 │       ├── channels/
 │       │   ├── anon_socket.ex
 │       │   └── anon_room_channel.ex
@@ -947,34 +949,52 @@ stelegano/
 │       │   └── layouts/
 │       ├── controllers/
 │       │   ├── page_controller.ex
-│       │   └── page_html/
-│       │       ├── home.html.heex
-│       │       ├── security.html.heex
-│       │       ├── privacy.html.heex
-│       │       ├── terms.html.heex
-│       │       ├── blog.html.heex
-│       │       └── about.html.heex
+│       │   ├── page_html/
+│       │   │   ├── home.html.heex
+│       │   │   ├── security.html.heex
+│       │   │   ├── privacy.html.heex
+│       │   │   ├── terms.html.heex
+│       │   │   ├── about.html.heex
+│       │   │   └── spec.html.heex
+│       │   ├── blog_controller.ex
+│       │   ├── blog_html/
+│       │   └── panic_controller.ex
+│       ├── plugs/
+│       │   ├── security_headers.ex
+│       │   ├── rate_limiter.ex
+│       │   └── admin_auth.ex       HTTP Basic Auth for /admin
 │       ├── live/
 │       │   ├── chat_live.ex
-│       │   └── steg_number_live.ex
+│       │   ├── steg_number_live.ex
+│       │   └── admin_dashboard_live.ex
 │       ├── endpoint.ex
 │       └── router.ex
 ├── priv/
-│   ├── repo/migrations/
+│   ├── repo/migrations/            6 migrations (rooms, access, messages, oban, rate_limit, remove_deleted_at)
 │   └── static/
-│       ├── sw.js                service worker (privacy-first caching)
-│       ├── manifest.json        PWA manifest
+│       ├── sw.js                    service worker (privacy-first caching)
+│       ├── manifest.json            PWA manifest
 │       ├── favicon.ico
 │       └── images/
-│           ├── icon-192.png     PWA icon
-│           ├── icon-512.png     PWA icon
+│           ├── icon-192.png         PWA icon
+│           ├── icon-512.png         PWA icon
 │           ├── apple-touch-icon.png
 │           ├── favicon.svg
 │           └── favicon-96x96.png
-├── test/                        ≥ 90% coverage enforced
+├── project/
+│   ├── stelgano_PRD_v2_1.md        this document
+│   ├── stelgano_Epics_v2_1.md      epics & user stories
+│   ├── launch_content.md            launch copy for all platforms
+│   ├── compliance_and_recommendations.md
+│   └── *.html / *.css               design system reference files
+├── test/                            ≥ 90% coverage enforced
+├── AGENTS.md
 ├── CHANGELOG.md
+├── CLAUDE.md
+├── CODE_OF_CONDUCT.md
+├── COMMERCIAL.md
 ├── CONTRIBUTING.md
-├── LICENSE                      AGPL-3.0
+├── LICENSE                          AGPL-3.0
 ├── README.md
 ├── SECURITY.md
 ├── mix.exs
@@ -1211,11 +1231,10 @@ jobs:
 # mix.exs
 "precommit": [
   "compile --warnings-as-errors",
+  "deps.unlock --check-unused",
   "format",
   "credo --strict",
-  "sobelow --config",
-  "dialyzer",
-  "test --cover"
+  "test"
 ]
 ```
 
@@ -1303,110 +1322,61 @@ jobs:
 
 ### 9.1 Design principle
 
-The database should contain only rooms that are either actively in use or have been recently created and are waiting for a second party. Stale, abandoned, and expired rooms are a liability — they consume storage, bloat the steg number pool, and make accurate metrics harder to compute. The cleanup system ensures that released steg numbers can be immediately reused.
+The database should contain only rooms that are either actively in use or have been recently created and are waiting for a second party. Stale, abandoned, and expired rooms are a liability — they consume storage, bloat the steg number pool, and make accurate metrics harder to compute.
 
-### 9.2 Room states
+### 9.2 Room states (current implementation)
 
 | State | Definition | Cleanup trigger |
 |-------|------------|----------------|
-| `active` | Both parties have joined; message exchange in progress or possible | TTL expiry |
-| `pending_peer` | First party joined; second party has never connected | 24 hours after creation |
-| `stale` | Both joined; no message ever sent | 48 hours after peer join |
-| `unreplied` | Message sent; not replied to before TTL | At TTL expiry |
-| `expired` | TTL elapsed or manually ended | Immediate — Oban job |
-| `recycled` | room_hash deleted; steg number returned to pool | Terminal state |
+| `active` | `is_active = TRUE`; room is usable | TTL expiry or manual expiry |
+| `expired` | `is_active = FALSE`; manually ended or TTL elapsed | Terminal state |
 
-### 9.3 Automated cleanup rules
+### 9.3 Automated cleanup (current implementation)
 
-An Oban job (`sTELgano.Jobs.RoomPurge`) runs every 15 minutes and evaluates each active room:
+An Oban job (`Stelgano.Jobs.ExpireTtlRooms`) runs **hourly** and expires rooms past their TTL:
 
-| Condition | Query | Grace period | Action |
-|-----------|-------|-------------|--------|
-| Second party never joined | `peer_joined_at IS NULL AND inserted_at < NOW() - INTERVAL '24 hours'` | 24 hours | Hard delete room + access record |
-| Both joined, no message ever sent | `first_message_at IS NULL AND peer_joined_at < NOW() - INTERVAL '48 hours'` | 48 hours | Hard delete room + access records |
-| Message sent, not replied to, past TTL | `messages.read_at IS NULL AND rooms.ttl_expires_at < NOW()` | None | Hard delete room + messages + access |
-| TTL elapsed (any state) | `ttl_expires_at < NOW() AND is_active = TRUE` | None | Hard delete + broadcast `room_expired` |
-| Manual expiry via channel event | `expire_room` event received | None | Hard delete + broadcast `room_expired` |
-| Dedicated number, subscription lapsed, grace elapsed | `is_dedicated = TRUE AND stripe_sub_id lapsed AND 7-day grace passed` | 7 days | Hard delete |
+| Condition | Action |
+|-----------|--------|
+| `ttl_expires_at < NOW() AND is_active = TRUE` | Sets `is_active = false`, hard-deletes all messages, broadcasts `room_expired` |
+| Manual expiry via `expire_room` channel event | Same atomic expiry via `Rooms.expire_room/1` |
 
-### 9.4 Steg number recycling
+**Queue:** `:maintenance` with 2 workers, max 3 attempts per job.
 
-When a room is deleted by any cleanup path, the `room_hash` record is removed. This makes the underlying steg number available again — a new `room_hash = SHA-256(steg_number + ROOM_SALT)` can be computed by any party who enters that number, creating a fresh room. The old conversation is completely gone; the new room has no connection to its predecessor.
+### 9.4 Future: Advanced cleanup (not yet implemented)
 
-For dedicated (paid) numbers: if the subscription lapses and the 7-day grace period passes without renewal, the number enters the shared pool. The subscriber is notified at 30 days, 7 days, and 1 day before lapse.
+The following cleanup states and rules are planned but not yet built:
 
-### 9.5 Database schema additions
+- `pending_peer` — auto-delete rooms where the second party never joined (24h)
+- `stale` — auto-delete rooms where no message was ever sent (48h)
+- Dedicated number subscription lapse with 7-day grace period
+- Steg number pool recycling
 
-```sql
-ALTER TABLE rooms
-  ADD COLUMN ttl_days         SMALLINT     NOT NULL DEFAULT 7,
-  ADD COLUMN ttl_expires_at   TIMESTAMPTZ  NOT NULL,
-  ADD COLUMN peer_joined_at   TIMESTAMPTZ,           -- NULL = second party never joined
-  ADD COLUMN first_message_at TIMESTAMPTZ,           -- NULL = no message ever sent
-  ADD COLUMN is_dedicated     BOOLEAN      NOT NULL DEFAULT FALSE,
-  ADD COLUMN stripe_sub_id    VARCHAR(64);           -- dedicated tier only; NULL for free
-
-CREATE INDEX ON rooms (ttl_expires_at) WHERE is_active = TRUE;
-CREATE INDEX ON rooms (peer_joined_at) WHERE peer_joined_at IS NULL AND is_active = TRUE;
-CREATE INDEX ON rooms (first_message_at) WHERE first_message_at IS NULL AND is_active = TRUE;
-CREATE INDEX ON rooms (is_dedicated, stripe_sub_id) WHERE is_dedicated = TRUE;
-```
-
-### 9.6 TTL notification schedule
-
-| Time before expiry | Notification | Channel |
-|-------------------|-------------|---------|
-| 2 days | Warning toast in chat UI | In-app only |
-| 12 hours | Critical toast with upgrade CTA | In-app only |
-| At expiry | `room_expired` broadcast → expiry screen | In-app + PubSub |
-| Dedicated: 30 days before lapse | Renewal reminder | Stripe email |
-| Dedicated: 7 days before lapse | Renewal reminder | Stripe email |
-| Dedicated: 1 day before lapse | Final warning | Stripe email |
-
-No notifications are sent via external channels for free-tier rooms. Email addresses are never collected.
+These features require additional database columns (`peer_joined_at`, `first_message_at`, `is_dedicated`, `stripe_sub_id`) that are not yet in the schema.
 
 ---
 
 ## 10. User-Defined TTL
 
-### 10.1 When TTL is set
+### 10.1 Current implementation
 
-TTL is set **once, at channel creation** — when the first party opens a room that does not yet exist. The entry screen detects a new room (server returns `room_not_found` on the first join attempt with `access_hash`) and shows a second step: the TTL slider.
+Rooms have an optional `ttl_expires_at` column. When set, the `ExpireTtlRooms` Oban job automatically expires the room after the TTL elapses. Either party can also manually expire the room at any time via the `expire_room` channel event.
 
-Returning users (room already exists) bypass the TTL step entirely. The TTL was set by whoever opened the room first.
+The in-chat TTL progress bar is implemented — a 3px bar beneath the chat header shows time remaining with green → amber → red colour transitions.
 
-### 10.2 Slider specification
+### 10.2 Future: TTL slider (not yet implemented)
 
-| Property | Value |
-|----------|-------|
-| Input type | Integer range slider |
-| Min | 1 day |
-| Max | 7 days (free tier) |
-| Default | 7 days (shown pre-selected) |
-| Step | 1 day only — no fractional days |
-| Display | Countdown ring + expiry date string |
-| Upgrade path | Inline nudge → dedicated number page |
+The following TTL selection UI is planned but not yet built:
 
-### 10.3 TTL UX copy
-
-- Question: **"How many days do you need this number for?"**
-- Rationale: conversational, maps to the user's mental model, educates about number lifecycle
-- Expiry label: **"Number recycled on [Day Date Month]."**
-- Recycle note: **"When the channel closes, the steg number returns to the pool and can be used by anyone."**
-- Upgrade nudge: **"Need this number permanently? Dedicated numbers never expire."** → $2/year CTA
-
-### 10.4 In-chat TTL strip
-
-A 3px progress bar immediately beneath the chat header shows time remaining. Colour transitions:
-- **Green** → more than 2 days remaining
-- **Amber** → 2 days or less remaining (warning toast shown once)
-- **Red** → 12 hours or less remaining (critical toast shown, upgrade CTA prominent)
-
-The strip is the only persistent TTL reminder in an active chat. It does not interrupt conversation flow.
+- TTL slider on new channel creation (1–7 day range, step 1 day)
+- Countdown ring visualisation
+- Expiry warning toasts at 2 days and 12 hours remaining
+- Upgrade nudge to dedicated numbers
 
 ---
 
-## 25. Business Model
+## 25. Business Model (not yet implemented)
+
+> **Implementation status:** The entire business model — Stripe integration, dedicated numbers, billing firewall, pricing page, and transparency reports — is planned but not yet built. The specification below is retained for future implementation.
 
 ### 25.1 Philosophy
 
@@ -1481,7 +1451,7 @@ The following elements from the submitted business model proposal were considere
 
 ### 23.1 Overview
 
-sTELgano's admin dashboard is an internal, server-side-rendered panel built directly into the Phoenix application. It is accessible only via `/admin` and is protected by TOTP (Time-based One-Time Password) authentication. It makes no external requests, loads no third-party scripts, and is excluded from the public-facing Content Security Policy.
+sTELgano's admin dashboard is an internal, server-side-rendered panel built directly into the Phoenix application. It is accessible only via `/admin` and is protected by HTTP Basic Auth. It makes no external requests, loads no third-party scripts, and is excluded from the public-facing Content Security Policy.
 
 The dashboard exists to provide the operator with meaningful operational insight while strictly upholding the product's privacy guarantees. The admin can see *how the system is performing* — never *what any individual is doing*.
 
@@ -1489,255 +1459,104 @@ The dashboard exists to provide the operator with meaningful operational insight
 
 ---
 
-### 23.2 Authentication — TOTP
+### 23.2 Authentication — HTTP Basic Auth
 
-#### 23.2.1 Login mechanism
+#### 23.2.1 Current implementation
 
-- Login route: `/admin/login`
-- Authentication: 6-digit TOTP code only — no username/password pair
-- TOTP secret provisioned once during deployment via `ADMIN_TOTP_SECRET` environment variable
-- Compatible with any RFC 6238-compliant authenticator app (Aegis, Google Authenticator, 1Password, Bitwarden)
-- 30-second rolling time window; one code of grace period accepted
+- Authentication: HTTP Basic Auth with constant-time credential comparison
+- Credentials sourced from `ADMIN_USERNAME` (default: `"admin"`) and `ADMIN_PASSWORD` environment variables
+- `ADMIN_PASSWORD` is required in production — startup fails without it
+- Constant-time comparison uses SHA-256 hash equality to prevent timing attacks
+- Unauthorized requests receive HTTP 401 with `WWW-Authenticate` header
 
-#### 23.2.2 Session management
-
-| Property | Value |
-|----------|-------|
-| Session token | Opaque signed cookie (Phoenix `put_session`) |
-| TTL | 2 hours |
-| Renewal | On any successful admin page load within the TTL window |
-| Inactivity logout | After 30 minutes of no navigation |
-| Concurrent sessions | Not permitted — new login invalidates previous session |
-
-#### 23.2.3 Brute-force protection
-
-- 3 failed TOTP attempts → 30-minute server-side lockout on the admin IP
-- Lockout is IP-scoped, not account-scoped (there is only one admin account)
-- After lockout, correct code still rejected until window expires
-- All lockout events logged to the admin audit log
-
-#### 23.2.4 Admin route security
+#### 23.2.2 Admin route security
 
 - `/admin/*` is declared in a separate Phoenix scope with a custom `AdminAuth` plug
+- Pipeline: `pipe_through [:browser, :admin_auth]`
 - Not linked from any public page; not present in `robots.txt` allow list
-- CSP for admin routes adds `script-src 'self' 'nonce-{nonce}'` — no change from public policy
-- Admin sessions invalidated on server restart (acceptable — TOTP re-login is fast)
+- CSP for admin routes is identical to public routes — no loosened policy
+
+#### 23.2.3 Future: TOTP upgrade (not yet implemented)
+
+The PRD originally specified TOTP authentication. This is planned as a future upgrade but is not yet built. The current HTTP Basic Auth is sufficient for single-operator deployments.
 
 ---
 
-### 23.3 Privacy-Safe Metrics
+### 23.3 Privacy-Safe Metrics (current implementation)
 
-All metrics are computed server-side from existing database operational data. No client-side instrumentation. No user identifiers in any metric. Every metric represents an aggregate count, average, or distribution — never a row tied to an individual room or user.
+All metrics are computed server-side from existing database operational data via `Stelgano.Rooms.aggregate_metrics/0`. No client-side instrumentation. No user identifiers in any metric.
 
-The following metrics are captured and displayed:
+#### 23.3.1 Implemented metrics (AdminDashboardLive)
 
-#### 23.3.1 Room metrics (retained 90 days)
+The admin dashboard currently displays four aggregate metric cards:
 
-| Metric | Collection method | Privacy note |
-|--------|------------------|--------------|
-| Active rooms count | `SELECT COUNT(*) FROM rooms WHERE is_active = TRUE` | No identifiers |
-| Rooms created per day | `GROUP BY DATE(inserted_at)` | Date only |
-| Rooms expired per day | `GROUP BY DATE(updated_at) WHERE is_active = FALSE` | Date only |
-| Rooms manually ended vs TTL-expired | Count of expire source (channel event vs Oban job) | No room identifier |
-| Room lifetime distribution | `updated_at - inserted_at` grouped into buckets: `<1h`, `1–6h`, `6–24h`, `1–7d`, `7+d` | No room identifier |
-| Average room lifespan | Aggregate avg over 30-day rolling window | No room identifier |
+| Metric | Query | Privacy note |
+|--------|-------|--------------|
+| Active chats | `COUNT(*) FROM rooms WHERE is_active = TRUE` | Count only, no identifiers |
+| New chats today | Rooms created in last 24 hours | Count only |
+| Messages sent today | Messages inserted in last 24 hours | Count only, encrypted content |
+| Total chats (90 days) | Rooms created in last 90 days | Count only |
 
-#### 23.3.2 Message metrics (retained 90 days)
+- Auto-refresh: 30-second timer with manual refresh button
+- Info panel: lists operational guidelines and data retention policy
+- No individual room identifiers, hashes, or content visible anywhere
 
-| Metric | Collection method | Privacy note |
-|--------|------------------|--------------|
-| Messages sent per day | `SELECT COUNT(*), DATE(inserted_at) FROM messages GROUP BY date` | Date only |
-| Messages edited before read (count) | Count of `updated_at != inserted_at AND read_at IS NULL` | No content, no room ID |
-| Messages deleted before read (count) | Count of `deleted_at IS NOT NULL AND read_at IS NULL` | No content, no room ID |
-| N=1 atomic operation success rate | Count successes vs conflicts from DB transaction log | No identifiers |
+#### 23.3.2 Future metrics (not yet implemented)
 
-#### 23.3.3 Access metrics (retained 30 days)
+The following metrics are planned but not yet built:
 
-| Metric | Collection method | Privacy note |
-|--------|------------------|--------------|
-| PIN verification failures per day | Count of `failed_attempts` increment events | No room hash exposed |
-| Active lockouts (current) | `SELECT COUNT(*) FROM room_access WHERE locked_until > NOW()` | No identifiers |
-| Lockout events per day | Aggregate count from room_access update events | No identifiers |
-
-#### 23.3.4 Real-time WebSocket metrics (in-memory, retained 90 days via OTP telemetry)
-
-| Metric | Collection method |
-|--------|------------------|
-| Current live connections | `:telemetry` event from `Phoenix.Socket` |
-| Peak concurrent connections (per hour) | ETS-backed rolling maximum |
-| WebSocket join events per hour | Telemetry counter |
-| WebSocket disconnect events per hour | Telemetry counter |
-
-#### 23.3.5 Performance metrics (retained 30 days)
-
-| Metric | Collection method |
-|--------|------------------|
-| Page load latency p50 / p95 | Phoenix Telemetry (`phoenix.router_dispatch.stop`) |
-| Message delivery latency p50 / p95 | Delta between `send_message` receipt and `new_message` broadcast |
-| PBKDF2 key derivation time estimate | Not measured server-side — reported from published device benchmarks |
-| DB query latency p50 / p95 | Ecto Telemetry |
-
-#### 23.3.6 Error metrics (retained 30 days)
-
-Errors are grouped by type and counted. No stack traces containing user data. No room hashes in error logs.
-
-| Error type | Description |
-|-----------|-------------|
-| `pin_verification_failed` | Access hash not found for room hash |
-| `room_not_found` | Unknown room hash |
-| `room_locked_out` | Access attempt during lockout |
-| `ws_connection_error` | Phoenix Channel join/push failure |
-| `invalid_base64_payload` | Malformed ciphertext or IV |
-| `n1_conflict` | Concurrent send attempt rejected by DB transaction |
-
-**What is explicitly not captured:**
-- Geographic distribution (requires IP, which is purged within 48 hours)
-- Browser or OS distribution (requires User-Agent storage, which is never retained)
-- Individual room identifiers in any metric
-- Any metric that could correlate to a specific conversation
+- Room lifetime distribution (bucketed)
+- WebSocket connection tracking (peak/current)
+- Error rate breakdown by type
+- Message delivery latency p50/p95
+- PIN verification failure rates
+- Performance metrics (page load, DB query latency)
 
 ---
 
-### 23.4 Natural Language → SQL Query Interface
+### 23.4 Future: NL → SQL Query Interface (not yet implemented)
 
-#### 23.4.1 Purpose
+The PRD originally specified a natural language → SQL interface powered by Claude. This feature is planned but not yet built. The specification is retained here for future implementation reference. Key design points: SELECT-only queries, privacy guardrails blocking sensitive columns (`room_hash`, `access_hash`, `sender_hash`, `ciphertext`, `iv`), read-only transactions, and aggregate-only results.
 
-Operators can ask operational questions in plain English without writing SQL. The interface converts the question to SQL using an LLM (Claude claude-sonnet-4-6 via the Anthropic API), validates the query against a strict allowlist, executes it as a read-only database transaction, and returns results in a formatted table.
+### 23.5 Future: Analytics Visualisation (not yet implemented)
 
-#### 23.4.2 Privacy guardrail — query validation
+Time-series charts (Chart.js, self-hosted) showing message/room activity, room lifetime distribution, WebSocket connections, and error rates are planned but not yet built.
 
-Before execution, every generated query passes through a validation layer that enforces the following rules:
+### 23.6 Future: Audit Log (not yet implemented)
 
-| Rule | Implementation |
-|------|---------------|
-| SELECT only | Statement type checked — `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER`, `CREATE` all rejected |
-| Allowed tables only | Query parsed for table references — only `rooms`, `messages`, `room_access`, `metric_snapshots` permitted |
-| Blocked columns | `room_hash`, `access_hash`, `sender_hash`, `ciphertext`, `iv` may never appear in SELECT output — they may appear in WHERE clauses for aggregate filtering only |
-| No LIMIT bypass | Maximum 1,000 rows enforced at the DB transaction level via `SET LOCAL statement_timeout` |
-| Aggregate required | Queries returning raw rows from `room_access` or `rooms` without a `GROUP BY` or aggregate function are rejected |
-| Read-only transaction | All queries run inside `BEGIN READ ONLY; ... ROLLBACK;` |
-
-A rejected query returns a privacy-guardrail explanation in plain English — never the raw validation error.
-
-#### 23.4.3 LLM prompt design
-
-```
-System: You are a read-only PostgreSQL query generator for a privacy-first application.
-        Allowed tables: rooms, messages, room_access, metric_snapshots.
-        Blocked columns in SELECT output: room_hash, access_hash, sender_hash, ciphertext, iv.
-        Always use GROUP BY or aggregate functions. Never return individual row identifiers.
-        Return only valid PostgreSQL SQL. No explanation. No markdown. No preamble.
-
-Schema context: [abbreviated schema without content of sensitive columns]
-
-User: {natural language question}
-```
-
-The generated SQL is shown to the admin before execution, with a one-click "Run" confirmation. The admin can edit the SQL before running.
-
-#### 23.4.4 Result presentation
-
-- Results displayed in a paginated table (20 rows per page, max 1,000 rows)
-- Numeric columns rendered with locale-appropriate formatting
-- Timestamp columns rendered in the server's configured timezone
-- Row count and query execution time shown beneath the table
-- Export to CSV (browser-side only — no server-side file creation)
-- All executed queries and their row counts are logged to the audit log
-
-#### 23.4.5 Suggested example queries (shown in UI)
-
-- "How many rooms were created in the last 7 days, broken down by day?"
-- "What percentage of rooms expire naturally vs are manually ended?"
-- "What is the average room lifespan this month?"
-- "How many lockout events occurred in the last 24 hours?"
-- "Show message volume for each hour today"
-- "What are the most common error types this week?"
+An `admin_audit_log` table recording all admin actions is planned but not yet built.
 
 ---
 
-### 23.5 Analytics Visualisation
+### 23.7 Admin implementation (actual)
 
-The dashboard displays the following charts, all rendered client-side using Chart.js (self-hosted, no CDN). Data is fetched from the server via LiveView assigns on page load and refreshed every 2 minutes.
-
-| Chart | Type | Data |
-|-------|------|------|
-| Messages & Rooms — 30 days | Dual-axis bar + line | Daily message count (bars) + daily room count (line) |
-| Room lifetime distribution | Doughnut | Percentage in each lifetime bucket |
-| Live WebSocket connections — 24h | Area line | Hourly peak connection count |
-| Message delivery latency — 7 days | Multi-line | p50 and p95 per day |
-| Error rates — 30 days | Horizontal bar | Count per error type |
-| Active lockouts (live) | Gauge / numeric | Current count from DB |
-
-Chart.js is loaded from `priv/static/js/vendor/chart.min.js` — no external CDN requests. Consistent with CSP.
-
----
-
-### 23.6 Audit Log
-
-Every admin action is recorded in an `admin_audit_log` database table. Entries are never purged (kept indefinitely as a compliance record for self-hosters).
-
-```sql
-CREATE TABLE admin_audit_log (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_type  VARCHAR(64) NOT NULL,   -- login, login_failed, query_executed, query_blocked, page_viewed
-  detail      TEXT,                   -- NL question, blocked reason, page name — never user data
-  ip_hash     VARCHAR(64),            -- SHA-256(ip + LOG_SALT) — cannot be reversed
-  inserted_at TIMESTAMPTZ NOT NULL
-);
-```
-
-IP addresses in the audit log are hashed — consistent with the privacy policy. The hash allows detecting repeated failed logins from the same origin without storing the raw IP.
-
----
-
-### 23.7 Repository changes for admin
-
-#### 23.7.1 New files
+#### 23.7.1 Files
 
 ```
 lib/
-├── stelegano_web/
-│   ├── controllers/
-│   │   └── admin_session_controller.ex   TOTP validation + session management
-│   ├── live/
-│   │   ├── admin/
-│   │   │   ├── dashboard_live.ex         overview with metric cards
-│   │   │   ├── analytics_live.ex         detailed charts
-│   │   │   ├── query_live.ex             NL → SQL interface
-│   │   │   ├── errors_live.ex            error type breakdown
-│   │   │   └── audit_log_live.ex         audit log viewer
-│   └── plugs/
-│       └── admin_auth.ex                 TOTP session guard
-├── stelegano/
-│   ├── admin/
-│   │   ├── metrics.ex                    aggregate query functions
-│   │   ├── nl_query.ex                   LLM prompt + validation + execution
-│   │   └── audit.ex                      audit log writer
+├── stelgano_web/
+│   ├── plugs/
+│   │   └── admin_auth.ex                 HTTP Basic Auth guard
+│   └── live/
+│       └── admin_dashboard_live.ex       overview with 4 metric cards + auto-refresh
+├── stelgano/
+│   └── rooms.ex                          aggregate_metrics/0 function
 ```
 
-#### 23.7.2 New environment variables
+#### 23.7.2 Environment variables
 
 | Variable | Purpose | Required |
 |----------|---------|---------|
-| `ADMIN_TOTP_SECRET` | Base32 TOTP secret for authenticator app provisioning | Yes |
-| `ANTHROPIC_API_KEY` | Claude API key for NL → SQL generation | Yes |
-| `ADMIN_LOG_SALT` | Salt for IP hashing in audit log | Optional (defaults to generated) |
+| `ADMIN_USERNAME` | Admin username (default: `"admin"`) | No |
+| `ADMIN_PASSWORD` | Admin password | Yes (production) |
 
-#### 23.7.3 New router scope
+#### 23.7.3 Router scope
 
 ```elixir
-scope "/admin", sTELganoWeb do
+scope "/admin", StelganoWeb do
   pipe_through [:browser, :admin_auth]
 
-  get  "/login",  AdminSessionController, :new
-  post "/login",  AdminSessionController, :create
-  delete "/logout", AdminSessionController, :delete
-
-  live "/",          Admin.DashboardLive,   :index
-  live "/analytics", Admin.AnalyticsLive,   :index
-  live "/query",     Admin.QueryLive,       :index
-  live "/errors",    Admin.ErrorsLive,      :index
-  live "/audit",     Admin.AuditLogLive,    :index
+  live "/", AdminDashboardLive
 end
 ```
 
@@ -1830,9 +1649,6 @@ The Passcode Test is the human-facing expression of the contact-layer steganogra
 
 ---
 
-*sTELgano PRD v2.1 — April 2026*
+*sTELgano PRD v2.2 — April 2026*
 *stelgano.com · sTELgano-std-1 · AGPL-3.0*
 *Hidden in the contact layer. Open by principle.*
-*stelgano.com*
-*Hidden in the contact layer. Open by principle.*
-*sTELgano-std-1 · AGPL-3.0*
