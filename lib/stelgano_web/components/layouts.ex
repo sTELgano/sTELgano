@@ -29,8 +29,8 @@ defmodule StelganoWeb.Layouts do
           <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
         </.link>
 
-        <div class="flex items-center gap-6">
-          <div class="hidden sm:flex items-center gap-8 mr-4">
+        <div class="flex items-center gap-3 sm:gap-6">
+          <div class="hidden md:flex items-center gap-8 mr-4">
             <.link
               navigate={~p"/security"}
               class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all"
@@ -44,11 +44,12 @@ defmodule StelganoWeb.Layouts do
               About
             </.link>
           </div>
-          <div class="h-4 w-px bg-white/10 mx-2"></div>
-          <.theme_toggle />
-          <.link navigate={~p"/steg-number"} class="btn-primary py-2 px-6 text-xs">
-            Start Channel
-          </.link>
+          <div class="hidden sm:block h-4 w-px bg-white/10 mx-2"></div>
+          <%= if assigns[:view_module] not in [StelganoWeb.ChatLive, StelganoWeb.StegNumberLive] do %>
+            <.link navigate={~p"/steg-number"} class="btn-primary py-2.5 px-5 text-[10px] sm:text-xs">
+              Start Chat
+            </.link>
+          <% end %>
         </div>
       </div>
     </nav>
@@ -88,7 +89,7 @@ defmodule StelganoWeb.Layouts do
         hidden
       >
         {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 animate-spin" />
+        <.icon name="refresh_cw" class="ml-1 size-3 animate-spin" />
       </.flash>
 
       <.flash
@@ -106,35 +107,4 @@ defmodule StelganoWeb.Layouts do
     """
   end
 
-  @doc """
-  Three-way theme toggle: system / light / dark.
-  """
-  @spec theme_toggle(map()) :: Phoenix.LiveView.Rendered.t()
-  def theme_toggle(assigns) do
-    ~H"""
-    <div class="flex items-center gap-1 p-1 bg-white/5 rounded-full border border-white/5 shadow-inner">
-      <button
-        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "system"})}
-        class="p-1.5 rounded-full hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
-        title="System"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4" />
-      </button>
-      <button
-        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "light"})}
-        class="p-1.5 rounded-full hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
-        title="Light"
-      >
-        <.icon name="hero-sun-micro" class="size-4" />
-      </button>
-      <button
-        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "dark"})}
-        class="p-1.5 rounded-full hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
-        title="Dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4" />
-      </button>
-    </div>
-    """
-  end
 end

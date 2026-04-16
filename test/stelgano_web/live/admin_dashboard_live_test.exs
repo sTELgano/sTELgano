@@ -64,15 +64,15 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
 
     test "shows all metric cards", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/admin")
-      assert html =~ "Active Handshakes"
-      assert html =~ "Inbound Streams"
-      assert html =~ "Ciphertext Flow"
-      assert html =~ "Historical Range"
+      assert html =~ "Active Chats"
+      assert html =~ "New Chats Today"
+      assert html =~ "Messages Sent Today"
+      assert html =~ "Total Chats"
     end
 
     test "shows last-updated timestamp", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/admin")
-      assert html =~ "Synced"
+      assert html =~ "Updated"
     end
 
     test "never exposes user identifiers or room hashes", %{conn: conn} do
@@ -84,14 +84,14 @@ defmodule StelganoWeb.AdminDashboardLiveTest do
 
     test "explains what metrics are shown", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/admin")
-      assert html =~ "No Handshake Data"
-      assert html =~ "Aggregate Metrics Only"
+      assert html =~ "No Private Data"
+      assert html =~ "Total Stats Only"
     end
 
     test "refresh_now event updates the view", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/admin")
-      view |> element("button", "Synchronize Matrix") |> render_click()
-      assert render(view) =~ "Synced"
+      view |> element("button", "Refresh Stats") |> render_click()
+      assert render(view) =~ "Updated"
     end
 
     test "metric values are non-negative integers", %{conn: conn} do

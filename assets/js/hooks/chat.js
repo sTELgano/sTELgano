@@ -408,31 +408,6 @@ export const AnonChat = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// ThemeToggle hook
-// ---------------------------------------------------------------------------
-
-const STORAGE_KEY = "stelgano:theme";
-
-export const ThemeToggle = {
-  mounted() {
-    this.el.addEventListener("click", () => {
-      const current = document.documentElement.getAttribute("data-theme");
-      const next = current === "dark" ? "light" : "dark";
-      setTheme(next);
-    });
-  },
-};
-
-function setTheme(theme) {
-  if (theme === "system") {
-    localStorage.removeItem(STORAGE_KEY);
-    document.documentElement.removeAttribute("data-theme");
-  } else {
-    localStorage.setItem(STORAGE_KEY, theme);
-    document.documentElement.setAttribute("data-theme", theme);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // PhoneGenerator hook (steg-number page)
@@ -440,50 +415,51 @@ function setTheme(theme) {
 
 export const PhoneGenerator = {
   mounted() {
-    const generateBtn = document.getElementById("generate-btn");
-    const countrySelect = document.getElementById("country-select");
-    if (!generateBtn || !countrySelect) return;
-
-    // Populate country dropdown from the package's CountryNames enum
+    // Synchronise full country list to server on mount
     const countries = Object.keys(CountryNames)
-      .filter(k => isNaN(k))
-      .map(k => ({ value: k, label: k.replace(/_/g, " ").replace(/'/g, "'") }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .filter((k) => isNaN(k))
+      .map((k) => ({
+        name: k.replace(/_/g, " ").replace(/'/g, "'"),
+        value: k,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-    for (const c of countries) {
-      const opt = document.createElement("option");
-      opt.value = c.value;
-      opt.textContent = c.label;
-      countrySelect.appendChild(opt);
-    }
-
-    generateBtn.addEventListener("click", () => {
-      this.pushEvent("start_generation", {});
-
-      setTimeout(() => {
-        const selected = countrySelect.value;
-        const config = selected ? { countryName: CountryNames[selected] } : {};
-        const number = generatePhoneNumber(config);
-        this.pushEvent("number_generated", { number: number, display: number });
-
-        // Auto-copy to clipboard on generation
-        navigator.clipboard.writeText(number).then(
-          () => this.pushEvent("copied", {}),
-          () => {}
-        );
-      }, 1200); // 1.2s synthetic delay for "derivation" feel
-    });
+    this.pushEvent("set_countries", { countries });
 
     this.el.addEventListener("click", (e) => {
-      const copyBtn = e.target.closest("#copy-btn");
-      if (!copyBtn) return;
-      const number = copyBtn.dataset.number;
-      if (!number) return;
+      // Handle Generate Button
+      const generateBtn = e.target.closest("#generate-btn");
+      if (generateBtn && !generateBtn.disabled) {
+        const countryInput = document.getElementById("country-select");
+        if (!countryInput) return;
 
-      navigator.clipboard.writeText(number).then(
-        () => this.pushEvent("copied", {}),
-        () => {}
-      );
+        this.pushEvent("start_generation", {});
+
+        setTimeout(() => {
+          const selected = countryInput.value;
+          const config = selected ? { countryName: CountryNames[selected] } : {};
+          const number = generatePhoneNumber(config);
+          this.pushEvent("number_generated", { number: number, display: number });
+
+          // Auto-copy to clipboard
+          navigator.clipboard.writeText(number).then(
+            () => this.pushEvent("copied", {}),
+            () => {}
+          );
+        }, 600); // Reduced to 600ms for snappier feel
+      }
+
+      // Handle Copy Button
+      const copyBtn = e.target.closest("#copy-btn");
+      if (copyBtn) {
+        const number = copyBtn.dataset.number;
+        if (number) {
+          navigator.clipboard.writeText(number).then(
+            () => this.pushEvent("copied", {}),
+            () => {}
+          );
+        }
+      }
     });
   },
 };

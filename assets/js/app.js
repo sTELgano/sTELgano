@@ -14,7 +14,6 @@ import {
   AnonChat,
   AutoResize,
   IntersectionReader,
-  ThemeToggle,
   PhoneGenerator,
 } from "./hooks/chat.js"
 
@@ -28,7 +27,6 @@ const liveSocket = new LiveSocket("/live", Socket, {
     AnonChat,
     AutoResize,
     IntersectionReader,
-    ThemeToggle,
     PhoneGenerator,
   },
 })

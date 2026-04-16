@@ -3,7 +3,7 @@
   <section class="relative min-h-[90vh] flex flex-col items-center justify-center px-6 py-24 text-center overflow-hidden">
     <div class="relative z-10 animate-in stagger-1">
       <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-[0.2em] mb-10 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-        <.icon name="hero-shield-check-mini" class="size-4" /> Anonymous Protocol v2.4
+        <.icon name="shield_check" class="size-4" /> Secure Private Messaging v2.4
       </div>
 
       <h1 class="text-7xl sm:text-8xl md:text-9xl font-extrabold tracking-tighter mb-8 font-display">
@@ -13,7 +13,7 @@
       <p class="text-xl sm:text-2xl md:text-3xl text-slate-300 font-medium mb-6 tracking-tight max-w-2xl mx-auto leading-tight">
         Hyper-secure communication, hidden in the
         <span class="text-white italic underline decoration-primary decoration-4 underline-offset-8">
-          contact layer.
+          your contacts.
         </span>
       </p>
 
@@ -27,9 +27,9 @@
           navigate={~p"/steg-number"}
           class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto"
         >
-          Start Channel
+          Open Private Chat
           <.icon
-            name="hero-sparkles-mini"
+            name="sparkles"
             class="size-6 group-hover:rotate-12 transition-transform"
           />
         </.link>
@@ -37,9 +37,9 @@
           navigate={~p"/security"}
           class="btn-secondary px-10 py-4 text-xl w-full sm:w-auto group"
         >
-          View Protocol
+          How it Works
           <.icon
-            name="hero-arrow-right-mini"
+            name="arrow_right"
             class="size-6 group-hover:translate-x-1 transition-transform"
           />
         </.link>
@@ -50,7 +50,7 @@
   <%!-- How It Works Grid --%>
   <section class="px-6 py-32 max-w-6xl mx-auto relative">
     <div class="text-center mb-20 animate-in">
-      <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">The Protocol</h2>
+      <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">How it Works</h2>
       <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display">
         Minimalist by design.
       </h3>
@@ -61,12 +61,12 @@
         :for={
           {step, i} <-
             Enum.with_index([
-              {"Generate Key",
-               "Create a unique international number. Save it in your partner's contacts—it stays invisible to casual observers."},
-              {"Personal PIN",
-               "Your PIN is your local key. It's used to derive encryption keys in your browser and is never sent to us."},
-              {"Direct Link",
-               "Open the channel with the number and PIN. Every message uses AES-256-GCM encryption at the edge."}
+              {"Create Number",
+               "Generate a unique secret number and save it to your partner's contacts—it stays hidden in plain sight."},
+              {"Private PIN",
+               "Your PIN is your personal key. It secures your chat locally and is never sent to our servers."},
+              {"Chat Securely",
+               "Open your chat room using the number and PIN. Every message is encrypted directly in your browser."}
             ])
         }
         class="glass-card p-8 group relative overflow-hidden animate-in"
@@ -91,7 +91,7 @@
     <div class="max-w-4xl mx-auto">
       <div class="text-center mb-16 animate-in">
         <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4 uppercase">
-          Out-of-Scope Risks
+          Our Security Model
         </h3>
         <p class="text-slate-400 font-medium">
           Zero-Trust Transparency: We design for the worst-case scenario.
@@ -101,16 +101,16 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         <.premium_card class="border-primary/10">
           <h4 class="text-xs font-bold uppercase tracking-[0.2em] text-primary mb-6 flex items-center gap-2">
-            <.icon name="hero-check-circle-mini" class="size-4" /> What is logged
+            <.icon name="check_circle" class="size-4" /> What is logged
           </h4>
           <ul class="space-y-4">
             <li
               :for={
                 item <- [
-                  "SHA-256 Hash of Phone Identity",
-                  "SHA-256 Hash of Identity + PIN",
-                  "Local AES-256-GCM Ciphertext",
-                  "Session TTL Indicator"
+                  "Encrypted Phone Identity (Hash)",
+                  "Secure Session Token (Hash)",
+                  "Encrypted Message Content",
+                  "Session Expiration Timer"
                 ]
               }
               class="flex items-center gap-3 text-sm font-medium text-slate-300"
@@ -123,7 +123,7 @@
 
         <.premium_card class="border-danger/10">
           <h4 class="text-xs font-bold uppercase tracking-[0.2em] text-danger mb-6 flex items-center gap-2">
-            <.icon name="hero-x-circle-mini" class="size-4" /> What is never stored
+            <.icon name="x_circle" class="size-4" /> What is never stored
           </h4>
           <ul class="space-y-4">
             <li
@@ -153,14 +153,14 @@
     </div>
     <div class="relative z-10 animate-in">
       <h3 class="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white font-display mb-10 tracking-tighter">
-        Ready for <span class="text-gradient">stealth?</span>
+        Ready to chat <span class="text-gradient">securely?</span>
       </h3>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <.link navigate={~p"/steg-number"} class="btn-primary px-12 py-5 text-xl">
-          Generate Identity
+          Create Secret Number
         </.link>
         <.link navigate={~p"/chat"} class="btn-secondary px-12 py-5 text-xl">
-          Open Channel
+          Open Private Chat
         </.link>
       </div>
     </div>

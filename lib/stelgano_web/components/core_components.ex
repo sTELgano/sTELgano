@@ -511,17 +511,38 @@ defmodule StelganoWeb.CoreComponents do
 
   ## Examples
 
-      <.icon name="hero-x-mark" />
-      <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
+      <.icon name="x" />
+      <.icon name="refresh_cw" class="ml-1 size-3 motion-safe:animate-spin" />
   """
   attr :name, :string, required: true
   attr :class, :any, default: "size-4"
+  attr :rest, :global
 
-  @spec icon(map()) :: Phoenix.LiveView.Rendered.t()
-  def icon(%{name: "hero-" <> _icon_name} = assigns) do
-    ~H"""
-    <span class={[@name, @class]} />
-    """
+  def icon(%{name: name} = assigns) do
+    icon_name =
+      name
+      |> String.replace("hero-", "")
+      |> String.replace("-mini", "")
+      |> String.replace("-micro", "")
+      |> String.replace("-solid", "")
+      |> String.replace("-", "_")
+      |> String.to_existing_atom()
+
+    # Flatten attributes into a clean map for Lucideicons
+    # 1. Merge global attributes from 'rest' (unrecognized by Phoenix components)
+    # 2. Add 'class' attribute explicitly
+    # 3. Add '__changed__' to satisfy Phoenix.Component requirements inside the library
+    attrs =
+      assigns.rest
+      |> Map.put(:class, assigns.class)
+      |> Map.put(:__changed__, %{})
+
+    apply(Lucideicons, icon_name, [attrs])
+  rescue
+    _ ->
+      ~H"""
+      <span class={[@name, @class]} />
+      """
   end
 
   ## JS Commands

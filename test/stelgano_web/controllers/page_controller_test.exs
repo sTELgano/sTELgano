@@ -14,7 +14,7 @@ defmodule StelganoWeb.PageControllerTest do
 
     test "homepage includes call to action", %{conn: conn} do
       conn = get(conn, ~p"/")
-      assert html_response(conn, 200) =~ "Start Channel"
+      assert html_response(conn, 200) =~ "Open Private Chat"
     end
 
     test "homepage explains what the server stores", %{conn: conn} do
@@ -22,26 +22,26 @@ defmodule StelganoWeb.PageControllerTest do
       html = html_response(conn, 200)
       assert html =~ "What is logged"
       assert html =~ "What is never stored"
-      assert html =~ "Out-of-Scope Risks"
+      assert html =~ "Our Security Model"
     end
 
     test "homepage is honest about limitations", %{conn: conn} do
       conn = get(conn, ~p"/")
-      assert html_response(conn, 200) =~ "Out-of-Scope Risks"
+      assert html_response(conn, 200) =~ "Our Security Model"
     end
   end
 
   describe "GET /security" do
     test "renders security page", %{conn: conn} do
       conn = get(conn, ~p"/security")
-      assert html_response(conn, 200) =~ "Technical Specification"
+      assert html_response(conn, 200) =~ "Security Guide"
     end
 
     test "security page shows derivation chain", %{conn: conn} do
       conn = get(conn, ~p"/security")
       html = html_response(conn, 200)
-      assert html =~ "room_hash"
-      assert html =~ "PBKDF2"
+      assert html =~ "Chat ID"
+      assert html =~ "Secure"
     end
 
     test "security page mentions AES-256-GCM", %{conn: conn} do
@@ -55,7 +55,7 @@ defmodule StelganoWeb.PageControllerTest do
       conn = get(conn, ~p"/privacy")
       html = html_response(conn, 200)
       assert html =~ "Privacy"
-      assert html =~ "Protocol"
+      assert html =~ "Policy"
     end
 
     test "states no third-party analytics", %{conn: conn} do
@@ -83,7 +83,7 @@ defmodule StelganoWeb.PageControllerTest do
   describe "GET /about" do
     test "renders about page", %{conn: conn} do
       conn = get(conn, ~p"/about")
-      assert html_response(conn, 200) =~ "The sTELgano Project"
+      assert html_response(conn, 200) =~ "About sTELgano"
     end
   end
 end

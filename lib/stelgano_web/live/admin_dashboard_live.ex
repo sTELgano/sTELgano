@@ -79,15 +79,15 @@ defmodule StelganoWeb.AdminDashboardLive do
         <div class="flex flex-col md:flex-row items-center justify-between gap-8 pb-8 border-b border-white/5">
           <div class="text-center md:text-left space-y-4">
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.3em] mb-2 shadow-[0_0_20px_var(--color-primary-glow)]">
-              <.icon name="hero-command-line-mini" class="size-3" /> System Oversight Matrix
+              <.icon name="terminal" class="size-3" /> System Status
             </div>
             <h1 class="text-5xl sm:text-6xl font-extrabold text-white font-display tracking-tighter uppercase leading-none">
               Admin <span class="text-gradient">Dashboard.</span>
             </h1>
             <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] leading-relaxed">
-              Aggregate Metrics Only · No Handshake Data ·
+              Total Stats Only · No Private Data ·
               <span class="text-primary italic">
-                Synced {Calendar.strftime(@last_updated, "%H:%M:%S UTC")}
+                Updated {Calendar.strftime(@last_updated, "%H:%M:%S UTC")}
               </span>
             </p>
           </div>
@@ -97,38 +97,38 @@ defmodule StelganoWeb.AdminDashboardLive do
             class="btn-primary py-4 px-10 text-sm flex items-center gap-3 group"
           >
             <.icon
-              name="hero-arrow-path-mini"
+              name="refresh_cw"
               class="size-5 group-hover:rotate-180 transition-transform duration-700"
-            /> Synchronize Matrix
+            /> Refresh Stats
           </button>
         </div>
 
         <%!-- Metric cards --%>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           <.metric_panel
-            label="Active Handshakes"
+            label="Active Chats"
             value={@metrics.active_rooms}
-            note="Live handover"
-            icon="hero-radio-mini"
+            note="Currently open"
+            icon="radio"
             trend="active"
           />
           <.metric_panel
-            label="Inbound Streams"
+            label="New Chats Today"
             value={@metrics.rooms_today}
-            note="Last 24h cycle"
-            icon="hero-plus-circle-mini"
+            note="Last 24 hours"
+            icon="plus_circle"
           />
           <.metric_panel
-            label="Ciphertext Flow"
+            label="Messages Sent Today"
             value={@metrics.messages_today}
-            note="Encrypted packets"
-            icon="hero-chat-bubble-left-right-mini"
+            note="Encrypted messages"
+            icon="messages_square"
           />
           <.metric_panel
-            label="Historical Range"
+            label="Total Chats"
             value={@metrics.rooms_last_90_days}
-            note="90-day retention"
-            icon="hero-calendar-days-mini"
+            note="Past 3 months"
+            icon="calendar"
           />
         </div>
 
@@ -138,20 +138,20 @@ defmodule StelganoWeb.AdminDashboardLive do
           </div>
 
           <div class="flex items-center gap-3 text-slate-300 relative z-10">
-            <.icon name="hero-information-circle-mini" class="size-5 text-primary" />
-            <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Operational Disclosure</h4>
+            <.icon name="info" class="size-5 text-primary" />
+            <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Admin Information</h4>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 relative z-10">
             <div
               :for={
                 note <- [
-                  "All values are counts derived from server operational data.",
-                  "No individual room contents, hashes, or user identifiers are shown.",
-                  "Active rooms represent nodes with verified persistence.",
-                  "Messages today counts rows inserted in last 24h interval.",
-                  "Metrics are retained for 90 days then discarded.",
-                  "Real-time sync occurs automatically every 30 seconds."
+                "All values are counts derived from server data.",
+                "No private chat contents, keys, or IDs are shown.",
+                "Active rooms represent open chat sessions.",
+                "Messages today counts encrypted items sent in last 24h.",
+                "Stats are kept for 90 days then removed.",
+                "Dashboard updates automatically every 30 seconds."
                 ]
               }
               class="flex items-start gap-4 group/item"
