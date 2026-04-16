@@ -19,14 +19,12 @@ defmodule Stelgano.RoomsTest do
   # ---------------------------------------------------------------------------
 
   # Valid SHA-256 hex strings (64 chars)
-  defp hex64(seed \\ 0) do
+  defp hex64(seed) do
     :crypto.hash(:sha256, "test-seed-#{seed}")
     |> Base.encode16(case: :lower)
   end
 
   defp room_hash, do: hex64(1)
-  defp access_hash, do: hex64(2)
-  defp other_access_hash, do: hex64(3)
   defp sender_hash, do: hex64(4)
 
   # 12-byte IV (96-bit AES-GCM nonce)
@@ -130,11 +128,14 @@ defmodule Stelgano.RoomsTest do
       assert result == {:error, :not_found}
     end
 
-    test "returns :unauthorized with remaining count on wrong hash after first join" do
+    test "returns :unauthorized with remaining count on wrong hash after room is full" do
       rh = hex64(50)
-      ah_correct = hex64(51)
-      ah_wrong = hex64(52)
-      Rooms.join_room(rh, ah_correct)
+      ah_correct1 = hex64(51)
+      ah_correct2 = hex64(52)
+      ah_wrong = hex64(53)
+
+      Rooms.join_room(rh, ah_correct1)
+      Rooms.join_room(rh, ah_correct2)
 
       assert {:error, :unauthorized, remaining} = Rooms.join_room(rh, ah_wrong)
       assert remaining == RoomAccess.max_attempts() - 1
@@ -142,12 +143,16 @@ defmodule Stelgano.RoomsTest do
 
     test "locks out after max attempts" do
       rh = hex64(60)
-      ah_correct = hex64(61)
-      ah_wrong = hex64(62)
-      Rooms.join_room(rh, ah_correct)
+      ah_correct1 = hex64(61)
+      ah_correct2 = hex64(62)
+      ah_wrong = hex64(63)
 
-      for _ <- 1..RoomAccess.max_attempts() do
-        Rooms.join_room(rh, ah_wrong)
+      Rooms.join_room(rh, ah_correct1)
+      Rooms.join_room(rh, ah_correct2)
+
+      # Attempt many times with the 3rd (wrong) hash
+      for _ <- 1..(RoomAccess.max_attempts() - 1) do
+        assert {:error, :unauthorized, _remaining} = Rooms.join_room(rh, ah_wrong)
       end
 
       assert {:error, :locked, _remaining} = Rooms.join_room(rh, ah_wrong)
@@ -155,19 +160,27 @@ defmodule Stelgano.RoomsTest do
 
     test "correct credentials reset failed attempt counter" do
       rh = hex64(70)
-      ah = hex64(71)
-      ah_wrong = hex64(72)
-      Rooms.join_room(rh, ah)
+      ah1 = hex64(71)
+      ah2 = hex64(72)
+      ah_wrong = hex64(73)
 
-      # A few failed attempts
+      Rooms.join_room(rh, ah1)
+      Rooms.join_room(rh, ah2)
+
+      # Target the existing records with failures
       Rooms.join_room(rh, ah_wrong)
       Rooms.join_room(rh, ah_wrong)
 
-      # Correct credentials reset counter
-      assert {:ok, _} = Rooms.join_room(rh, ah)
+      # One of the records should have failures now. 
+      # We check both and verify that at least one is non-zero, 
+      # or we just joining with both to ensure both are reset.
+      assert {:ok, _} = Rooms.join_room(rh, ah1)
+      assert {:ok, _} = Rooms.join_room(rh, ah2)
 
-      access = Repo.get_by(RoomAccess, room_hash: rh, access_hash: ah)
-      assert access.failed_attempts == 0
+      access1 = Repo.get_by(RoomAccess, room_hash: rh, access_hash: ah1)
+      access2 = Repo.get_by(RoomAccess, room_hash: rh, access_hash: ah2)
+      assert access1.failed_attempts == 0
+      assert access2.failed_attempts == 0
     end
   end
 

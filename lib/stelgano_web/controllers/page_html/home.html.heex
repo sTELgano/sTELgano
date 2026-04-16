@@ -1,185 +1,201 @@
 <Layouts.app flash={@flash}>
-  <%!-- Hero --%>
-  <section
-    class="min-h-screen flex flex-col items-center justify-center px-4 py-20 text-center"
-    style="background: var(--bg-base);"
-  >
-    <div class="mb-8 select-none">
-      <span
-        class="text-5xl md:text-6xl font-light tracking-tight"
-        style="color: var(--text-secondary);"
-      >
-        s
-      </span><span
-        class="text-5xl md:text-6xl font-semibold"
-        style="color: var(--accent); letter-spacing: 0.04em;"
-      >TEL</span><span
-        class="text-5xl md:text-6xl font-light tracking-tight"
-        style="color: var(--text-secondary);"
-      >gano</span>
-    </div>
-
-    <p class="text-lg md:text-xl mb-3 font-light" style="color: var(--text-secondary);">
-      Hidden in the contact layer.
-    </p>
-
-    <p class="text-sm md:text-base max-w-md mb-10" style="color: var(--text-muted);">
-      A shared phone number in your contacts app. A personal PIN you choose. No account. No history. One message at a time.
-    </p>
-
-    <div class="flex flex-col sm:flex-row gap-3 justify-center">
-      <a
-        href="/chat"
-        class="px-8 py-4 rounded-2xl font-medium text-base transition-all duration-150 hover:opacity-90 active:scale-95"
-        style="background: var(--accent); color: var(--accent-fg);"
-      >
-        Open a channel
-      </a>
-      <a
-        href="/security"
-        class="px-8 py-4 rounded-2xl font-medium text-base transition-all duration-150 hover:opacity-80"
-        style="background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border);"
-      >
-        Read the spec
-      </a>
-    </div>
-  </section>
-
-  <%!-- How it works --%>
-  <section class="px-4 py-20 max-w-2xl mx-auto">
-    <h2 class="text-2xl font-light mb-12 text-center" style="color: var(--text-primary);">
-      How it works
-    </h2>
-    <div class="space-y-8">
-      <div class="flex gap-6">
-        <span
-          class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
-          style="background: var(--accent-soft); color: var(--accent);"
-        >
-          1
-        </span>
-        <div>
-          <h3 class="font-medium mb-1" style="color: var(--text-primary);">
-            Generate a steg number
-          </h3>
-          <p class="text-sm" style="color: var(--text-secondary);">
-            Create a random international phone number. Save it in the other person's contacts alongside their real number. It looks like every other number in the app.
-          </p>
-        </div>
+  <%!-- Hero Section --%>
+  <section class="relative min-h-[90vh] flex flex-col items-center justify-center px-6 py-24 text-center overflow-hidden">
+    <div class="relative z-10 animate-in stagger-1">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-[0.2em] mb-10 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+        <.icon name="hero-shield-check-mini" class="size-4" /> Anonymous Protocol v2.4
       </div>
-      <div class="flex gap-6">
-        <span
-          class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
-          style="background: var(--accent-soft); color: var(--accent);"
-        >
-          2
-        </span>
-        <div>
-          <h3 class="font-medium mb-1" style="color: var(--text-primary);">
-            Choose your own PIN
-          </h3>
-          <p class="text-sm" style="color: var(--text-secondary);">
-            Pick a PIN you never share with anyone. Each of you chooses independently. The server stores only a hash of number + PIN; the PIN never leaves your device.
-          </p>
-        </div>
-      </div>
-      <div class="flex gap-6">
-        <span
-          class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
-          style="background: var(--accent-soft); color: var(--accent);"
-        >
-          3
-        </span>
-        <div>
-          <h3 class="font-medium mb-1" style="color: var(--text-primary);">Open the channel</h3>
-          <p class="text-sm" style="color: var(--text-secondary);">
-            Go to stelgano.com, enter the steg number and your PIN. Your browser encrypts every message with AES-256-GCM. We never see the plaintext.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <%!-- What the server stores --%>
-  <section class="px-4 py-20" style="background: var(--bg-surface);">
-    <div class="max-w-2xl mx-auto">
-      <h2 class="text-2xl font-light mb-2 text-center" style="color: var(--text-primary);">
-        What the server stores
-      </h2>
-      <p class="text-sm text-center mb-10" style="color: var(--text-muted);">
-        Honesty is the product.
+      <h1 class="text-7xl sm:text-8xl md:text-9xl font-extrabold tracking-tighter mb-8 font-display">
+        <span class="text-slate-500 font-light italic">s</span><span class="text-gradient">TEL</span><span class="text-white">gano</span>
+      </h1>
+
+      <p class="text-xl sm:text-2xl md:text-3xl text-slate-300 font-medium mb-6 tracking-tight max-w-2xl mx-auto leading-tight">
+        Hyper-secure communication, hidden in the
+        <span class="text-white italic underline decoration-primary decoration-4 underline-offset-8">
+          contact layer.
+        </span>
       </p>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div
-          class="rounded-2xl p-6"
-          style="background: var(--bg-raised); border: 1px solid var(--border);"
+
+      <p class="text-slate-500 text-base sm:text-lg mb-12 max-w-lg mx-auto leading-relaxed">
+        Zero accounts. Zero history. Your browser performs the encryption.
+        The server only sees ciphertext.
+      </p>
+
+      <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <.link
+          navigate={~p"/steg-number"}
+          class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto"
         >
-          <h3 class="font-medium mb-4" style="color: var(--text-primary);">Stores</h3>
-          <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
-            <li>Hash of phone number (SHA-256, not reversible)</li>
-            <li>Hash of phone + PIN (SHA-256, not reversible)</li>
-            <li>Encrypted message ciphertext</li>
-            <li>Anonymous sender identifier</li>
-          </ul>
-        </div>
-        <div
-          class="rounded-2xl p-6"
-          style="background: var(--bg-raised); border: 1px solid var(--border);"
+          Start Channel
+          <.icon
+            name="hero-sparkles-mini"
+            class="size-6 group-hover:rotate-12 transition-transform"
+          />
+        </.link>
+        <.link
+          navigate={~p"/security"}
+          class="btn-secondary px-10 py-4 text-xl w-full sm:w-auto group"
         >
-          <h3 class="font-medium mb-4" style="color: var(--text-primary);">Never stores</h3>
-          <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
-            <li>Phone number in any form</li>
-            <li>PIN in any form</li>
-            <li>Encryption key</li>
-            <li>Message plaintext</li>
-            <li>Your real identity</li>
-          </ul>
-        </div>
+          View Protocol
+          <.icon
+            name="hero-arrow-right-mini"
+            class="size-6 group-hover:translate-x-1 transition-transform"
+          />
+        </.link>
       </div>
     </div>
   </section>
 
-  <%!-- Protection scope --%>
-  <section class="px-4 py-20 max-w-2xl mx-auto">
-    <h2 class="text-2xl font-light mb-10 text-center" style="color: var(--text-primary);">
-      What we protect — and what we don't
-    </h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-8">
-      <div>
-        <h3 class="text-sm font-medium mb-3" style="color: var(--accent);">Protected against</h3>
-        <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
-          <li>A partner who picks up your unlocked phone</li>
-          <li>Family members with device access</li>
-          <li>Browser history inspection</li>
-          <li>Database breach — no readable data</li>
-        </ul>
+  <%!-- How It Works Grid --%>
+  <section class="px-6 py-32 max-w-6xl mx-auto relative">
+    <div class="text-center mb-20 animate-in">
+      <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">The Protocol</h2>
+      <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display">
+        Minimalist by design.
+      </h3>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div
+        :for={
+          {step, i} <-
+            Enum.with_index([
+              {"Generate Key",
+               "Create a unique international number. Save it in your partner's contacts—it stays invisible to casual observers."},
+              {"Personal PIN",
+               "Your PIN is your local key. It's used to derive encryption keys in your browser and is never sent to us."},
+              {"Direct Link",
+               "Open the channel with the number and PIN. Every message uses AES-256-GCM encryption at the edge."}
+            ])
+        }
+        class="glass-card p-8 group relative overflow-hidden animate-in"
+        style={"animation-delay: #{i * 0.1}s"}
+      >
+        <div class="absolute -right-6 -bottom-6 text-9xl font-black text-white/[0.02] group-hover:text-white/[0.04] transition-colors italic">
+          {i + 1}
+        </div>
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-2xl mb-8 shadow-inner ring-1 ring-primary/20">
+          {i + 1}
+        </div>
+        <h4 class="text-xl font-bold text-white mb-4 font-display">{elem(step, 0)}</h4>
+        <p class="text-slate-400 leading-relaxed font-medium">
+          {elem(step, 1)}
+        </p>
       </div>
-      <div>
-        <h3 class="text-sm font-medium mb-3" style="color: var(--danger);">
-          Not protected against
+    </div>
+  </section>
+
+  <%!-- Verification Table Section --%>
+  <section class="px-6 py-32 bg-white/[0.01] border-y border-white/5 relative">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center mb-16 animate-in">
+        <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4 uppercase">
+          Out-of-Scope Risks
         </h3>
-        <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
-          <li>Government subpoenas</li>
-          <li>Nation-state surveillance</li>
-          <li>Law enforcement with a warrant</li>
-          <li>Institutional monitoring</li>
-        </ul>
+        <p class="text-slate-400 font-medium">
+          Zero-Trust Transparency: We design for the worst-case scenario.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <.premium_card class="border-primary/10">
+          <h4 class="text-xs font-bold uppercase tracking-[0.2em] text-primary mb-6 flex items-center gap-2">
+            <.icon name="hero-check-circle-mini" class="size-4" /> What is logged
+          </h4>
+          <ul class="space-y-4">
+            <li
+              :for={
+                item <- [
+                  "SHA-256 Hash of Phone Identity",
+                  "SHA-256 Hash of Identity + PIN",
+                  "Local AES-256-GCM Ciphertext",
+                  "Session TTL Indicator"
+                ]
+              }
+              class="flex items-center gap-3 text-sm font-medium text-slate-300"
+            >
+              <div class="size-1.5 rounded-full bg-primary/40"></div>
+              {item}
+            </li>
+          </ul>
+        </.premium_card>
+
+        <.premium_card class="border-danger/10">
+          <h4 class="text-xs font-bold uppercase tracking-[0.2em] text-danger mb-6 flex items-center gap-2">
+            <.icon name="hero-x-circle-mini" class="size-4" /> What is never stored
+          </h4>
+          <ul class="space-y-4">
+            <li
+              :for={
+                item <- [
+                  "Raw Phone Numbers",
+                  "Raw PIN Codes",
+                  "Plaintext Messages",
+                  "Encryption Keys (Client-only)",
+                  "IP / Geolocation Data"
+                ]
+              }
+              class="flex items-center gap-3 text-sm font-medium text-slate-300"
+            >
+              <div class="size-1.5 rounded-full bg-danger/40"></div>
+              {item}
+            </li>
+          </ul>
+        </.premium_card>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Call to Action --%>
+  <section class="px-6 py-40 text-center relative overflow-hidden">
+    <div class="orb orb-1 opacity-20 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 !w-[600px] !h-[600px]">
+    </div>
+    <div class="relative z-10 animate-in">
+      <h3 class="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white font-display mb-10 tracking-tighter">
+        Ready for <span class="text-gradient">stealth?</span>
+      </h3>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <.link navigate={~p"/steg-number"} class="btn-primary px-12 py-5 text-xl">
+          Generate Identity
+        </.link>
+        <.link navigate={~p"/chat"} class="btn-secondary px-12 py-5 text-xl">
+          Open Channel
+        </.link>
       </div>
     </div>
   </section>
 
   <%!-- Footer --%>
-  <footer class="px-4 py-8 border-t text-center" style="border-color: var(--border);">
-    <div
-      class="flex flex-wrap justify-center gap-6 text-xs mb-4"
-      style="color: var(--text-muted);"
-    >
-      <a href="/security" class="hover:underline">Security</a>
-      <a href="/privacy" class="hover:underline">Privacy</a>
-      <a href="/terms" class="hover:underline">Terms</a>
-      <a href="/about" class="hover:underline">About</a>
-      <a href="/steg-number" class="hover:underline">Number generator</a>
+  <footer class="px-6 py-20 border-t border-white/5 bg-slate-950/40 relative">
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
+      <div class="flex flex-col items-center md:items-start gap-4">
+        <.link navigate={~p"/"} class="wordmark text-2xl">
+          <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span>gano</span>
+        </.link>
+        <p class="text-slate-500 text-sm font-medium">
+          Building the next generation of stealth communication.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap justify-center gap-8">
+        <a
+          :for={link <- ["Security", "Privacy", "Terms", "About"]}
+          href={"/#{String.downcase(link)}"}
+          class="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
+        >
+          {link}
+        </a>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-slate-500 uppercase">
+          AGPL-3.0
+        </div>
+        <div class="px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-slate-500 uppercase">
+          Build 2026.04
+        </div>
+      </div>
     </div>
-    <p class="text-xs" style="color: var(--text-muted);">sTELgano · AGPL-3.0</p>
   </footer>
 </Layouts.app>

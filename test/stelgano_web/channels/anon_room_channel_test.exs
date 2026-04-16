@@ -26,7 +26,7 @@ defmodule StelganoWeb.AnonRoomChannelTest do
   defp valid_ct, do: :crypto.strong_rand_bytes(64) |> Base.encode64()
 
   # Connect an anonymous socket and join a room in one step.
-  defp connect_and_join(rh \\ hex64(1), ah \\ hex64(2), sh \\ hex64(3)) do
+  defp connect_and_join(rh, ah, sh) do
     {:ok, _reply, socket} =
       AnonSocket
       |> socket("anon_socket", %{})
@@ -44,23 +44,23 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   describe "join" do
     test "creates room on first join and returns room_id" do
-      rh = hex64(10)
+      rh = hex64(10 + 2000)
 
       {:ok, reply, _socket} =
         AnonSocket
         |> socket("anon_socket", %{})
         |> subscribe_and_join(StelganoWeb.AnonRoomChannel, "anon_room:#{rh}", %{
-          "access_hash" => hex64(11),
-          "sender_hash" => hex64(12)
+          "access_hash" => hex64(11 + 2000),
+          "sender_hash" => hex64(12 + 2000)
         })
 
       assert is_binary(reply.room_id)
     end
 
     test "delivers current_message in join reply when one exists" do
-      rh = hex64(20)
-      ah = hex64(21)
-      sh = hex64(22)
+      rh = hex64(20 + 2000)
+      ah = hex64(21 + 2000)
+      sh = hex64(22 + 2000)
 
       socket1 = connect_and_join(rh, ah, sh)
       ref = push(socket1, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
@@ -71,8 +71,8 @@ defmodule StelganoWeb.AnonRoomChannelTest do
         AnonSocket
         |> socket("anon_socket", %{})
         |> subscribe_and_join(StelganoWeb.AnonRoomChannel, "anon_room:#{rh}", %{
-          "access_hash" => hex64(23),
-          "sender_hash" => hex64(24)
+          "access_hash" => hex64(23 + 2000),
+          "sender_hash" => hex64(24 + 2000)
         })
 
       assert reply[:current_message]
@@ -86,26 +86,26 @@ defmodule StelganoWeb.AnonRoomChannelTest do
                |> subscribe_and_join(
                  StelganoWeb.AnonRoomChannel,
                  "anon_room:not-a-valid-hash",
-                 %{"access_hash" => hex64(1), "sender_hash" => hex64(2)}
+                 %{"access_hash" => hex64(1 + 2000), "sender_hash" => hex64(2 + 2000)}
                )
     end
 
     test "rejects join with invalid sender_hash" do
-      rh = hex64(30)
+      rh = hex64(30 + 2000)
 
       assert {:error, %{reason: "invalid_sender"}} =
                AnonSocket
                |> socket("anon_socket", %{})
                |> subscribe_and_join(StelganoWeb.AnonRoomChannel, "anon_room:#{rh}", %{
-                 "access_hash" => hex64(31),
+                 "access_hash" => hex64(31 + 2000),
                  "sender_hash" => "not-valid"
                })
     end
 
     test "returns not_found for expired room" do
-      rh = hex64(40)
-      ah = hex64(41)
-      sh = hex64(42)
+      rh = hex64(40 + 2000)
+      ah = hex64(41 + 2000)
+      sh = hex64(42 + 2000)
 
       # Join first to create the room, then expire it
       {:ok, _reply, socket} =
@@ -136,15 +136,15 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   describe "send_message" do
     test "returns ok reply with message_id" do
-      socket = connect_and_join(hex64(50), hex64(51), hex64(52))
+      socket = connect_and_join(hex64(50 + 2000), hex64(51 + 2000), hex64(52 + 2000))
       ref = push(socket, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
       assert_reply ref, :ok, %{message_id: id}
       assert is_binary(id)
     end
 
     test "broadcasts new_message to channel members" do
-      rh = hex64(60)
-      socket = connect_and_join(rh, hex64(61), hex64(62))
+      rh = hex64(60 + 2000)
+      socket = connect_and_join(rh, hex64(61 + 2000), hex64(62 + 2000))
       StelganoWeb.Endpoint.subscribe("anon_room:#{rh}")
 
       ref = push(socket, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
@@ -154,9 +154,9 @@ defmodule StelganoWeb.AnonRoomChannelTest do
     end
 
     test "blocks sender from sending twice without a reply" do
-      rh = hex64(70)
-      sh = hex64(71)
-      socket = connect_and_join(rh, hex64(72), sh)
+      rh = hex64(70 + 2000)
+      sh = hex64(71 + 2000)
+      socket = connect_and_join(rh, hex64(72 + 2000), sh)
 
       ref1 = push(socket, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
       assert_reply ref1, :ok, _
@@ -166,14 +166,14 @@ defmodule StelganoWeb.AnonRoomChannelTest do
     end
 
     test "rejects oversized ciphertext" do
-      socket = connect_and_join(hex64(80), hex64(81), hex64(82))
+      socket = connect_and_join(hex64(80 + 2000), hex64(81 + 2000), hex64(82 + 2000))
       huge_ct = :crypto.strong_rand_bytes(10_000) |> Base.encode64()
       ref = push(socket, "send_message", %{"ciphertext" => huge_ct, "iv" => valid_iv()})
       assert_reply ref, :error, %{reason: "message_too_large"}
     end
 
     test "rejects invalid base64 encoding" do
-      socket = connect_and_join(hex64(90), hex64(91), hex64(92))
+      socket = connect_and_join(hex64(90 + 2000), hex64(91 + 2000), hex64(92 + 2000))
       ref = push(socket, "send_message", %{"ciphertext" => "!!!not_b64!!!", "iv" => valid_iv()})
       assert_reply ref, :error, %{reason: "invalid_encoding"}
     end
@@ -185,13 +185,13 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   describe "read_receipt" do
     test "broadcasts message_read to all channel members" do
-      rh = hex64(100)
-      socket = connect_and_join(rh, hex64(101), hex64(102))
+      rh = hex64(100 + 2000)
+      socket = connect_and_join(rh, hex64(101 + 2000), hex64(102 + 2000))
 
       ref = push(socket, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
       assert_reply ref, :ok, %{message_id: msg_id}
 
-      socket2 = connect_and_join(rh, hex64(103), hex64(104))
+      socket2 = connect_and_join(rh, hex64(103 + 2000), hex64(104 + 2000))
       StelganoWeb.Endpoint.subscribe("anon_room:#{rh}")
 
       push(socket2, "read_receipt", %{"message_id" => msg_id})
@@ -205,9 +205,9 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   describe "edit_message" do
     test "edits an unread message and broadcasts message_edited" do
-      rh = hex64(110)
-      sh = hex64(111)
-      socket = connect_and_join(rh, hex64(112), sh)
+      rh = hex64(110 + 2000)
+      sh = hex64(111 + 2000)
+      socket = connect_and_join(rh, hex64(112 + 2000), sh)
       StelganoWeb.Endpoint.subscribe("anon_room:#{rh}")
 
       ref1 = push(socket, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
@@ -225,9 +225,9 @@ defmodule StelganoWeb.AnonRoomChannelTest do
     end
 
     test "returns not_found for another sender's message" do
-      rh = hex64(120)
-      socket1 = connect_and_join(rh, hex64(121), hex64(122))
-      socket2 = connect_and_join(rh, hex64(123), hex64(124))
+      rh = hex64(120 + 2000)
+      socket1 = connect_and_join(rh, hex64(121 + 2000), hex64(122 + 2000))
+      socket2 = connect_and_join(rh, hex64(123 + 2000), hex64(124 + 2000))
 
       ref1 = push(socket1, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
       assert_reply ref1, :ok, %{message_id: msg_id}
@@ -249,9 +249,9 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   describe "delete_message" do
     test "deletes an unread message and broadcasts message_deleted" do
-      rh = hex64(130)
-      sh = hex64(131)
-      socket = connect_and_join(rh, hex64(132), sh)
+      rh = hex64(130 + 2000)
+      sh = hex64(131 + 2000)
+      socket = connect_and_join(rh, hex64(132 + 2000), sh)
       StelganoWeb.Endpoint.subscribe("anon_room:#{rh}")
 
       ref1 = push(socket, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
@@ -263,9 +263,9 @@ defmodule StelganoWeb.AnonRoomChannelTest do
     end
 
     test "returns not_deletable after message is read" do
-      rh = hex64(140)
-      socket1 = connect_and_join(rh, hex64(141), hex64(142))
-      socket2 = connect_and_join(rh, hex64(143), hex64(144))
+      rh = hex64(140 + 2000)
+      socket1 = connect_and_join(rh, hex64(141 + 2000), hex64(142 + 2000))
+      socket2 = connect_and_join(rh, hex64(143 + 2000), hex64(144 + 2000))
 
       ref1 = push(socket1, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
       assert_reply ref1, :ok, %{message_id: msg_id}
@@ -287,8 +287,8 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   describe "typing" do
     test "broadcasts counterparty_typing to others but not sender" do
-      rh = hex64(150)
-      socket = connect_and_join(rh, hex64(151), hex64(152))
+      rh = hex64(150 + 2000)
+      socket = connect_and_join(rh, hex64(151 + 2000), hex64(152 + 2000))
       StelganoWeb.Endpoint.subscribe("anon_room:#{rh}")
 
       push(socket, "typing", %{})
@@ -302,8 +302,8 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   describe "expire_room" do
     test "expires the room and broadcasts room_expired" do
-      rh = hex64(160)
-      socket = connect_and_join(rh, hex64(161), hex64(162))
+      rh = hex64(160 + 2000)
+      socket = connect_and_join(rh, hex64(161 + 2000), hex64(162 + 2000))
       StelganoWeb.Endpoint.subscribe("anon_room:#{rh}")
 
       ref = push(socket, "expire_room", %{})
@@ -312,8 +312,8 @@ defmodule StelganoWeb.AnonRoomChannelTest do
     end
 
     test "room is inactive after expiry" do
-      rh = hex64(170)
-      socket = connect_and_join(rh, hex64(171), hex64(172))
+      rh = hex64(170 + 2000)
+      socket = connect_and_join(rh, hex64(171 + 2000), hex64(172 + 2000))
 
       ref = push(socket, "expire_room", %{})
       # Wait for the reply before checking DB state

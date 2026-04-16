@@ -1,54 +1,59 @@
 <Layouts.app flash={@flash}>
-  <div class="max-w-2xl mx-auto px-4 py-16">
-    <a
-      href="/"
-      class="text-sm hover:underline mb-8 inline-block"
-      style="color: var(--text-muted);"
-    >
-      ← Back
-    </a>
-    <h1 class="text-3xl font-light mb-2" style="color: var(--text-primary);">Privacy policy</h1>
-    <p class="text-sm mb-12" style="color: var(--text-muted);">
-      Plain English. Updated April 2026.
-    </p>
+  <div class="max-w-5xl mx-auto space-y-16 py-12 animate-in pb-40">
+    <%!-- Hero Header --%>
+    <div class="text-center space-y-6 pt-12">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="hero-hand-raised-mini" class="size-3" /> User Confidence Vector
+      </div>
 
-    <div class="prose-sm space-y-8" style="color: var(--text-secondary);">
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">
-          What we collect
-        </h2>
-        <p>
-          Almost nothing. No email. No real phone number. No name. No account. The only data we store are opaque hashes and encrypted ciphertext — neither can be read by us or reversed to reveal your identity or messages.
-        </p>
-      </section>
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">Analytics</h2>
-        <p>
-          No Google Analytics. No Mixpanel. No third-party analytics of any kind. We measure only server-side aggregate metrics (active rooms count, messages per day) — no individual tracking, no persistent identifiers.
-        </p>
-      </section>
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">
-          IP addresses
-        </h2>
-        <p>
-          IP addresses appear in standard web server logs and are purged within 48 hours. We do not correlate them with room hashes or any user data.
-        </p>
-      </section>
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">Cookies</h2>
-        <p>
-          One session cookie (_stelgano_key) used for CSRF protection. Theme preference stored in localStorage. No tracking cookies.
-        </p>
-      </section>
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">
-          GDPR / CCPA
-        </h2>
-        <p>
-          Compliant by design — there is no personal data to request, export, or delete. We cannot identify you from what we store.
-        </p>
-      </section>
+      <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
+        Privacy <span class="text-gradient">Protocol.</span>
+      </h1>
+
+      <p class="text-slate-500 font-mono text-[10px] font-bold uppercase tracking-[0.4em] animate-in stagger-3">
+        Plain English Policy · Updated April 2026
+      </p>
+    </div>
+
+    <%!-- Policy Grid --%>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-4">
+      <div
+        :for={
+          {title, desc, icon} <- [
+            {"What we collect",
+             "Almost nothing. No email, no real phone number, no names, no accounts. The only data stored are opaque hashes and encrypted ciphertext.",
+             "hero-circle-stack-mini"},
+            {"Analytics",
+             "Zero third-party analytics. No Google, no trackers. We measure only server-side aggregate metrics with no individual correlation.",
+             "hero-chart-bar-mini"},
+            {"IP Log Retention",
+             "IP addresses appear in transient server logs for security auditing and are purged automatically within 48 hours.",
+             "hero-clock-mini"},
+            {"Cookie Usage",
+             "One session token used exclusively for CSRF protection. Theme preferences are stored in your local browser state. No tracking cookies.",
+             "hero-cookie-mini"},
+            {"Regulatory Status",
+             "GDPR / CCPA compliant by design. There is no personal data to request or delete because we cannot identify you.",
+             "hero-globe-alt-mini"}
+          ]
+        }
+        class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"
+      >
+        <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+          <.icon
+            name={icon}
+            class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+          />
+        </div>
+        <div class="space-y-3">
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+            {title}
+          </h4>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium">
+            {desc}
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </Layouts.app>

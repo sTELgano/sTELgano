@@ -11,16 +11,11 @@ defmodule StelganoWeb.CoreComponents do
   with doc strings and declarative assigns. You may customize and style
   them in any way you want, based on your application growth and needs.
 
-  The foundation for styling is Tailwind CSS, a utility-first CSS framework,
-  augmented with daisyUI, a Tailwind CSS plugin that provides UI components
-  and themes. Here are useful references:
+  The foundation for styling is Tailwind CSS, a utility-first CSS framework.
+  All components are custom-built to provide a premium, world-class aesthetic 
+  with Hyper-Glass surfaces and fluid interactions.
 
-    * [daisyUI](https://daisyui.com/docs/intro/) - a good place to get
-      started and see the available components.
-
-    * [Tailwind CSS](https://tailwindcss.com) - the foundational framework
-      we build on. You will use it for layout, sizing, flexbox, grid, and
-      spacing.
+  ## Components
 
     * [Heroicons](https://heroicons.com) - see `icon/1` for usage.
 
@@ -36,11 +31,6 @@ defmodule StelganoWeb.CoreComponents do
 
   @doc """
   Renders flash notices.
-
-  ## Examples
-
-      <.flash kind={:info} flash={@flash} />
-      <.flash kind={:info} phx-mounted={show("#flash")}>Welcome Back!</.flash>
   """
   attr :id, :string, doc: "the optional id of flash container"
   attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
@@ -59,23 +49,34 @@ defmodule StelganoWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="pointer-events-auto"
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
+        "glass-card p-4 w-80 sm:w-96 flex gap-4 items-start border-l-4 shadow-2xl animate-in",
+        @kind == :info && "border-l-primary",
+        @kind == :error && "border-l-danger"
       ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
+        <.icon
+          :if={@kind == :info}
+          name="hero-information-circle"
+          class="size-6 shrink-0 text-primary"
+        />
+        <.icon
+          :if={@kind == :error}
+          name="hero-exclamation-circle"
+          class="size-6 shrink-0 text-danger"
+        />
+        <div class="flex-1">
+          <p :if={@title} class="font-display font-bold text-white mb-0.5">{@title}</p>
+          <p class="text-sm text-slate-300 leading-relaxed font-medium">{msg}</p>
         </div>
-        <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+        <button
+          type="button"
+          class="group p-1 -mr-1 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+          aria-label={gettext("close")}
+        >
+          <.icon name="hero-x-mark" class="size-5 text-slate-500 group-hover:text-white" />
         </button>
       </div>
     </div>
@@ -84,24 +85,23 @@ defmodule StelganoWeb.CoreComponents do
 
   @doc """
   Renders a button with navigation support.
-
-  ## Examples
-
-      <.button>Send!</.button>
-      <.button phx-click="go" variant="primary">Send!</.button>
-      <.button navigate={~p"/"}>Home</.button>
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
   attr :class, :any
-  attr :variant, :string, values: ~w(primary)
+  attr :variant, :string, values: ~w(primary secondary ghost)
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+    variants = %{
+      "primary" => "btn-primary",
+      "secondary" => "btn-secondary",
+      "ghost" => "btn-ghost",
+      nil => "btn-primary"
+    }
 
     assigns =
       assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
+        [Map.fetch!(variants, assigns[:variant])]
       end)
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
@@ -160,9 +160,9 @@ defmodule StelganoWeb.CoreComponents do
   [`options_for_select`](https://hexdocs.pm/phoenix_html/Phoenix.HTML.Form.html#options_for_select/2).
   """
   attr :id, :any, default: nil
-  attr :name, :any
+  attr :name, :any, default: nil
   attr :label, :string, default: nil
-  attr :value, :any
+  attr :value, :any, default: nil
 
   attr :type, :string,
     default: "text",
@@ -170,12 +170,17 @@ defmodule StelganoWeb.CoreComponents do
                search select tel text textarea time url week hidden)
 
   attr :field, Phoenix.HTML.FormField,
+    default: nil,
     doc: "a form field struct retrieved from the form, for example: @form[:email]"
 
   attr :errors, :list, default: []
   attr :checked, :boolean, doc: "the checked flag for checkbox inputs"
   attr :prompt, :string, default: nil, doc: "the prompt for select inputs"
-  attr :options, :list, doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2"
+
+  attr :options, :list,
+    default: [],
+    doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2"
+
   attr :multiple, :boolean, default: false, doc: "the multiple flag for select inputs"
   attr :class, :any, default: nil, doc: "the input class to use over defaults"
   attr :error_class, :any, default: nil, doc: "the input error class to use over defaults"
@@ -208,8 +213,8 @@ defmodule StelganoWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
+    <div class="mb-4">
+      <label class="flex items-center gap-3 cursor-pointer group">
         <input
           type="hidden"
           name={@name}
@@ -217,16 +222,28 @@ defmodule StelganoWeb.CoreComponents do
           disabled={@rest[:disabled]}
           form={@rest[:form]}
         />
-        <span class="label">
+        <div class="relative flex items-center">
           <input
             type="checkbox"
             id={@id}
             name={@name}
             value="true"
             checked={@checked}
-            class={@class || "checkbox checkbox-sm"}
+            class="peer sr-only"
             {@rest}
-          />{@label}
+          />
+          <div class="size-6 rounded-lg bg-white/5 border border-white/10 peer-checked:bg-primary peer-checked:border-primary transition-all duration-300 shadow-inner group-hover:border-primary/50">
+          </div>
+          <.icon
+            name="hero-check"
+            class="absolute inset-0 size-4 m-auto text-dark opacity-0 peer-checked:opacity-100 transition-opacity duration-300"
+          />
+        </div>
+        <span
+          :if={@label}
+          class="text-sm font-medium text-slate-300 group-hover:text-white transition-colors"
+        >
+          {@label}
         </span>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
@@ -236,20 +253,32 @@ defmodule StelganoWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
+    <div class="mb-6 relative group">
+      <label
+        :if={@label}
+        for={@id}
+        class="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2.5 ml-1"
+      >
+        {@label}
+      </label>
+      <div class="relative">
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
           multiple={@multiple}
+          class={[
+            "glass-input w-full appearance-none transition-all duration-300 pr-10",
+            @errors != [] && "border-danger ring-danger/10"
+          ]}
           {@rest}
         >
           <option :if={@prompt} value="">{@prompt}</option>
           {Phoenix.HTML.Form.options_for_select(@options, @value)}
         </select>
-      </label>
+        <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-primary transition-colors">
+          <.icon name="hero-chevron-down-micro" class="size-4" />
+        </div>
+      </div>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
@@ -257,52 +286,63 @@ defmodule StelganoWeb.CoreComponents do
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
-        <textarea
-          id={@id}
-          name={@name}
-          class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
-          ]}
-          {@rest}
-        >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
+    <div class="mb-6">
+      <label
+        :if={@label}
+        for={@id}
+        class="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2.5 ml-1"
+      >
+        {@label}
       </label>
+      <textarea
+        id={@id}
+        name={@name}
+        class={[
+          "glass-input w-full min-h-[120px] resize-none py-3 scrollbar-hide transition-all duration-300",
+          @errors != [] && "border-danger ring-danger/10"
+        ]}
+        {@rest}
+      >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
   end
 
-  # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
+    <div class="mb-6 group">
+      <label
+        :if={@label}
+        for={@id}
+        class="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2.5 ml-1 group-focus-within:text-primary transition-colors"
+      >
+        {@label}
+      </label>
+      <div class="relative">
         <input
           type={@type}
           name={@name}
           id={@id}
           value={Phoenix.HTML.Form.normalize_value(@type, @value)}
           class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
+            "glass-input w-full transition-all duration-300",
+            @errors != [] && "border-danger ring-danger/10 focus:ring-danger/20"
           ]}
           {@rest}
         />
-      </label>
+        <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
+          <div class="size-1.5 rounded-full bg-primary shadow-[0_0_8px_var(--color-primary)]"></div>
+        </div>
+      </div>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
   end
 
-  # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
-      <.icon name="hero-exclamation-circle" class="size-5" />
+    <p class="mt-2 flex gap-2 items-center text-xs font-semibold text-danger animate-in stagger-1">
+      <.icon name="hero-exclamation-triangle-mini" class="size-4 shrink-0" />
       {render_slot(@inner_block)}
     </p>
     """
@@ -317,12 +357,15 @@ defmodule StelganoWeb.CoreComponents do
 
   def header(assigns) do
     ~H"""
-    <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4"]}>
+    <header class={[
+      @actions != [] && "flex items-center justify-between gap-6",
+      "pb-8 mb-4 border-b border-white/5"
+    ]}>
       <div>
-        <h1 class="text-lg font-semibold leading-8">
+        <h1 class="text-2xl font-extrabold tracking-tight text-white font-display">
           {render_slot(@inner_block)}
         </h1>
-        <p :if={@subtitle != []} class="text-sm text-base-content/70">
+        <p :if={@subtitle != []} class="mt-2 text-sm text-slate-400 font-medium leading-relaxed">
           {render_slot(@subtitle)}
         </p>
       </div>
@@ -332,29 +375,34 @@ defmodule StelganoWeb.CoreComponents do
   end
 
   @doc """
-  Renders a table with generic styling.
+  Renders a premium glassmorphic card.
+  """
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :inner_block, required: true
 
-  ## Examples
+  def premium_card(assigns) do
+    ~H"""
+    <div class={["glass-card p-6 sm:p-8 animate-in", @class]} {@rest}>
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
 
-      <.table id="users" rows={@users}>
-        <:col :let={user} label="id">{user.id}</:col>
-        <:col :let={user} label="username">{user.username}</:col>
-      </.table>
+  @doc """
+  Renders a table with premium styling.
   """
   attr :id, :string, required: true
   attr :rows, :list, required: true
-  attr :row_id, :any, default: nil, doc: "the function for generating the row id"
-  attr :row_click, :any, default: nil, doc: "the function for handling phx-click on each row"
-
-  attr :row_item, :any,
-    default: &Function.identity/1,
-    doc: "the function for mapping each row before calling the :col and :action slots"
+  attr :row_id, :any, default: nil
+  attr :row_click, :any, default: nil
+  attr :row_item, :any, default: &Function.identity/1
 
   slot :col, required: true do
     attr :label, :string
   end
 
-  slot :action, doc: "the slot for showing user actions in the last table column"
+  slot :action
 
   def table(assigns) do
     assigns =
@@ -363,46 +411,60 @@ defmodule StelganoWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
-      <thead>
-        <tr>
-          <th :for={col <- @col}>{col[:label]}</th>
-          <th :if={@action != []}>
-            <span class="sr-only">{gettext("Actions")}</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody id={@id} phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}>
-        <tr :for={row <- @rows} id={@row_id && @row_id.(row)}>
-          <td
-            :for={col <- @col}
-            phx-click={@row_click && @row_click.(row)}
-            class={@row_click && "hover:cursor-pointer"}
+    <div class="glass-card overflow-hidden">
+      <table class="w-full text-left border-collapse">
+        <thead class="bg-white/5 border-b border-white/10">
+          <tr>
+            <th
+              :for={col <- @col}
+              class="px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-400"
+            >
+              {col[:label]}
+            </th>
+            <th
+              :if={@action != []}
+              class="px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-400"
+            >
+              <span class="sr-only">{gettext("Actions")}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody
+          id={@id}
+          class="divide-y divide-white/5"
+          phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}
+        >
+          <tr
+            :for={row <- @rows}
+            id={@row_id && @row_id.(row)}
+            class="group hover:bg-white/[0.02] transition-colors"
           >
-            {render_slot(col, @row_item.(row))}
-          </td>
-          <td :if={@action != []} class="w-0 font-semibold">
-            <div class="flex gap-4">
-              <%= for action <- @action do %>
-                {render_slot(action, @row_item.(row))}
-              <% end %>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+            <td
+              :for={col <- @col}
+              phx-click={@row_click && @row_click.(row)}
+              class={[
+                "px-4 py-4 text-sm font-medium text-slate-300 group-hover:text-white transition-colors",
+                @row_click && "cursor-pointer"
+              ]}
+            >
+              {render_slot(col, @row_item.(row))}
+            </td>
+            <td :if={@action != []} class="px-4 py-4 text-right">
+              <div class="flex justify-end gap-3 translate-x-1 opacity-60 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
+                <%= for action <- @action do %>
+                  {render_slot(action, @row_item.(row))}
+                <% end %>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     """
   end
 
   @doc """
-  Renders a data list.
-
-  ## Examples
-
-      <.list>
-        <:item title="Title">{@post.title}</:item>
-        <:item title="Views">{@post.views}</:item>
-      </.list>
+  Renders a premium data list.
   """
   slot :item, required: true do
     attr :title, :string, required: true
@@ -410,11 +472,15 @@ defmodule StelganoWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <ul class="list">
-      <li :for={item <- @item} class="list-row">
-        <div class="list-col-grow">
-          <div class="font-bold">{item.title}</div>
-          <div>{render_slot(item)}</div>
+    <ul class="divide-y divide-white/5">
+      <li :for={item <- @item} class="py-4 first:pt-0 last:pb-0 group">
+        <div class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4">
+          <div class="text-xs font-bold uppercase tracking-widest text-slate-500 group-hover:text-primary transition-colors min-w-[120px]">
+            {item.title}
+          </div>
+          <div class="text-sm font-medium text-slate-300 leading-relaxed">
+            {render_slot(item)}
+          </div>
         </div>
       </li>
     </ul>

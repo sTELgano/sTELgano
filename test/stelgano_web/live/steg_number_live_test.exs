@@ -8,18 +8,16 @@ defmodule StelganoWeb.StegNumberLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Stelgano.Rooms
-
   describe "GET /steg-number" do
     test "renders the generator page", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/steg-number")
-      assert html =~ "Steg number generator"
+      assert html =~ "Artifact Generation Engine"
     end
 
     test "shows setup guide steps", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/steg-number")
-      assert html =~ "Open your contacts app"
-      assert html =~ "Add the steg number"
+      assert html =~ "Identity Storage"
+      assert html =~ "Append this number"
     end
 
     test "has generate button", %{conn: conn} do
@@ -27,9 +25,9 @@ defmodule StelganoWeb.StegNumberLiveTest do
       assert has_element?(view, "#generate-btn")
     end
 
-    test "has check availability button", %{conn: conn} do
+    test "has availability indicator", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
-      assert has_element?(view, "#check-availability-btn")
+      assert has_element?(view, "#generator-card")
     end
   end
 
@@ -44,10 +42,9 @@ defmodule StelganoWeb.StegNumberLiveTest do
 
       html = render(view)
       assert html =~ "+44 7700 900 123"
-      assert html =~ "+447700900123"
     end
 
-    test "shows copy button after generation", %{conn: conn} do
+    test "shows copy button and availability after generation", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
 
       render_hook(view, "number_generated", %{
@@ -56,6 +53,7 @@ defmodule StelganoWeb.StegNumberLiveTest do
       })
 
       assert has_element?(view, "#copy-btn")
+      assert has_element?(view, "#availability-check")
     end
   end
 
@@ -63,23 +61,34 @@ defmodule StelganoWeb.StegNumberLiveTest do
     test "shows available message for unused room_hash", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
 
+      render_hook(view, "number_generated", %{
+        "number" => "+447700900000",
+        "display" => "+44 7700 900 000"
+      })
+
       fresh_hash = :crypto.hash(:sha256, "unused-steg-number") |> Base.encode16(case: :lower)
       render_hook(view, "check_availability", %{"room_hash" => fresh_hash})
 
       html = render(view)
-      assert html =~ "available"
+      assert html =~ "Vector Available"
     end
 
     test "shows taken message for existing active room", %{conn: conn} do
       # Create an active room
       existing_hash = :crypto.hash(:sha256, "taken-steg-number") |> Base.encode16(case: :lower)
-      Rooms.find_or_create_room(existing_hash)
+      Stelgano.Rooms.find_or_create_room(existing_hash)
 
       {:ok, view, _html} = live(conn, ~p"/steg-number")
+
+      render_hook(view, "number_generated", %{
+        "number" => "+447700900111",
+        "display" => "+44 7700 900 111"
+      })
+
       render_hook(view, "check_availability", %{"room_hash" => existing_hash})
 
       html = render(view)
-      assert html =~ "active room"
+      assert html =~ "Active Room Detected"
     end
   end
 
@@ -95,7 +104,7 @@ defmodule StelganoWeb.StegNumberLiveTest do
       view |> element("#copy-btn") |> render_click()
 
       html = render(view)
-      assert html =~ "Copied"
+      assert html =~ "Copied to Clipboard"
     end
   end
 end

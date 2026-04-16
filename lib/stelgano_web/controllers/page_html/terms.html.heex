@@ -1,48 +1,61 @@
 <Layouts.app flash={@flash}>
-  <div class="max-w-2xl mx-auto px-4 py-16">
-    <a
-      href="/"
-      class="text-sm hover:underline mb-8 inline-block"
-      style="color: var(--text-muted);"
-    >
-      ← Back
-    </a>
-    <h1 class="text-3xl font-light mb-2" style="color: var(--text-primary);">Terms of service</h1>
-    <p class="text-sm mb-12" style="color: var(--text-muted);">
-      Plain English. Updated April 2026.
-    </p>
+  <div class="max-w-5xl mx-auto space-y-16 py-12 animate-in pb-40">
+    <%!-- Hero Header --%>
+    <div class="text-center space-y-6 pt-12">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="hero-scale-mini" class="size-3" /> Artifact Governance
+      </div>
 
-    <div class="space-y-8" style="color: var(--text-secondary);">
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">Use</h2>
-        <p class="text-sm">
-          Do not use sTELgano for illegal activity. We cannot read your messages — and that is by design — but illegal use remains your responsibility.
-        </p>
-      </section>
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">
-          No warranty
-        </h2>
-        <p class="text-sm">
-          sTELgano is AGPL-3.0 open-source software provided as-is. No warranties, express or implied.
-        </p>
-      </section>
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">
-          We cannot read your messages
-        </h2>
-        <p class="text-sm">
-          We hold no decryption key. Message content is encrypted in your browser before it reaches us. We cannot hand over plaintext to anyone because we do not have it.
-        </p>
-      </section>
-      <section>
-        <h2 class="text-base font-medium mb-2" style="color: var(--text-primary);">
-          Lost credentials
-        </h2>
-        <p class="text-sm">
-          If you lose your steg number and PIN, the room is inaccessible. We cannot recover it. Store your steg number in your contacts app as the product instructs.
-        </p>
-      </section>
+      <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
+        Terms of <span class="text-gradient">Service.</span>
+      </h1>
+
+      <p class="text-slate-500 font-mono text-[10px] font-bold uppercase tracking-[0.4em] animate-in stagger-3">
+        Governance Revision 2026.04
+      </p>
+    </div>
+
+    <%!-- Terms Grid --%>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-4">
+      <div
+        :for={
+          {title, desc, badge} <- [
+            {"Open Source License",
+             "sTELgano is licensed under the AGPL-3.0. You are permitted to fork, modify, and host this code, provided any improvements are contributed back to the public domain.",
+             "AGPL-3.0"},
+            {"Zero Warranty",
+             "The software is provided 'as is'. We offer zero guarantees regarding the uptime, availability, or suitability of the protocol for any specific regulatory requirement.",
+             "DISCLAIMER"},
+            {"User Responsibility",
+             "You are solely responsible for your encryption artifacts (PINs and generated numbers). If lost, they are unrecoverable. We cannot assist in data recovery.",
+             "CRITICAL"},
+            {"Acceptable Use",
+             "This tool is for legitimate privacy and anonymity. Use for illegal activity is strictly prohibited and may violate the laws of your local jurisdiction.",
+             "CONDUCT"}
+          ]
+        }
+        class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500"
+      >
+        <div class="flex items-center justify-between">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <.icon
+              name="hero-shield-check-mini"
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
+          </div>
+          <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
+            {badge}
+          </span>
+        </div>
+        <div class="space-y-4">
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+            {title}
+          </h4>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium">
+            {desc}
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </Layouts.app>

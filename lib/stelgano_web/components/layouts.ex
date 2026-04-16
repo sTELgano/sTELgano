@@ -18,52 +18,46 @@ defmodule StelganoWeb.Layouts do
   Renders the app layout shell with navigation and footer.
   """
   attr :flash, :map, required: true
-
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <nav class="site-nav">
-      <a href="/" class="wordmark" style="font-size: 1.4rem;">
-        <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
-      </a>
-      <ul class="nav-links">
-        <li><a href="/security">Security</a></li>
-        <li><a href="/about">About</a></li>
-        <li><.theme_toggle /></li>
-        <li>
-          <a
-            href="/chat"
-            class="glass-button"
-            style="padding: 0.5rem 1rem; font-size: 0.875rem; min-height: auto; width: auto;"
-          >
-            Open chat
-          </a>
-        </li>
-      </ul>
+    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-white/5 backdrop-blur-2xl bg-slate-950/40">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <.link navigate={~p"/"} class="wordmark group text-xl">
+          <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
+        </.link>
+
+        <div class="flex items-center gap-6">
+          <div class="hidden sm:flex items-center gap-8 mr-4">
+            <.link
+              navigate={~p"/security"}
+              class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all"
+            >
+              Spec
+            </.link>
+            <.link
+              navigate={~p"/about"}
+              class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all"
+            >
+              About
+            </.link>
+          </div>
+          <div class="h-4 w-px bg-white/10 mx-2"></div>
+          <.theme_toggle />
+          <.link navigate={~p"/steg-number"} class="btn-primary py-2 px-6 text-xs">
+            Start Channel
+          </.link>
+        </div>
+      </div>
     </nav>
 
-    <main style="flex: 1;">
-      {render_slot(@inner_block)}
-    </main>
-
-    <footer class="site-footer">
-      <p>
-        <a href="/" class="wordmark wordmark-small">
-          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
-        </a>
-      </p>
-      <div class="footer-links">
-        <a href="/privacy" class="footer-link">Privacy</a>
-        <a href="/terms" class="footer-link">Terms</a>
-        <a href="/security" class="footer-link">Security</a>
+    <main class="flex-1 flex flex-col pt-16 h-screen overflow-y-auto">
+      <.flash_group flash={@flash} />
+      <div class="max-w-5xl mx-auto w-full px-6 py-12 flex-1 flex flex-col">
+        {render_slot(@inner_block)}
       </div>
-      <p class="footer-note">
-        AGPL-3.0 · Hidden in the contact layer.
-      </p>
-    </footer>
-
-    <.flash_group flash={@flash} />
+    </main>
     """
   end
 
@@ -78,8 +72,7 @@ defmodule StelganoWeb.Layouts do
     <div
       id={@id}
       aria-live="polite"
-      class="flash-group"
-      style="position: fixed; top: 1rem; right: 1rem; z-index: 1000; max-width: 400px;"
+      class="fixed top-6 right-6 z-[100] flex flex-col gap-3 w-full max-w-sm pointer-events-none"
     >
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
@@ -116,30 +109,24 @@ defmodule StelganoWeb.Layouts do
   """
   def theme_toggle(assigns) do
     ~H"""
-    <div class="theme-toggle" role="group" aria-label="Theme">
+    <div class="flex items-center gap-1 p-1 bg-white/5 rounded-full border border-white/5 shadow-inner">
       <button
-        class="btn-icon theme-toggle-button"
-        style="padding: 0.25rem;"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
+        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "system"})}
+        class="p-1.5 rounded-full hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
         title="System"
       >
         <.icon name="hero-computer-desktop-micro" class="size-4" />
       </button>
       <button
-        class="btn-icon theme-toggle-button"
-        style="padding: 0.25rem;"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
+        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "light"})}
+        class="p-1.5 rounded-full hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
         title="Light"
       >
         <.icon name="hero-sun-micro" class="size-4" />
       </button>
       <button
-        class="btn-icon theme-toggle-button"
-        style="padding: 0.25rem;"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
+        phx-click={JS.dispatch("phx:set-theme", detail: %{theme: "dark"})}
+        class="p-1.5 rounded-full hover:bg-white/10 transition-colors text-slate-400 hover:text-white"
         title="Dark"
       >
         <.icon name="hero-moon-micro" class="size-4" />

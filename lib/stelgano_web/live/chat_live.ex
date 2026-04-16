@@ -430,9 +430,11 @@ defmodule StelganoWeb.ChatLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="chat-root" phx-hook="AnonChat">
-      {render_state(assigns)}
-    </div>
+    <Layouts.app flash={@flash}>
+      <div id="chat-root" phx-hook="AnonChat" class="animate-in">
+        {render_state(assigns)}
+      </div>
+    </Layouts.app>
     """
   end
 
@@ -449,90 +451,166 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_entry(assigns) do
     ~H"""
-    <div class="entry-screen">
-      <div class="entry-card">
-        <div style="text-align: center; margin-bottom: 1.5rem;">
-          <a href="/" class="wordmark" style="font-size: 1.4rem;">
-            <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
-          </a>
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] animate-in">
+      <div class="w-full max-w-xl space-y-12">
+        <%!-- Branding --%>
+        <div class="text-center space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-4 shadow-[0_0_15px_rgba(0,255,163,0.1)]">
+            <.icon name="hero-no-symbol-mini" class="size-3" /> Anonymous Protocol Active
+          </div>
+          <h1 class="text-5xl sm:text-6xl font-extrabold tracking-tighter text-white font-display">
+            Enter <span class="text-gradient">Workspace.</span>
+          </h1>
+          <p class="text-slate-500 font-medium text-lg leading-relaxed">
+            Initialize your secure derivation sequence below.
+          </p>
         </div>
 
-        <%= if @error do %>
-          <div class="entry-error">
-            {@error}
-            <%= if @attempts_remaining do %>
-              <span style="display: block; font-size: 0.75rem; margin-top: 0.25rem; opacity: 0.75;">
-                {@attempts_remaining} {if @attempts_remaining == 1, do: "attempt", else: "attempts"} remaining
-              </span>
+        <.premium_card class="p-1 sm:p-1 overflow-hidden shadow-primary-glow/20">
+          <div class="p-8 sm:p-12 space-y-10">
+            <%= if @error do %>
+              <div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
+                <.icon name="hero-exclamation-circle" class="size-6 text-danger shrink-0" />
+                <div class="space-y-1">
+                  <p class="text-sm font-bold text-danger">{@error}</p>
+                  <%= if @attempts_remaining do %>
+                    <p class="text-[10px] text-danger/60 font-mono uppercase tracking-widest font-black">
+                      Vector Lock: {@attempts_remaining} {if @attempts_remaining == 1,
+                        do: "attempt",
+                        else: "attempts"} remaining
+                    </p>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+
+            <%= cond do %>
+              <% @_pending_phone == "" -> %>
+                <div class="text-center py-12 space-y-10 animate-in">
+                  <div class="size-24 mx-auto relative group">
+                    <div class="absolute inset-0 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-all">
+                    </div>
+                    <div class="relative size-24 rounded-[2rem] bg-slate-900 border border-white/10 flex items-center justify-center">
+                      <.icon name="hero-no-symbol-mini" class="size-12 text-slate-500" />
+                    </div>
+                  </div>
+
+                  <div class="space-y-4">
+                    <h3 class="text-4xl font-extrabold text-white font-display">No Active Vector.</h3>
+                    <p class="text-slate-500 font-medium leading-relaxed max-w-sm mx-auto">
+                      A derivation sequence requires a pre-shared identity artifact to initialize the secure handshake.
+                    </p>
+                  </div>
+
+                  <div class="pt-6">
+                    <.link
+                      navigate={~p"/steg-number"}
+                      class="btn-primary inline-flex items-center gap-4 px-10 py-5 text-lg shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)] transition-all"
+                    >
+                      Generate Identity Artifact <.icon name="hero-sparkles-mini" class="size-6" />
+                    </.link>
+                  </div>
+                </div>
+              <% @phone_locked -> %>
+                <form
+                  id="entry-form"
+                  phx-submit="entry_submit"
+                  phx-change="entry_change"
+                  class="space-y-10"
+                >
+                  <%!-- Phone Vector --%>
+                  <div class="space-y-4">
+                    <div class="flex items-center justify-between px-1">
+                      <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                        Shared Identity Vector
+                      </label>
+                      <span class="text-[10px] font-mono text-primary font-bold">READY</span>
+                    </div>
+                    <div class="relative group">
+                      <input
+                        id="entry-phone"
+                        name="phone"
+                        type={if @phone_visible, do: "text", else: "password"}
+                        class="glass-input w-full pr-14 font-mono text-xl font-bold tracking-widest bg-slate-950/40"
+                        value={@_pending_phone}
+                        readonly
+                      />
+                      <button
+                        type="button"
+                        id="phone-toggle-btn"
+                        phx-click="toggle_phone_visibility"
+                        class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                        tabindex="-1"
+                      >
+                        <.icon
+                          name={if @phone_visible, do: "hero-eye-slash-mini", else: "hero-eye-mini"}
+                          class="size-6"
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <%!-- PIN Input --%>
+                  <div class="space-y-4">
+                    <div class="flex items-center justify-between px-1">
+                      <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                        Local Pin Access
+                      </label>
+                      <span class="text-[10px] font-mono text-slate-500 font-bold">
+                        ENCRYPTED AT SOURCE
+                      </span>
+                    </div>
+                    <.input
+                      id="entry-pin"
+                      name="pin"
+                      type="password"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="••••"
+                      autocomplete="current-password"
+                      autofocus
+                      class="text-center text-3xl sm:text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10"
+                    />
+                  </div>
+
+                  <button
+                    id="entry-submit"
+                    type="submit"
+                    class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+                  >
+                    Open Secure Link
+                    <.icon
+                      name="hero-bolt-mini"
+                      class="size-6 group-hover:scale-125 transition-transform"
+                    />
+                  </button>
+                </form>
+              <% true -> %>
+                <%!-- Fallback for manual entry if needed, but current app flow favors prefilled params --%>
+                <div class="text-center py-6 space-y-8">
+                  <div class="relative size-32 mx-auto">
+                    <div class="absolute inset-0 rounded-full border-4 border-primary/10 border-t-primary animate-spin">
+                    </div>
+                    <div class="absolute inset-4 rounded-full border-2 border-primary/5 border-b-primary animate-spin-slow">
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                      <.icon
+                        name="hero-finger-print-mini"
+                        class="size-12 text-primary drop-shadow-[0_0_10px_rgba(0,255,163,0.5)]"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="space-y-3">
+                    <h3 class="text-2xl font-bold text-white font-display">Authorizing Context</h3>
+                    <p class="text-slate-400 font-medium">
+                      Validating cryptographic signature artifacts…
+                    </p>
+                  </div>
+                </div>
             <% end %>
           </div>
-        <% end %>
-
-        <form id="entry-form" phx-submit="entry_submit" phx-change="entry_change" class="stack-md">
-          <%= if @phone_locked do %>
-            <div class="phone-field-wrapper">
-              <input
-                id="entry-phone"
-                name="phone"
-                type="text"
-                class="glass-input glass-input-mono"
-                value={@_pending_phone}
-                readonly
-                style="padding-right: 3rem; opacity: 0.7; cursor: not-allowed;"
-              />
-              <span class="phone-toggle" style="opacity: 0.4;">
-                <.icon name="hero-lock-closed-micro" class="w-5 h-5" />
-              </span>
-            </div>
-          <% else %>
-            <div class="phone-field-wrapper">
-              <input
-                id="entry-phone"
-                name="phone"
-                type={if @phone_visible, do: "text", else: "password"}
-                class="glass-input glass-input-mono"
-                placeholder="Shared phone number"
-                autocomplete="off"
-                value={@_pending_phone}
-                style="padding-right: 3rem;"
-              />
-              <button
-                type="button"
-                id="phone-toggle-btn"
-                class="phone-toggle"
-                phx-click="toggle_phone_visibility"
-                tabindex="-1"
-              >
-                <%= if @phone_visible do %>
-                  <.icon name="hero-eye-slash-micro" class="w-5 h-5" />
-                <% else %>
-                  <.icon name="hero-eye-micro" class="w-5 h-5" />
-                <% end %>
-              </button>
-            </div>
-          <% end %>
-
-          <input
-            id="entry-pin"
-            name="pin"
-            type="password"
-            inputmode="numeric"
-            pattern="[0-9]*"
-            class="glass-input"
-            placeholder="Your PIN"
-            autocomplete="current-password"
-          />
-
-          <button id="entry-submit" type="submit" class="glass-button">
-            Open
-          </button>
-        </form>
-
-        <div style="text-align: center; margin-top: 1rem;">
-          <.link navigate={~p"/steg-number"} class="link-muted">
-            Generate a shared number
-          </.link>
-        </div>
+        </.premium_card>
       </div>
     </div>
     """
@@ -544,24 +622,32 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_deriving(assigns) do
     ~H"""
-    <div class="entry-screen">
-      <div class="entry-card entry-card-center">
-        <a
-          href="/"
-          class="wordmark"
-          style="font-size: 1.4rem; margin-bottom: 2rem; display: inline-block;"
-        >
-          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
-        </a>
-        <div
-          class="dots dots-center"
-          style="display: flex; justify-content: center; margin-bottom: 1rem;"
-        >
-          <div class="dot"></div>
-          <div class="dot"></div>
-          <div class="dot"></div>
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6">
+      <div class="w-full max-w-sm text-center space-y-12">
+        <div class="relative size-40 mx-auto">
+          <div class="absolute inset-0 rounded-full border-2 border-white/5 border-t-primary animate-spin duration-[2000ms]">
+          </div>
+          <div class="absolute inset-4 rounded-full border-2 border-white/5 border-r-primary animate-spin-reverse duration-[3000ms]">
+          </div>
+          <div class="absolute inset-8 rounded-full border-2 border-white/5 border-l-primary animate-spin duration-[4000ms]">
+          </div>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <.icon name="hero-cpu-chip-mini" class="size-12 text-primary animate-pulse" />
+          </div>
         </div>
-        <p class="status-copy">Verifying…</p>
+
+        <div class="space-y-4">
+          <h3 class="text-3xl font-bold text-white font-display text-gradient">Deriving Keys</h3>
+          <p class="text-slate-400 font-medium leading-relaxed">
+            Executing Argon2id sequence locally. This may take a few moments based on your hardware.
+          </p>
+        </div>
+
+        <div class="flex justify-center gap-2">
+          <div class="size-1.5 rounded-full bg-primary/40 animate-ping"></div>
+          <div class="size-1.5 rounded-full bg-primary/40 animate-ping [animation-delay:0.3s]"></div>
+          <div class="size-1.5 rounded-full bg-primary/40 animate-ping [animation-delay:0.6s]"></div>
+        </div>
       </div>
     </div>
     """
@@ -573,25 +659,20 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_connecting(assigns) do
     ~H"""
-    <div class="entry-screen">
-      <div class="entry-card entry-card-center">
-        <a
-          href="/"
-          class="wordmark"
-          style="font-size: 1.4rem; margin-bottom: 2rem; display: inline-block;"
-        >
-          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
-        </a>
-        <div
-          class="dots dots-center"
-          style="display: flex; justify-content: center; margin-bottom: 1rem;"
-        >
-          <div class="dot"></div>
-          <div class="dot"></div>
-          <div class="dot"></div>
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6">
+      <div class="w-full max-w-sm text-center space-y-10 animate-in">
+        <div class="size-24 rounded-[2.5rem] bg-primary/5 flex items-center justify-center mx-auto shadow-inner ring-1 ring-primary/20 animate-pulse">
+          <.icon name="hero-globe-alt-mini" class="size-12 text-primary" />
         </div>
-        <p class="status-copy">Deriving encryption key…</p>
-        <p class="status-copy-small">This takes a moment on first open.</p>
+
+        <div class="space-y-3">
+          <h3 class="text-2xl font-bold text-white font-display">Synchronizing</h3>
+          <p class="text-slate-400 font-medium">Establishing handshake with encrypted node…</p>
+        </div>
+
+        <div class="px-6 py-3 rounded-2xl bg-slate-950/60 border border-white/5 font-mono text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">
+          Status: Initializing WS Stream
+        </div>
       </div>
     </div>
     """
@@ -603,74 +684,166 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_chat(assigns) do
     ~H"""
-    <div class="chat-layout">
-      <%!-- Header --%>
-      <div class="chat-header">
-        <a href="/" class="wordmark wordmark-small">
-          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
-        </a>
-        <div class="chat-header-actions">
-          <button class="btn-icon" phx-click="lock_chat" title="Lock">
-            <.icon name="hero-lock-closed-micro" class="w-5 h-5" />
-          </button>
+    <div class="chat-container">
+      <%!-- Header (Command Cluster) --%>
+      <div class="sticky top-0 z-40 px-6 py-4 flex items-center justify-between border-b border-white/5 backdrop-blur-2xl bg-slate-950/60">
+        <div class="flex items-center gap-4">
+          <div class="relative size-10">
+            <div class="absolute inset-0 rounded-xl bg-primary/10 border border-primary/20 animate-pulse">
+            </div>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="size-2 rounded-full bg-primary shadow-[0_0_12px_var(--color-primary)]">
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-col">
+            <.link navigate={~p"/"} class="wordmark text-lg leading-tight group">
+              <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
+            </.link>
+            <span class="text-[9px] font-black uppercase tracking-[0.3em] text-primary/60">
+              Active Vector · Handshake Stable
+            </span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="flex items-center bg-white/5 rounded-2xl p-1 gap-1 border border-white/5">
+            <button
+              class="p-2.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all group"
+              phx-click="lock_chat"
+              title="Lock session"
+            >
+              <.icon
+                name="hero-lock-closed-mini"
+                class="size-5 group-hover:scale-110 transition-transform"
+              />
+            </button>
+            <button
+              class="p-2.5 rounded-xl hover:bg-danger/10 text-slate-400 hover:text-danger transition-all group"
+              phx-click="confirm_expire"
+              title="Nuclear Wipe"
+            >
+              <.icon name="hero-fire-mini" class="size-5 group-hover:scale-110 transition-transform" />
+            </button>
+          </div>
+
+          <div class="w-px h-6 bg-white/10 mx-2"></div>
+
           <button
-            class="btn-icon"
-            style="color: var(--text-muted);"
-            phx-click="confirm_expire"
-            title="End conversation"
+            class="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/5"
+            phx-click="leave_chat"
+            title="Terminate Link"
           >
-            <.icon name="hero-trash-micro" class="w-5 h-5" />
-          </button>
-          <button class="btn-icon" phx-click="leave_chat" title="Leave">
-            <.icon name="hero-arrow-right-on-rectangle-micro" class="w-5 h-5" />
+            <.icon name="hero-power-mini" class="size-5 text-danger/80" />
           </button>
         </div>
       </div>
 
-      <%!-- TTL bar --%>
-      <div class="ttl-bar">
-        <div class="ttl-bar-fill" id="ttl-bar-fill" style="width: 100%;"></div>
+      <%!-- TTL (Session Entropy) Bar --%>
+      <div class="h-1 w-full bg-slate-900 border-b border-white/5 overflow-hidden">
+        <div
+          class="h-full bg-gradient-to-r from-primary via-emerald-400 to-primary/40 transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(0,255,163,0.5)]"
+          id="ttl-bar-fill"
+          style="width: 100%;"
+        >
+        </div>
       </div>
 
-      <%!-- Message area --%>
-      <div class="chat-messages" role="log" aria-live="polite">
-        <%!-- Typing indicator --%>
-        <%= if @typing_visible do %>
-          <div class="typing-indicator">
-            <div class="dots">
-              <div class="dot"></div>
-              <div class="dot"></div>
-              <div class="dot"></div>
+      <%!-- Workspace Message Area --%>
+      <div
+        class="flex-1 overflow-y-auto px-6 py-10 space-y-10 scrollbar-hide"
+        role="log"
+        aria-live="polite"
+        id="message-list"
+      >
+        <%= if @message do %>
+          <.render_message_bubble msg={@message} />
+        <% else %>
+          <div class="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto animate-in space-y-8">
+            <div class="relative size-24">
+              <div class="absolute inset-0 rounded-3xl bg-white/[0.02] border border-white/5 rotate-6">
+              </div>
+              <div class="absolute inset-0 rounded-3xl bg-white/[0.02] border border-white/5 -rotate-3">
+              </div>
+              <div class="absolute inset-0 rounded-3xl bg-slate-900 border border-white/10 flex items-center justify-center">
+                <.icon name="hero-shield-check-mini" class="size-12 text-slate-700" />
+              </div>
+            </div>
+            <div class="space-y-3">
+              <h4 class="text-2xl font-bold text-white font-display">Zero Trace Channel</h4>
+              <p class="text-slate-500 font-medium leading-relaxed">
+                The buffer is currently empty. This workspace adheres to a strict single-message protocol for maximum plausible deniability.
+              </p>
             </div>
           </div>
         <% end %>
 
-        <%!-- Current message --%>
-        <%= if @message do %>
-          <.render_message_bubble msg={@message} />
+        <%!-- Async Indicator --%>
+        <%= if @typing_visible do %>
+          <div class="flex items-center gap-4 text-primary ml-2 animate-in py-4">
+            <div class="flex gap-1.5">
+              <div class="size-2 bg-primary/80 rounded-full animate-bounce"></div>
+              <div class="size-2 bg-primary/80 rounded-full animate-bounce [animation-delay:0.2s]">
+              </div>
+              <div class="size-2 bg-primary/80 rounded-full animate-bounce [animation-delay:0.4s]">
+              </div>
+            </div>
+            <span class="text-[10px] font-black uppercase tracking-[0.4em]">Handshaking...</span>
+          </div>
         <% end %>
       </div>
 
-      <%!-- Input area --%>
-      <%= if can_type?(assigns) do %>
-        <.render_input_area char_count={@char_count} />
-      <% else %>
-        <div class="chat-input-area">
-          <div class="waiting-state">Waiting for reply…</div>
-        </div>
-      <% end %>
-
-      <%!-- Expire confirmation modal --%>
-      <%= if @confirm_expire do %>
-        <div class="modal-backdrop">
-          <div class="modal-card">
-            <div class="modal-title">End this conversation?</div>
-            <div class="modal-body">
-              This cannot be undone. All messages will be permanently deleted.
+      <%!-- User Interaction Zone --%>
+      <div class="p-8 pb-10">
+        <%= if can_type?(assigns) do %>
+          <.render_input_area
+            char_count={@char_count}
+            max_chars={@max_chars}
+            counter_warn_at={@counter_warn_at}
+            counter_danger_at={@counter_danger_at}
+          />
+        <% else %>
+          <div class="glass-card flex items-center justify-center gap-4 py-6 border-white/5 select-none opacity-60 backdrop-grayscale">
+            <div class="size-8 rounded-xl bg-white/5 flex items-center justify-center">
+              <.icon name="hero-lock-closed-mini" class="size-4 text-slate-500" />
             </div>
-            <div class="modal-actions">
-              <button class="btn-ghost" phx-click="cancel_expire">Cancel</button>
-              <button class="btn-danger" phx-click="expire_room">End</button>
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">
+              Synchronizing response vector…
+            </span>
+          </div>
+        <% end %>
+      </div>
+
+      <%!-- Destruction Modal --%>
+      <%= if @confirm_expire do %>
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-3xl animate-in duration-300">
+          <div class="w-full max-w-sm glass-card p-10 border-danger/40 shadow-danger-glow relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 size-40 bg-danger/5 rounded-full blur-3xl">
+            </div>
+
+            <div class="size-20 rounded-[2rem] bg-danger/10 flex items-center justify-center mb-8 border border-danger/20">
+              <.icon name="hero-fire-mini" class="size-10 text-danger" />
+            </div>
+
+            <h3 class="text-3xl font-extrabold text-white mb-4 font-display">Nuclear Wipe?</h3>
+            <p class="text-slate-400 mb-10 leading-relaxed font-medium">
+              This will permanently purge the current artifact and end the sequence for both nodes. This action is
+              <span class="text-white">irreversible.</span>
+            </p>
+
+            <div class="flex flex-col gap-3">
+              <button
+                class="w-full py-4 rounded-2xl bg-danger text-white font-black uppercase tracking-widest shadow-xl shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all"
+                phx-click="expire_room"
+              >
+                Initialize Purge
+              </button>
+              <button
+                class="w-full py-4 rounded-2xl bg-white/5 text-slate-400 font-bold uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5"
+                phx-click="cancel_expire"
+              >
+                Abort
+              </button>
             </div>
           </div>
         </div>
@@ -686,30 +859,71 @@ defmodule StelganoWeb.ChatLive do
   attr :msg, :map, required: true
 
   defp render_message_bubble(assigns) do
-    side = if assigns.msg.is_mine, do: "sent", else: "received"
-    assigns = assign(assigns, :side, side)
-
     ~H"""
     <div
       id={"bubble-wrapper-#{@msg.id}"}
-      class={"bubble-wrapper #{@side}"}
+      class={["flex w-full animate-in", if(@msg.is_mine, do: "justify-end", else: "justify-start")]}
       phx-hook={unless @msg.is_mine || @msg.read_at, do: "IntersectionReader"}
       data-message-id={@msg.id}
     >
-      <div>
-        <div id={"bubble-#{@msg.id}"} class={"bubble #{@side}"}>
-          {@msg.plaintext}
+      <div class={[
+        "max-w-[80%] group space-y-3",
+        if(@msg.is_mine, do: "flex flex-col items-end", else: "flex flex-col items-start")
+      ]}>
+        <div class={[
+          "relative p-6 sm:p-8 rounded-[2rem] group-hover:shadow-2xl transition-all duration-500 border overflow-hidden",
+          if(@msg.is_mine,
+            do:
+              "bg-gradient-to-br from-primary/20 via-primary/5 to-emerald-500/10 border-primary/20 rounded-tr-none text-white",
+            else:
+              "bg-slate-900/80 backdrop-blur-xl border-white/10 rounded-tl-none text-slate-200 shadow-inner"
+          )
+        ]}>
+          <%!-- Glass Reflect Effect --%>
+          <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent">
+          </div>
+
+          <p class="relative z-10 whitespace-pre-wrap text-base sm:text-lg leading-relaxed font-medium tracking-tight">
+            {@msg.plaintext}
+          </p>
+
+          <%!-- Ambient Glow --%>
+          <div
+            :if={@msg.is_mine}
+            class="absolute -right-20 -top-20 size-40 bg-primary/10 rounded-full blur-[80px]"
+          >
+          </div>
+          <div
+            :if={!@msg.is_mine}
+            class="absolute -left-20 -top-20 size-40 bg-white/5 rounded-full blur-[80px]"
+          >
+          </div>
         </div>
-        <div class="bubble-meta">
+
+        <div class="flex items-center gap-4 px-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
           <%= if @msg.edited do %>
-            <span class="bubble-edited">edited</span>
+            <span class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-600">
+              Edited Segment
+            </span>
           <% end %>
           <%= if @msg.is_mine do %>
-            <%= if @msg.read_at do %>
-              <span class="tick-double">✓✓</span>
-            <% else %>
-              <span class="tick-single">✓</span>
-            <% end %>
+            <div class="flex items-center gap-2">
+              <%= if @msg.read_at do %>
+                <span class="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-primary/10">
+                  <.icon name="hero-check-badge-mini" class="size-3 text-primary" />
+                  <span class="text-[9px] font-black uppercase tracking-[0.2em] text-primary">
+                    Decrypted
+                  </span>
+                </span>
+              <% else %>
+                <span class="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-white/5">
+                  <div class="size-1.5 rounded-full bg-slate-600 animate-pulse"></div>
+                  <span class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                    Persisted
+                  </span>
+                </span>
+              <% end %>
+            </div>
           <% end %>
         </div>
       </div>
@@ -722,35 +936,64 @@ defmodule StelganoWeb.ChatLive do
   # ---------------------------------------------------------------------------
 
   attr :char_count, :integer, required: true
+  attr :max_chars, :integer, required: true
+  attr :counter_warn_at, :integer, required: true
+  attr :counter_danger_at, :integer, required: true
 
   defp render_input_area(assigns) do
     ~H"""
-    <div class="chat-input-area">
-      <div class="chat-input-row">
+    <div class="relative group">
+      <%!-- Glow focus effect --%>
+      <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 via-emerald-400/20 to-primary/20 rounded-[2.5rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700">
+      </div>
+
+      <div class="relative flex items-end gap-3 p-3 sm:p-4 rounded-[2.2rem] bg-slate-900 border border-white/10 group-focus-within:border-primary/40 group-focus-within:bg-slate-950/80 transition-all duration-300 shadow-2xl">
         <textarea
           id="chat-textarea"
-          class="chat-textarea"
-          placeholder="Write a message…"
+          class="flex-1 bg-transparent border-none text-white placeholder-slate-600 focus:ring-0 py-4 px-4 resize-none max-h-60 min-h-[56px] scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
+          placeholder="Construct secure message…"
           rows="1"
           maxlength={@max_chars}
           phx-hook="AutoResize"
           phx-keyup="input_change"
           phx-update="ignore"
         ></textarea>
-        <button
-          id="btn-send"
-          class="btn-icon"
-          style="background: var(--color-primary); color: #fff; border-radius: 50%; width: 48px; height: 48px; min-width: 48px;"
-          phx-click="send_message"
-        >
-          <.icon name="hero-paper-airplane-micro" class="w-5 h-5" />
-        </button>
+
+        <div class="flex items-center gap-4 pr-2 pb-2">
+          <%= if @char_count >= @counter_warn_at do %>
+            <div class="flex flex-col items-end">
+              <span class={[
+                "text-[9px] font-mono font-black tracking-widest",
+                if(@char_count >= @counter_danger_at, do: "text-danger", else: "text-warning")
+              ]}>
+                {@char_count}<span class="text-slate-700">/</span>{@max_chars}
+              </span>
+              <div class="w-12 h-0.5 bg-slate-800 rounded-full mt-1 overflow-hidden">
+                <div
+                  class={[
+                    "h-full transition-all",
+                    if(@char_count >= @counter_danger_at, do: "bg-danger", else: "bg-warning")
+                  ]}
+                  style={"width: #{(@char_count / @max_chars) * 100}%"}
+                >
+                </div>
+              </div>
+            </div>
+          <% end %>
+
+          <button
+            id="btn-send"
+            class="size-14 rounded-3xl bg-primary text-slate-950 flex items-center justify-center shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all group disabled:grayscale disabled:opacity-50"
+            phx-click="send_message"
+            aria-label="Encrypt & Broadcast"
+          >
+            <.icon
+              name="hero-paper-airplane-mini"
+              class="size-6 -rotate-12 group-hover:rotate-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+            />
+          </button>
+        </div>
       </div>
-      <%= if @char_count >= @counter_warn_at do %>
-        <p class={"char-counter #{if @char_count >= @counter_danger_at, do: "danger", else: "warning"}"}>
-          {@char_count}/{@max_chars}
-        </p>
-      <% end %>
     </div>
     """
   end
@@ -761,36 +1004,39 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_locked(assigns) do
     ~H"""
-    <div class="lock-overlay" role="dialog">
-      <div class="lock-card">
-        <div style="margin-bottom: 2rem;">
-          <a href="/" class="wordmark" style="font-size: 1.4rem;">
-            <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
-          </a>
+    <div class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-2xl animate-in">
+      <div class="w-full max-w-sm text-center">
+        <div class="size-20 rounded-3xl bg-primary/10 flex items-center justify-center mx-auto mb-8 shadow-inner ring-1 ring-primary/20 animate-in stagger-1">
+          <.icon name="hero-lock-closed-mini" class="size-10 text-primary" />
         </div>
+        <h3 class="text-3xl font-extrabold text-white mb-2 font-display animate-in stagger-2 text-gradient">
+          Session Locked
+        </h3>
+        <p class="text-slate-400 font-medium mb-10 animate-in stagger-3">
+          Enter your PIN to re-secure the channel
+        </p>
 
-        <p class="lock-pin-label">Enter PIN to resume</p>
-
-        <form id="lock-form" phx-submit="unlock_chat" class="stack-md">
-          <input
-            id="lock-pin-input"
+        <form id="unlock-form" phx-submit="unlock_chat" class="animate-in stagger-3">
+          <.input
             name="pin"
             type="password"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            placeholder="••••"
+            class="text-center text-2xl tracking-[0.5em] font-mono py-4"
             autofocus
-            class="glass-input glass-input-mono"
-            style="text-align: center; letter-spacing: 0.2em;"
-            placeholder="****"
           />
           <%= if @lock_error do %>
-            <p id="lock-error" class="lock-error">{@lock_error}</p>
+            <p class="mt-4 text-sm font-bold text-danger animate-bounce">{@lock_error}</p>
           <% end %>
-          <button id="lock-submit" type="submit" class="glass-button" style="margin-top: 1rem;">
-            Resume
-          </button>
+          <button type="submit" class="btn-primary w-full py-4 mt-6 text-lg">Unlock Channel</button>
         </form>
 
-        <button id="lock-clear" class="lock-clear" phx-click="clear_session">
-          Clear session
+        <button
+          phx-click="clear_session"
+          class="mt-8 text-sm font-bold uppercase tracking-widest text-slate-500 hover:text-white transition-colors animate-in stagger-3"
+        >
+          Clear Session Artifacts
         </button>
       </div>
     </div>
@@ -803,24 +1049,26 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_expired(assigns) do
     ~H"""
-    <div class="entry-screen">
-      <div class="entry-card entry-card-center">
-        <a
-          href="/"
-          class="wordmark"
-          style="font-size: 1.4rem; margin-bottom: 1.5rem; display: inline-block;"
-        >
-          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
-        </a>
-        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">This conversation has ended.</p>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-2xl">
+      <.premium_card class="max-w-md w-full text-center border-danger/20 shadow-danger-glow animate-in">
+        <div class="size-20 rounded-3xl bg-danger/10 flex items-center justify-center mx-auto mb-8 border border-danger/20">
+          <.icon name="hero-trash-mini" class="size-10 text-danger" />
+        </div>
+
+        <h3 class="text-3xl font-extrabold text-white font-display mb-4">Sequence Ended</h3>
+
+        <p class="text-slate-400 font-medium leading-relaxed mb-10">
+          The channel artifacts have been permanently purged.
+          No recovery is possible through the current vector.
+        </p>
+
         <button
-          class="glass-button"
           phx-click="back_to_entry"
-          style="max-width: 200px; margin: 0 auto;"
+          class="btn-primary w-full py-4 text-lg"
         >
-          OK
+          Initialize New Sequence
         </button>
-      </div>
+      </.premium_card>
     </div>
     """
   end

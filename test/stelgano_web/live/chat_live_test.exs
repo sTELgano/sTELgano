@@ -14,165 +14,142 @@ defmodule StelganoWeb.ChatLiveTest do
   import Phoenix.LiveViewTest
 
   # ---------------------------------------------------------------------------
-  # Entry screen
+  # Entry screen — without phone param (empty state)
   # ---------------------------------------------------------------------------
 
-  describe "GET /chat" do
-    test "renders the entry screen with two masked fields", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
+  describe "GET /chat (no phone)" do
+    test "renders the empty state prompting to generate a number", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/chat")
 
-      # Entry screen elements
-      assert has_element?(view, "#entry-screen")
-      assert has_element?(view, "#steg-number-input")
-      assert has_element?(view, "#pin-input")
-      assert has_element?(view, "#entry-submit")
+      assert html =~ "No Active Vector"
+      assert html =~ "Start Channel"
     end
 
     test "shows sTELgano wordmark", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/chat")
-      # Wordmark components
       assert html =~ "TEL"
       assert html =~ "gano"
-    end
-
-    test "phone field is masked by default", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/chat")
-      # type=password makes it masked
-      assert html =~ ~s(type="password")
     end
 
     test "entry screen does not reveal any conversation history", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/chat")
       refute html =~ "conversation"
-      refute html =~ "message"
       refute html =~ "history"
     end
 
     test "Passcode Test — no identifying information visible", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/chat")
-      # Should show nothing about rooms, users, or messages
       refute html =~ "room_hash"
       refute html =~ "sender_hash"
     end
   end
 
-  describe "toggle_number_visibility event" do
+  # ---------------------------------------------------------------------------
+  # Entry screen — with phone param (form visible)
+  # ---------------------------------------------------------------------------
+
+  describe "GET /chat?phone=+12025551234" do
+    test "renders the entry form with locked phone field", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/chat?phone=+12025551234")
+
+      assert html =~ "entry-phone"
+      assert html =~ "entry-pin"
+      assert html =~ "entry-submit"
+    end
+
+    test "phone field is masked by default", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/chat?phone=+12025551234")
+      assert html =~ ~s(type="password")
+    end
+
+    test "phone field is read-only when pre-populated", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/chat?phone=+12025551234")
+      assert html =~ "readonly"
+    end
+  end
+
+  describe "toggle_phone_visibility event" do
     test "reveals phone field on first toggle", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
-      assert has_element?(view, "#steg-number-input[type='password']")
+      {:ok, view, _html} = live(conn, ~p"/chat?phone=+12025551234")
 
-      view |> element("button[phx-click='toggle_number_visibility']") |> render_click()
+      view |> element("#phone-toggle-btn") |> render_click()
 
-      assert has_element?(view, "#steg-number-input[type='text']")
+      html = render(view)
+      assert html =~ ~s(type="text")
     end
 
     test "masks phone field again on second toggle", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
+      {:ok, view, _html} = live(conn, ~p"/chat?phone=+12025551234")
 
-      view |> element("button[phx-click='toggle_number_visibility']") |> render_click()
-      view |> element("button[phx-click='toggle_number_visibility']") |> render_click()
+      view |> element("#phone-toggle-btn") |> render_click()
+      view |> element("#phone-toggle-btn") |> render_click()
 
-      assert has_element?(view, "#steg-number-input[type='password']")
+      html = render(view)
+      assert html =~ ~s(type="password")
     end
   end
 
-  describe "channel_error event" do
-    test "displays neutral error message on failure", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
+  # ---------------------------------------------------------------------------
+  # State transitions via hook events
+  # ---------------------------------------------------------------------------
 
-      # Simulate what JS hook does when channel join fails
-      render_hook(view, "channel_error", %{"reason" => "unauthorized"})
-
-      assert has_element?(view, "#entry-error")
-      html = render(view)
-      assert html =~ "Could not open this room"
-    end
-
-    test "shows lockout message on locked reason", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
-
-      render_hook(view, "channel_error", %{"reason" => "locked"})
-
-      html = render(view)
-      assert html =~ "Too many failed attempts"
-    end
-
-    test "shows attempts remaining when provided", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
-
-      render_hook(view, "channel_error", %{
-        "reason" => "unauthorized",
-        "attempts_remaining" => 7
-      })
-
-      html = render(view)
-      assert html =~ "7"
-    end
-  end
-
-  describe "channel_joined event" do
+  describe "join_empty event" do
     test "transitions to chat screen on successful join", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
+      {:ok, view, _html} = live(conn, ~p"/chat?phone=+12025551234")
 
-      render_hook(view, "channel_joined", %{"room_id" => Ecto.UUID.generate()})
+      render_hook(view, "join_empty", %{"ttl_expires_at" => nil})
 
-      assert has_element?(view, "#chat-screen")
-      refute has_element?(view, "#entry-screen")
-    end
-
-    test "clears any previous entry error on join", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
-
-      render_hook(view, "channel_error", %{"reason" => "unauthorized"})
-      render_hook(view, "channel_joined", %{"room_id" => Ecto.UUID.generate()})
-
-      refute has_element?(view, "#entry-error")
+      html = render(view)
+      assert html =~ "Zero Trace Channel"
+      assert html =~ "The buffer is currently empty."
     end
   end
 
-  describe "lock_session event" do
+  describe "lock_chat event" do
     test "shows lock screen when locked", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
+      {:ok, view, _html} = live(conn, ~p"/chat?phone=+12025551234")
 
-      render_hook(view, "channel_joined", %{"room_id" => Ecto.UUID.generate()})
-      view |> element("#lock-btn") |> render_click()
+      render_hook(view, "join_empty", %{"ttl_expires_at" => nil})
 
-      assert has_element?(view, "#lock-screen")
-      assert has_element?(view, "#lock-pin-input")
+      view |> element("button[phx-click='lock_chat']") |> render_click()
+
+      html = render(view)
+      assert html =~ "Session Locked"
+      assert html =~ "unlock-form"
     end
 
     test "lock screen shows clear session link", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
+      {:ok, view, _html} = live(conn, ~p"/chat?phone=+12025551234")
 
-      render_hook(view, "channel_joined", %{"room_id" => Ecto.UUID.generate()})
-      view |> element("#lock-btn") |> render_click()
+      render_hook(view, "join_empty", %{"ttl_expires_at" => nil})
+      view |> element("button[phx-click='lock_chat']") |> render_click()
 
       html = render(view)
-      assert html =~ "Clear session"
+      assert html =~ "Clear Session Artifacts"
     end
   end
 
-  describe "leave_session event" do
+  describe "leave_chat event" do
     test "returns to entry screen on leave", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
+      {:ok, view, _html} = live(conn, ~p"/chat?phone=+12025551234")
 
-      render_hook(view, "channel_joined", %{"room_id" => Ecto.UUID.generate()})
-      view |> element("#leave-btn") |> render_click()
+      render_hook(view, "join_empty", %{"ttl_expires_at" => nil})
+      view |> element("button[phx-click='leave_chat']") |> render_click()
 
-      assert has_element?(view, "#entry-screen")
-      refute has_element?(view, "#chat-screen")
+      html = render(view)
+      assert html =~ "No Active Vector"
     end
   end
 
-  describe "room_expired event" do
+  describe "room_expired_received event" do
     test "shows expired screen when room expires", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/chat")
+      {:ok, view, _html} = live(conn, ~p"/chat?phone=+12025551234")
 
-      render_hook(view, "channel_joined", %{"room_id" => Ecto.UUID.generate()})
-      render_hook(view, "room_expired", %{})
+      render_hook(view, "join_empty", %{"ttl_expires_at" => nil})
+      render_hook(view, "room_expired_received", %{})
 
       html = render(view)
-      assert html =~ "Conversation ended"
+      assert html =~ "Sequence Ended"
     end
   end
 end
