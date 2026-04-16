@@ -3,11 +3,11 @@
     <%!-- Hero Header --%>
     <div class="text-center space-y-6 pt-12">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
-        <.icon name="hero-document-text-mini" class="size-3" /> Technical Specification v1.8
+        <.icon name="file_text" class="size-3" /> Security Guide v1.8
       </div>
 
       <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
-        Cryptographic <span class="text-gradient">Integrity.</span>
+        Security & <span class="text-gradient">Privacy.</span>
       </h1>
 
       <p class="text-slate-400 text-sm sm:text-base font-mono uppercase tracking-[0.4em] font-black animate-in stagger-3">
@@ -19,7 +19,7 @@
     <div class="space-y-8 animate-in stagger-3">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
-          Derivation Chain
+          How we protect you
         </h2>
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
@@ -27,34 +27,28 @@
       <.premium_card class="p-0 overflow-hidden ring-1 ring-white/5 shadow-2xl">
         <div class="bg-slate-950/90 p-8 sm:p-12 relative">
           <div class="absolute top-0 right-0 p-4 opacity-5">
-            <.icon name="hero-cpu-chip" class="size-32 text-white" />
+            <.icon name="cpu" class="size-32 text-white" />
           </div>
           <pre
             class="text-xs sm:text-sm md:text-base overflow-x-auto leading-relaxed font-mono whitespace-pre text-slate-300 relative z-10"
             phx-no-curly-interpolation
-          ><span class="text-primary italic opacity-60"># Normalization Vector</span>
-phone       = normalise(raw_input)
-              <span class="text-slate-500">// strips: spaces · dashes · dots · + · parentheses</span>
-              <span class="text-slate-500">// result: E.164 formatted identity</span>
-
-<span class="text-primary italic opacity-60"># Public Artifacts (Sent to Server)</span>
-room_hash   = SHA-256(phone + ":" + ROOM_SALT)
-              <span class="text-slate-500">// Irreversible room identifier</span>
-
-access_hash = SHA-256(phone + ":" + PIN + ":" + ACCESS_SALT)
-              <span class="text-slate-500">// Per-user entry gate. Never persists in cleartext.</span>
-
-<span class="text-primary italic opacity-60"># Local Secrets (NEVER Leaves Hardware)</span>
-enc_key     = PBKDF2(
-                password  : phone,
-                salt      : room_id + ENC_SALT,
-                iterations: 600,000,
-                hash      : SHA-256,
-                keylen    : 256 bits → <span class="text-primary font-black drop-shadow-[0_0_10px_rgba(0,255,163,0.5)]">AES-256-GCM Key</span>
-              )
-
-sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
-              <span class="text-slate-500">// Stored in volatile sessionStorage only.</span></pre>
+          >phone       = Cleanup(phone_number)
+              <span class="text-slate-500">// We remove spaces, dashes, and other symbols.</span>
+              <span class="text-slate-500">// This ensures the number is standard and predictable.</span>
+ 
+ <span class="text-primary italic opacity-60"># Public Details (Stored on Server)</span>
+ room_hash   = Lock(phone)
+              <span class="text-slate-500">// A unique ID for your chat room. No one can guess your phone from this.</span>
+ 
+ access_hash = Lock(phone + PIN)
+              <span class="text-slate-500">// A secret "keyhole" for your PIN. We never see your actual PIN.</span>
+ 
+ <span class="text-primary italic opacity-60"># Your Private Keys (ONLY on your phone)</span>
+ enc_key     = Secure(phone + room_id)
+              <span class="text-slate-500">// This is your master encryption key. It never leaves your browser.</span>
+ 
+ sender_hash = ID(phone + room_hash)
+              <span class="text-slate-500">// A temporary ID used only for this session.</span></pre>
         </div>
       </.premium_card>
     </div>
@@ -64,10 +58,10 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
       <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner group-hover:scale-110 transition-transform">
-            <.icon name="hero-shield-check-mini" class="size-6 text-primary" />
+            <.icon name="shield_check" class="size-6 text-primary" />
           </div>
           <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
-            Encryption Matrix
+            Encryption Details
           </h3>
         </div>
         <div class="space-y-4">
@@ -95,7 +89,7 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
       <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner group-hover:scale-110 transition-transform">
-            <.icon name="hero-adjustments-horizontal-mini" class="size-6 text-primary" />
+            <.icon name="sliders_horizontal" class="size-6 text-primary" />
           </div>
           <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
             Wait Cycles
@@ -134,10 +128,10 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
         <div class="glass-card p-10 space-y-8 border-primary/20 bg-primary/2 group transition-all hover:bg-primary/4">
           <div class="flex items-center gap-4 text-primary">
             <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center">
-              <.icon name="hero-check-badge-mini" class="size-6" />
+              <.icon name="shield_check" class="size-6" />
             </div>
             <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">
-              Protected Mitigations
+              What we protect against
             </h4>
           </div>
           <ul class="space-y-4">
@@ -153,7 +147,7 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
               class="flex items-start gap-4 group/li"
             >
               <.icon
-                name="hero-check-circle-mini"
+                name="check_circle"
                 class="size-5 text-primary group-hover/li:scale-125 transition-transform"
               />
               <span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">
@@ -166,7 +160,7 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
         <div class="glass-card p-10 space-y-8 border-danger/20 bg-danger/2 group transition-all hover:bg-danger/4">
           <div class="flex items-center gap-4 text-danger">
             <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center">
-              <.icon name="hero-exclamation-triangle-mini" class="size-6" />
+              <.icon name="alert_triangle" class="size-6" />
             </div>
             <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">Out-of-Scope Risks</h4>
           </div>
@@ -198,7 +192,7 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
     <div class="space-y-8 pb-40 animate-in stagger-5">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
-          Persistence Audit
+          Privacy Summary
         </h2>
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
@@ -209,10 +203,10 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
             <thead>
               <tr class="bg-white/2 border-b border-white/5">
                 <th class="p-8 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 font-mono">
-                  Artifact Vector
+                  Data Type
                 </th>
                 <th class="p-8 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 font-mono">
-                  Server Retention State
+                  Storage Status
                 </th>
               </tr>
             </thead>
@@ -220,10 +214,10 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
               <tr
                 :for={
                   {item, state} <- [
-                    {"room_hash", "Anonymous Reference (Opaque SHA-256)"},
-                    {"access_hash", "Challenge Token (One-Way Hash)"},
-                    {"ciphertext", "Edge-Encrypted Buffer (AES-256-GCM)"},
-                    {"sender_hash", "Volatile Ephemeral Reference (Null)"}
+                    {"Chat ID", "Encrypted Reference (SHA-256)"},
+                    {"Access Pin", "Hashed Security Token"},
+                    {"Messages", "Encrypted in browser (AES-256)"},
+                    {"Sender ID", "Temporary session data"}
                   ]
                 }
                 class="group hover:bg-white/3 transition-all"

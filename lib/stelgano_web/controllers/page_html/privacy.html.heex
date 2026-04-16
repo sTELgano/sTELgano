@@ -3,11 +3,11 @@
     <%!-- Hero Header --%>
     <div class="text-center space-y-6 pt-12">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
-        <.icon name="hero-hand-raised-mini" class="size-3" /> User Confidence Vector
+        <.icon name="hand" class="size-3" /> Our Privacy Commitment
       </div>
 
       <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
-        Privacy <span class="text-gradient">Protocol.</span>
+        Privacy <span class="text-gradient">Policy.</span>
       </h1>
 
       <p class="text-slate-500 font-mono text-[10px] font-bold uppercase tracking-[0.4em] animate-in stagger-3">
@@ -22,19 +22,19 @@
           {title, desc, icon} <- [
             {"What we collect",
              "Almost nothing. No email, no real phone number, no names, no accounts. The only data stored are opaque hashes and encrypted ciphertext.",
-             "hero-circle-stack-mini"},
+             "database"},
             {"Analytics",
              "Zero third-party analytics. No Google, no trackers. We measure only server-side aggregate metrics with no individual correlation.",
-             "hero-chart-bar-mini"},
+             "bar_chart"},
             {"IP Log Retention",
-             "IP addresses appear in transient server logs for security auditing and are purged automatically within 48 hours.",
-             "hero-clock-mini"},
+             "IP addresses are only used temporarily for system security and are automatically deleted within 48 hours.",
+             "clock"},
             {"Cookie Usage",
              "One session token used exclusively for CSRF protection. Theme preferences are stored in your local browser state. No tracking cookies.",
-             "hero-cookie-mini"},
+             "cookie"},
             {"Regulatory Status",
              "GDPR / CCPA compliant by design. There is no personal data to request or delete because we cannot identify you.",
-             "hero-globe-alt-mini"}
+             "globe"}
           ]
         }
         class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"

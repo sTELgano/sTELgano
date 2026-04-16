@@ -21,8 +21,8 @@ defmodule StelganoWeb.ChatLiveTest do
     test "renders the empty state prompting to generate a number", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/chat")
 
-      assert html =~ "No Active Vector"
-      assert html =~ "Start Channel"
+      assert html =~ "Start a Chat."
+      assert html =~ "Create Number"
     end
 
     test "shows sTELgano wordmark", %{conn: conn} do
@@ -126,7 +126,7 @@ defmodule StelganoWeb.ChatLiveTest do
       view |> element("button[phx-click='lock_chat']") |> render_click()
 
       html = render(view)
-      assert html =~ "Terminate All Artifacts"
+      assert html =~ "Erase All Session Data"
     end
   end
 
@@ -138,7 +138,7 @@ defmodule StelganoWeb.ChatLiveTest do
       view |> element("button[phx-click='leave_chat']") |> render_click()
 
       html = render(view)
-      assert html =~ "No Active Vector"
+      assert html =~ "Start a Chat."
     end
   end
 
@@ -150,7 +150,7 @@ defmodule StelganoWeb.ChatLiveTest do
       render_hook(view, "room_expired_received", %{})
 
       html = render(view)
-      assert html =~ "Sequence Ended"
+      assert html =~ "Chat Ended"
     end
   end
 end

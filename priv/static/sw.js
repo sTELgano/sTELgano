@@ -71,9 +71,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Never cache sensitive routes
   if (NO_CACHE_PATHS.some((p) => url.pathname.startsWith(p))) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(fetch(event.request).catch(() => {}));
     return;
   }
 

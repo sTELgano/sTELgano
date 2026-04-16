@@ -11,13 +11,13 @@ defmodule StelganoWeb.StegNumberLiveTest do
   describe "GET /steg-number" do
     test "renders the generator page", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/steg-number")
-      assert html =~ "Artifact Generation Engine"
+      assert html =~ "Secret Number Generator"
     end
 
     test "shows setup guide steps", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/steg-number")
-      assert html =~ "Identity Storage"
-      assert html =~ "Append this number"
+      assert html =~ "Save the number"
+      assert html =~ "Add this number"
     end
 
     test "has generate button", %{conn: conn} do
@@ -71,7 +71,7 @@ defmodule StelganoWeb.StegNumberLiveTest do
       render_hook(view, "check_availability", %{"room_hash" => fresh_hash})
 
       html = render(view)
-      assert html =~ "Vector Available"
+      assert html =~ "Number Available"
     end
 
     test "shows taken message for existing active room", %{conn: conn} do

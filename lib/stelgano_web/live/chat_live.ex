@@ -71,9 +71,10 @@ defmodule StelganoWeb.ChatLive do
       |> assign(:ttl_expires_at, nil)
       |> assign(:_pending_phone, prefilled_phone)
       |> assign(:_pending_pin, "")
+      |> assign(:confirm_expire, false)
       |> assign_constants()
 
-    {:ok, socket}
+    {:ok, socket, layout: false}
   end
 
   # ---------------------------------------------------------------------------
@@ -430,11 +431,10 @@ defmodule StelganoWeb.ChatLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <div id="chat-root" phx-hook="AnonChat" class="animate-in">
-        {render_state(assigns)}
-      </div>
-    </Layouts.app>
+    <div id="chat-root" phx-hook="AnonChat" class="h-dvh w-screen overflow-hidden bg-slate-950 text-white">
+      <Layouts.flash_group flash={@flash} id="chat-flash" />
+      {render_state(assigns)}
+    </div>
     """
   end
 
@@ -456,13 +456,13 @@ defmodule StelganoWeb.ChatLive do
         <%!-- Branding --%>
         <div class="text-center space-y-4">
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-4 shadow-[0_0_15px_rgba(0,255,163,0.1)]">
-            <.icon name="hero-no-symbol-mini" class="size-3" /> Anonymous Protocol Active
+            <.icon name="ban" class="size-3" /> Secure Chat Session
           </div>
           <h1 class="text-5xl sm:text-6xl font-extrabold tracking-tighter text-white font-display">
-            Enter <span class="text-gradient">Workspace.</span>
+            Open <span class="text-gradient">Chat.</span>
           </h1>
           <p class="text-slate-500 font-medium text-lg leading-relaxed">
-            Initialize your secure derivation sequence below.
+            Enter your details below to secure your connection.
           </p>
         </div>
 
@@ -470,12 +470,12 @@ defmodule StelganoWeb.ChatLive do
           <div class="p-8 sm:p-12 space-y-10">
             <%= if @error do %>
               <div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
-                <.icon name="hero-exclamation-circle" class="size-6 text-danger shrink-0" />
+                <.icon name="alert_circle" class="size-6 text-danger shrink-0" />
                 <div class="space-y-1">
                   <p class="text-sm font-bold text-danger">{@error}</p>
                   <%= if @attempts_remaining do %>
                     <p class="text-[10px] text-danger/60 font-mono uppercase tracking-widest font-black">
-                      Vector Lock: {@attempts_remaining} {if @attempts_remaining == 1,
+                      Security Lock: {@attempts_remaining} {if @attempts_remaining == 1,
                         do: "attempt",
                         else: "attempts"} remaining
                     </p>
@@ -491,14 +491,14 @@ defmodule StelganoWeb.ChatLive do
                     <div class="absolute inset-0 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-all">
                     </div>
                     <div class="relative size-24 rounded-4xl bg-slate-900 border border-white/10 flex items-center justify-center">
-                      <.icon name="hero-no-symbol-mini" class="size-12 text-slate-500" />
+                      <.icon name="ban" class="size-12 text-slate-500" />
                     </div>
                   </div>
 
                   <div class="space-y-4">
-                    <h3 class="text-4xl font-extrabold text-white font-display">No Active Vector.</h3>
+                    <h3 class="text-4xl font-extrabold text-white font-display">Start a Chat.</h3>
                     <p class="text-slate-500 font-medium leading-relaxed max-w-sm mx-auto">
-                      A derivation sequence requires a pre-shared identity artifact to initialize the secure handshake.
+                      A chat session requires a secret number to start a secure connection.
                     </p>
                   </div>
 
@@ -507,7 +507,7 @@ defmodule StelganoWeb.ChatLive do
                       navigate={~p"/steg-number"}
                       class="btn-primary inline-flex items-center gap-4 px-10 py-5 text-lg shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)] transition-all"
                     >
-                      Generate Identity Artifact <.icon name="hero-sparkles-mini" class="size-6" />
+                      Create Number <.icon name="sparkles" class="size-6" />
                     </.link>
                   </div>
                 </div>
@@ -522,9 +522,9 @@ defmodule StelganoWeb.ChatLive do
                   <div class="space-y-4">
                     <div class="flex items-center justify-between px-1">
                       <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
-                        Shared Identity Vector
+                        Secret Number
                       </label>
-                      <span class="text-[10px] font-mono text-primary font-bold">READY</span>
+                      <span class="text-[10px] font-mono text-primary font-bold">LOCKED</span>
                     </div>
                     <div class="relative group">
                       <input
@@ -543,7 +543,7 @@ defmodule StelganoWeb.ChatLive do
                         tabindex="-1"
                       >
                         <.icon
-                          name={if @phone_visible, do: "hero-eye-slash-mini", else: "hero-eye-mini"}
+                          name={if @phone_visible, do: "eye_off", else: "eye"}
                           class="size-6"
                         />
                       </button>
@@ -554,10 +554,10 @@ defmodule StelganoWeb.ChatLive do
                   <div class="space-y-4">
                     <div class="flex items-center justify-between px-1">
                       <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
-                        Local Pin Access
+                        Private PIN
                       </label>
                       <span class="text-[10px] font-mono text-slate-500 font-bold">
-                        ENCRYPTED AT SOURCE
+                        SECURED LOCALLY
                       </span>
                     </div>
                     <.input
@@ -578,9 +578,9 @@ defmodule StelganoWeb.ChatLive do
                     type="submit"
                     class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
                   >
-                    Open Secure Link
+                    Open Chat
                     <.icon
-                      name="hero-bolt-mini"
+                      name="zap"
                       class="size-6 group-hover:scale-125 transition-transform"
                     />
                   </button>
@@ -595,16 +595,16 @@ defmodule StelganoWeb.ChatLive do
                     </div>
                     <div class="absolute inset-0 flex items-center justify-center">
                       <.icon
-                        name="hero-finger-print-mini"
+                        name="fingerprint"
                         class="size-12 text-primary drop-shadow-[0_0_10px_rgba(0,255,163,0.5)]"
                       />
                     </div>
                   </div>
 
                   <div class="space-y-3">
-                    <h3 class="text-2xl font-bold text-white font-display">Authorizing Context</h3>
+                    <h3 class="text-2xl font-bold text-white font-display">Authorizing</h3>
                     <p class="text-slate-400 font-medium">
-                      Validating cryptographic signature artifacts…
+                      Verifying your PIN...
                     </p>
                   </div>
                 </div>
@@ -634,7 +634,7 @@ defmodule StelganoWeb.ChatLive do
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="size-24 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center shadow-2xl">
               <.icon
-                name="hero-cpu-chip-mini"
+                name="cpu"
                 class="size-12 text-primary animate-pulse drop-shadow-[0_0_15px_var(--color-primary-glow)]"
               />
             </div>
@@ -643,12 +643,12 @@ defmodule StelganoWeb.ChatLive do
 
         <div class="space-y-6">
           <h3 class="text-4xl font-extrabold text-white font-display tracking-tight uppercase">
-            Deriving <span class="text-gradient">Key Matrix.</span>
+            Securing <span class="text-gradient">Chat.</span>
           </h3>
           <p class="text-slate-500 font-medium leading-relaxed">
-            Executing Argon2id sequence locally. Your browser is performing {if @confirm_expire,
-              do: "a secure wipe-derivation",
-              else: "the cryptographic heavy lifting"}.
+            Your browser is {if @confirm_expire,
+              do: "safely erasing all data",
+              else: "securing your private connection"}.
           </p>
         </div>
 
@@ -671,16 +671,16 @@ defmodule StelganoWeb.ChatLive do
     <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6">
       <div class="w-full max-w-sm text-center space-y-10 animate-in">
         <div class="size-24 rounded-[2.5rem] bg-primary/5 flex items-center justify-center mx-auto shadow-inner ring-1 ring-primary/20 animate-pulse">
-          <.icon name="hero-globe-alt-mini" class="size-12 text-primary" />
+          <.icon name="globe" class="size-12 text-primary" />
         </div>
 
         <div class="space-y-3">
-          <h3 class="text-2xl font-bold text-white font-display">Synchronizing</h3>
-          <p class="text-slate-400 font-medium">Establishing handshake with encrypted node…</p>
+          <h3 class="text-2xl font-bold text-white font-display">Connecting</h3>
+          <p class="text-slate-400 font-medium">Linking with your private chat space…</p>
         </div>
 
         <div class="px-6 py-3 rounded-2xl bg-slate-950/60 border border-white/5 font-mono text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">
-          Status: Initializing WS Stream
+          Status: Opening Secure Link
         </div>
       </div>
     </div>
@@ -693,57 +693,42 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_chat(assigns) do
     ~H"""
-    <div class="chat-container">
-      <%!-- Header (Command Cluster) --%>
-      <div class="sticky top-0 z-40 px-6 py-4 flex items-center justify-between border-b border-white/5 backdrop-blur-2xl bg-slate-950/60">
+    <div class="h-full w-full flex flex-col relative overflow-hidden">
+      <%!-- Navigation Header --%>
+      <div class="px-6 py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl sticky top-0 z-50">
         <div class="flex items-center gap-4">
-          <div class="relative size-10">
-            <div class="absolute inset-0 rounded-xl bg-primary/10 border border-primary/20 animate-pulse">
-            </div>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <div class="size-2 rounded-full bg-primary shadow-[0_0_12px_var(--color-primary)]">
-              </div>
-            </div>
-          </div>
-          <div class="flex flex-col">
-            <.link navigate={~p"/"} class="wordmark text-lg leading-tight group">
-              <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
-            </.link>
-            <span class="text-[9px] font-black uppercase tracking-[0.3em] text-primary/60">
-              Active Vector · Handshake Stable
-            </span>
-          </div>
+          <.link navigate={~p"/"} class="wordmark text-2xl leading-tight group">
+            <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
+          </.link>
+          <div class="hidden sm:block h-6 w-px bg-white/20"></div>
+          <span class="hidden sm:inline text-xs font-bold uppercase tracking-[0.3em] text-primary">
+            WORKSPACE SECURED
+          </span>
         </div>
 
-        <div class="flex items-center gap-2">
-          <div class="flex items-center bg-white/5 rounded-2xl p-1 gap-1 border border-white/5">
-            <button
-              class="p-2.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all group"
-              phx-click="lock_chat"
-              title="Lock session"
-            >
-              <.icon
-                name="hero-lock-closed-mini"
-                class="size-5 group-hover:scale-110 transition-transform"
-              />
-            </button>
-            <button
-              class="p-2.5 rounded-xl hover:bg-danger/10 text-slate-400 hover:text-danger transition-all group"
-              phx-click="confirm_expire"
-              title="Nuclear Wipe"
-            >
-              <.icon name="hero-fire-mini" class="size-5 group-hover:scale-110 transition-transform" />
-            </button>
-          </div>
-
-          <div class="w-px h-6 bg-white/10 mx-2"></div>
-
+        <%!-- Session Controls --%>
+        <div class="flex items-center gap-1 sm:gap-4">
           <button
-            class="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/5"
-            phx-click="leave_chat"
-            title="Terminate Link"
+            class="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
+            phx-click="lock_chat"
+            title="Lock session"
           >
-            <.icon name="hero-power-mini" class="size-5 text-danger/80" />
+            <.icon name="lock" class="size-6" />
+          </button>
+          <button
+            class="p-3 rounded-2xl bg-danger/10 hover:bg-danger/20 text-danger transition-all flex items-center justify-center border border-danger/20 shadow-lg shadow-danger/5"
+            phx-click="confirm_expire"
+            title="Erase all"
+          >
+            <.icon name="flame" class="size-6" />
+          </button>
+          <div class="w-px h-6 bg-white/20 mx-1"></div>
+          <button
+            class="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
+            phx-click="leave_chat"
+            title="Exit Chat"
+          >
+            <.icon name="power" class="size-6 text-danger" />
           </button>
         </div>
       </div>
@@ -775,7 +760,7 @@ defmodule StelganoWeb.ChatLive do
               <div class="absolute inset-0 rounded-3xl bg-white/2 border border-white/5 -rotate-3">
               </div>
               <div class="absolute inset-0 rounded-3xl bg-slate-900 border border-white/10 flex items-center justify-center">
-                <.icon name="hero-shield-check-mini" class="size-12 text-slate-700" />
+                <.icon name="shield_check" class="size-12 text-slate-700" />
               </div>
             </div>
             <div class="space-y-3">
@@ -797,7 +782,9 @@ defmodule StelganoWeb.ChatLive do
               <div class="size-2 bg-primary/80 rounded-full animate-bounce [animation-delay:0.4s]">
               </div>
             </div>
-            <span class="text-[10px] font-black uppercase tracking-[0.4em]">Handshaking...</span>
+            <span class="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
+              The other node is typing...
+            </span>
           </div>
         <% end %>
       </div>
@@ -813,11 +800,13 @@ defmodule StelganoWeb.ChatLive do
           />
         <% else %>
           <div class="glass-card flex items-center justify-center gap-4 py-6 border-white/5 select-none opacity-60 backdrop-grayscale">
-            <div class="size-8 rounded-xl bg-white/5 flex items-center justify-center">
-              <.icon name="hero-lock-closed-mini" class="size-4 text-slate-500" />
+            <div class="flex gap-2 items-center">
+              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce"></div>
+              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.2s]"></div>
+              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.4s]"></div>
             </div>
-            <span class="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">
-              Synchronizing response vector…
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-[0.3em] animate-pulse">
+              Waiting for reply...
             </span>
           </div>
         <% end %>
@@ -831,7 +820,7 @@ defmodule StelganoWeb.ChatLive do
             </div>
 
             <div class="size-20 rounded-4xl bg-danger/10 flex items-center justify-center mb-8 border border-danger/20">
-              <.icon name="hero-fire-mini" class="size-10 text-danger" />
+              <.icon name="flame" class="size-10 text-danger" />
             </div>
 
             <h3 class="text-3xl font-extrabold text-white mb-4 font-display">Nuclear Wipe?</h3>
@@ -893,26 +882,26 @@ defmodule StelganoWeb.ChatLive do
           </p>
         </div>
 
-        <div class="flex items-center gap-4 px-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+        <div class="flex items-center gap-4 px-2 mt-1">
           <%= if @msg.edited do %>
             <span class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-600">
-              Edited Segment
+              Edited
             </span>
           <% end %>
           <%= if @msg.is_mine do %>
             <div class="flex items-center gap-2">
               <%= if @msg.read_at do %>
-                <span class="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-primary/10">
-                  <.icon name="hero-check-badge-mini" class="size-3 text-primary" />
-                  <span class="text-[9px] font-black uppercase tracking-[0.2em] text-primary">
-                    Decrypted
+                <span class="flex items-center gap-1 py-0.5 px-1.5 rounded-md bg-primary/5 border border-primary/10">
+                  <.icon name="badge_check" class="size-2.5 text-primary" />
+                  <span class="text-[8px] font-black uppercase tracking-[0.1em] text-primary/80">
+                    Read
                   </span>
                 </span>
               <% else %>
-                <span class="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-white/5">
-                  <div class="size-1.5 rounded-full bg-slate-600 animate-pulse"></div>
-                  <span class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
-                    Persisted
+                <span class="flex items-center gap-1 py-0.5 px-1.5 rounded-md bg-white/5 border border-white/5">
+                  <div class="size-1 rounded-full bg-slate-600 animate-pulse"></div>
+                  <span class="text-[8px] font-black uppercase tracking-[0.1em] text-slate-500">
+                    Delivered
                   </span>
                 </span>
               <% end %>
@@ -940,10 +929,10 @@ defmodule StelganoWeb.ChatLive do
       <div class="absolute -inset-1 bg-linear-to-r from-primary/20 via-emerald-400/20 to-primary/20 rounded-[2.5rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700">
       </div>
 
-      <div class="relative flex items-end gap-3 p-3 sm:p-4 rounded-[2.2rem] bg-slate-900 border border-white/10 group-focus-within:border-primary/40 group-focus-within:bg-slate-950/80 transition-all duration-300 shadow-2xl">
+      <div class="relative flex items-end gap-3 p-3 sm:p-5 rounded-4xl bg-slate-900 border-2 border-white/10 group-focus-within:border-primary/50 group-focus-within:bg-slate-950 transition-all duration-300 shadow-2xl z-50">
         <textarea
           id="chat-textarea"
-          class="flex-1 bg-transparent border-none text-white placeholder-slate-600 focus:ring-0 py-4 px-4 resize-none max-h-60 min-h-14 scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
+          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 py-4 px-2 resize-none max-h-60 min-h-[3.5rem] scrollbar-hide text-lg leading-relaxed font-medium"
           placeholder="Construct secure message…"
           rows="1"
           maxlength={@max_chars}
@@ -952,37 +941,27 @@ defmodule StelganoWeb.ChatLive do
           phx-update="ignore"
         ></textarea>
 
-        <div class="flex items-center gap-4 pr-2 pb-2">
+        <div class="flex items-center gap-4 pr-1 pb-1">
           <%= if @char_count >= @counter_warn_at do %>
-            <div class="flex flex-col items-end">
+            <div class="flex flex-col items-end mr-2">
               <span class={[
-                "text-[9px] font-mono font-black tracking-widest",
+                "text-[10px] font-mono font-bold tracking-widest",
                 if(@char_count >= @counter_danger_at, do: "text-danger", else: "text-warning")
               ]}>
-                {@char_count}<span class="text-slate-700">/</span>{@max_chars}
+                {@char_count}<span class="text-slate-600">/</span>{@max_chars}
               </span>
-              <div class="w-12 h-0.5 bg-slate-800 rounded-full mt-1 overflow-hidden">
-                <div
-                  class={[
-                    "h-full transition-all",
-                    if(@char_count >= @counter_danger_at, do: "bg-danger", else: "bg-warning")
-                  ]}
-                  style={"width: #{(@char_count / @max_chars) * 100}%"}
-                >
-                </div>
-              </div>
             </div>
           <% end %>
 
           <button
             id="btn-send"
-            class="size-14 rounded-3xl bg-primary text-slate-950 flex items-center justify-center shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all group disabled:grayscale disabled:opacity-50"
+            class="size-16 rounded-[1.75rem] bg-primary text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,163,0.3)] hover:scale-110 active:scale-95 transition-all group disabled:grayscale disabled:opacity-50"
             phx-click="send_message"
             aria-label="Encrypt & Broadcast"
           >
             <.icon
-              name="hero-paper-airplane-mini"
-              class="size-6 -rotate-12 group-hover:rotate-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+              name="send"
+              class="size-8 -rotate-12 group-hover:rotate-0 transition-transform"
             />
           </button>
         </div>
@@ -1003,7 +982,7 @@ defmodule StelganoWeb.ChatLive do
           <div class="absolute -inset-4 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
           <div class="relative size-24 rounded-4xl bg-slate-900 border border-primary/20 flex items-center justify-center shadow-inner group">
             <.icon
-              name="hero-lock-closed-mini"
+              name="lock"
               class="size-12 text-primary drop-shadow-[0_0_10px_var(--color-primary-glow)]"
             />
           </div>
@@ -1048,7 +1027,7 @@ defmodule StelganoWeb.ChatLive do
             type="submit"
             class="btn-primary w-full py-5 text-xl shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
           >
-            Reconnect Vector
+            Reconnect Chat
           </button>
         </form>
 
@@ -1056,7 +1035,7 @@ defmodule StelganoWeb.ChatLive do
           phx-click="clear_session"
           class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 hover:text-white transition-colors flex items-center gap-2 mx-auto py-2 px-4 rounded-xl hover:bg-white/5"
         >
-          <.icon name="hero-trash-mini" class="size-3" /> Terminate All Artifacts
+          <.icon name="trash_2" class="size-3" /> Erase All Session Data
         </button>
       </div>
     </div>
@@ -1072,21 +1051,21 @@ defmodule StelganoWeb.ChatLive do
     <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-2xl">
       <.premium_card class="max-w-md w-full text-center border-danger/20 shadow-danger-glow animate-in">
         <div class="size-20 rounded-3xl bg-danger/10 flex items-center justify-center mx-auto mb-8 border border-danger/20">
-          <.icon name="hero-trash-mini" class="size-10 text-danger" />
+          <.icon name="trash_2" class="size-10 text-danger" />
         </div>
 
-        <h3 class="text-3xl font-extrabold text-white font-display mb-4">Sequence Ended</h3>
+        <h3 class="text-3xl font-extrabold text-white font-display mb-4">Chat Ended</h3>
 
         <p class="text-slate-400 font-medium leading-relaxed mb-10">
-          The channel artifacts have been permanently purged.
-          No recovery is possible through the current vector.
+          The chat session has been permanently closed.
+          All messages have been erased and cannot be recovered.
         </p>
 
         <button
           phx-click="back_to_entry"
           class="btn-primary w-full py-4 text-lg"
         >
-          Initialize New Sequence
+          Start New Chat
         </button>
       </.premium_card>
     </div>
@@ -1098,7 +1077,8 @@ defmodule StelganoWeb.ChatLive do
   # ---------------------------------------------------------------------------
 
   defp can_type?(%{state: :chat, message: nil}), do: true
-  defp can_type?(%{state: :chat, message: %{is_mine: true}}), do: false
   defp can_type?(%{state: :chat, message: %{is_mine: false}}), do: true
+  defp can_type?(%{state: :chat, message: %{is_mine: true, read_at: nil}}), do: true
+  defp can_type?(%{state: :chat, message: %{is_mine: true}}), do: false
   defp can_type?(_assigns), do: false
 end

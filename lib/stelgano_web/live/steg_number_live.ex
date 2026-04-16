@@ -29,6 +29,15 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:copied, false)
       |> assign(:availability, :idle)
       |> assign(:generating, false)
+      |> assign(:selected_country, "Kenya")
+      |> assign(:show_countries, false)
+      |> assign(:countries, [
+        {"Kenya", "Kenya"}, {"United States", "United_States"}, {"United Kingdom", "United_Kingdom"},
+        {"Germany", "Germany"}, {"France", "France"}, {"Canada", "Canada"}, {"Japan", "Japan"},
+        {"Australia", "Australia"}, {"India", "India"}, {"Brazil", "Brazil"}, {"South Africa", "South_Africa"},
+        {"Nigeria", "Nigeria"}, {"Egypt", "Egypt"}, {"Morocco", "Morocco"}, {"Ethiopia", "Ethiopia"},
+        {"Ghana", "Ghana"}, {"Tanzania", "Tanzania"}, {"Uganda", "Uganda"}, {"Rwanda", "Rwanda"}
+      ])
 
     {:ok, socket}
   end
@@ -48,6 +57,28 @@ defmodule StelganoWeb.StegNumberLive do
   @impl Phoenix.LiveView
   def handle_event("start_generation", _params, socket) do
     {:noreply, assign(socket, :generating, true)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("set_countries", %{"countries" => countries}, socket) do
+    # Convert list of maps to list of tuples for HEEx
+    country_tuples = Enum.map(countries, fn %{"name" => name, "value" => val} -> {name, val} end)
+    {:noreply, assign(socket, :countries, country_tuples)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("update_country", %{"country" => country}, socket) do
+    {:noreply, assign(socket, selected_country: country, show_countries: false)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("toggle_countries", _params, socket) do
+    {:noreply, assign(socket, :show_countries, !socket.assigns.show_countries)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("close_countries", _params, socket) do
+    {:noreply, assign(socket, :show_countries, false)}
   end
 
   @impl Phoenix.LiveView
@@ -76,15 +107,15 @@ defmodule StelganoWeb.StegNumberLive do
         <%!-- Hero Header --%>
         <div class="text-center space-y-8 pt-12">
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
-            <.icon name="hero-sparkles-mini" class="size-3" /> Artifact Generation Engine
+            <.icon name="sparkles" class="size-3" /> Secret Number Generator
           </div>
 
-          <h1 class="text-6xl sm:text-8xl md:text-9xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
-            Secret <span class="text-gradient">Identity.</span>
-          </h1>
+          <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter text-white font-display mb-8">
+          Secret Number <span class="text-gradient">Generator</span>
+        </h1>
 
           <p class="text-slate-400 text-lg sm:text-2xl font-medium leading-tight max-w-2xl mx-auto animate-in stagger-3">
-            Your identity artifact is the derivation seed for your channel. Use it to establish an invisible link within your native contact layer.
+            Generate a secret number to create your private channel. Use it to establish an invisible link with your partner.
           </p>
         </div>
 
@@ -98,27 +129,80 @@ defmodule StelganoWeb.StegNumberLive do
             >
               <div class="p-8 sm:p-10 space-y-10">
                 <%!-- Identity Selector --%>
-                <div class="space-y-4">
-                  <div class="flex items-center justify-between px-1">
-                    <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
-                      Region Vector
-                    </label>
-                    <span class="text-[10px] font-mono text-primary font-bold">
-                      SHA-256 SALT ACTIVE
-                    </span>
-                  </div>
-                  <div class="relative group">
-                    <select
-                      id="country-select"
-                      class="glass-input w-full appearance-none pr-12 cursor-pointer bg-slate-950/50 text-base font-bold tracking-wide"
-                    >
-                      <option value="">Global Anonymity Matrix (Random)</option>
-                    </select>
-                    <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-primary transition-colors">
-                      <.icon name="hero-chevron-down-mini" class="size-5" />
+                  <div class="space-y-4">
+                    <div class="flex items-center justify-between px-1">
+                      <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                        Select Country
+                      </label>
+                    </div>
+                    <div class="relative group">
+                      <div class="absolute inset-0 bg-primary/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                      </div>
+                      
+                      <%!-- Custom Premium Dropdown --%>
+                      <div class="relative z-20">
+                        <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                          <.icon name="badge_check" class="size-5 text-primary" />
+                          Secure your number
+                        </h4>
+                        <button
+                          type="button"
+                          phx-click="toggle_countries"
+                          class="glass-input w-full flex items-center justify-between gap-4 text-left group/btn"
+                        >
+                          <span class="flex items-center gap-3">
+                            <.icon name="globe" class="size-5 text-primary/60" />
+                            <span class="font-bold text-white">
+                              {Enum.find_value(@countries, "Select Matrix", fn {name, val} ->
+                                if val == @selected_country, do: name
+                              end)}
+                            </span>
+                          </span>
+                          <.icon
+                            name="chevron_down"
+                            class={[
+                              "size-5 text-slate-500 transition-transform duration-300",
+                              @show_countries && "rotate-180 text-primary"
+                            ]}
+                          />
+                        </button>
+
+
+                        <%= if @show_countries do %>
+                          <div
+                            class="absolute top-full left-0 right-0 mt-3 p-2 glass-card-premium z-50 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 animate-in"
+                            phx-click-away="close_countries"
+                          >
+                            <div class="grid grid-cols-1 gap-1">
+                              <button
+                                :for={{name, val} <- @countries}
+                                type="button"
+                                phx-click="update_country"
+                                phx-value-country={val}
+                                class={[
+                                  "w-full px-4 py-3 rounded-xl text-left text-sm font-bold transition-all flex items-center justify-between group/item",
+                                  if(@selected_country == val,
+                                    do: "bg-primary text-slate-950 shadow-[0_0_15px_rgba(0,255,163,0.3)]",
+                                    else: "text-slate-400 hover:bg-white/5 hover:text-white"
+                                  )
+                                ]}
+                              >
+                                <span class="flex items-center gap-3">
+                                  <.icon name="map_pin" class="size-4 opacity-40 group-hover/item:opacity-100 transition-opacity" />
+                                  {name}
+                                </span>
+                                <%= if @selected_country == val do %>
+                                  <.icon name="check_circle" class="size-4" />
+                                <% end %>
+                              </button>
+                            </div>
+                          </div>
+                        <% end %>
+                      </div>
+
+                      <input type="hidden" name="country" id="country-select" value={@selected_country} />
                     </div>
                   </div>
-                </div>
 
                 <%!-- High-Impact Number Display --%>
                 <div class="relative py-12 px-8 rounded-3xl bg-slate-950/50 border border-white/5 shadow-inner overflow-hidden group">
@@ -131,25 +215,31 @@ defmodule StelganoWeb.StegNumberLive do
                         <div class="absolute inset-0 rounded-full border-2 border-primary/20 border-t-primary animate-spin">
                         </div>
                         <div class="absolute inset-0 flex items-center justify-center">
-                          <.icon name="hero-cpu-chip-mini" class="size-10 text-primary animate-pulse" />
+                          <.icon name="cpu" class="size-10 text-primary animate-pulse" />
                         </div>
                       </div>
                       <div class="space-y-2">
-                        <div class="text-[10px] font-black uppercase tracking-[0.4em] text-primary">
-                          Initializing Matrix
-                        </div>
-                        <p class="text-xs text-slate-500 font-mono">Randomizing entropy seed...</p>
+                        <h3 class="text-white font-black uppercase tracking-[0.2em] text-[10px] mb-4 flex items-center gap-2">
+                          <.icon name="shield_check" class="size-4" /> Security Setup
+                        </h3>
+                        <p class="text-xs text-slate-500 font-mono">Randomizing identity seed...</p>
                       </div>
                     </div>
                   <% else %>
                     <%= if @generated_number do %>
                       <div class="relative z-10 text-center space-y-6 animate-in">
                         <div class="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/60">
-                          Assigned Identity Vector
+                          Your Secret Number
                         </div>
                         <div
                           id="generated-display"
-                          class="text-4xl sm:text-5xl md:text-6xl font-mono font-black text-white tracking-widest drop-shadow-[0_0_20px_rgba(0,255,163,0.3)]"
+                          class={[
+                            "font-mono font-black text-white tracking-widest drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] transition-all break-all overflow-hidden",
+                            if(String.length(@generated_number.display) > 15,
+                              do: "text-2xl sm:text-3xl md:text-4xl",
+                              else: "text-4xl sm:text-5xl md:text-6xl"
+                            )
+                          ]}
                         >
                           {@generated_number && @generated_number.display}
                         </div>
@@ -169,11 +259,10 @@ defmodule StelganoWeb.StegNumberLive do
                             ]}
                           >
                             <%= if @copied do %>
-                              <.icon name="hero-check-circle-mini" class="size-4" />
+                              <.icon name="check_circle" class="size-4" />
                               Copied to Clipboard
                             <% else %>
-                              <.icon name="hero-clipboard-document-mini" class="size-4" />
-                              Copy Key Artifact
+                              <.icon name="clipboard" class="size-4" /> Copy Number
                             <% end %>
                           </button>
 
@@ -185,7 +274,7 @@ defmodule StelganoWeb.StegNumberLive do
                               <% @availability == :available -> %>
                                 <div class="size-1.5 rounded-full bg-emerald-500"></div>
                                 <span class="text-[9px] font-black uppercase tracking-widest text-emerald-500">
-                                  Vector Available
+                                  Number Available
                                 </span>
                               <% @availability == :taken -> %>
                                 <div class="size-1.5 rounded-full bg-danger animate-pulse"></div>
@@ -205,12 +294,12 @@ defmodule StelganoWeb.StegNumberLive do
                       <div class="relative z-10 py-10 text-center animate-in">
                         <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6 group-hover:border-primary/20 transition-colors">
                           <.icon
-                            name="hero-phone-mini"
+                            name="phone"
                             class="size-10 text-slate-700 group-hover:text-slate-500 transition-colors"
                           />
                         </div>
                         <p class="text-slate-500 font-bold uppercase tracking-[0.2em] text-sm group-hover:text-slate-400 transition-colors">
-                          Vector Pending Initialization
+                          Waiting to create number
                         </p>
                       </div>
                     <% end %>
@@ -220,7 +309,6 @@ defmodule StelganoWeb.StegNumberLive do
                 <button
                   type="button"
                   id="generate-btn"
-                  phx-click="generate"
                   disabled={@generating}
                   class={[
                     "btn-primary w-full py-5 text-lg group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]",
@@ -228,9 +316,9 @@ defmodule StelganoWeb.StegNumberLive do
                   ]}
                 >
                   <span class="relative z-10 flex items-center gap-3">
-                    {if(@generated_number, do: "Re-roll Identity", else: "Initialize Artifact")}
+                    {if(@generated_number, do: "Generate New Number", else: "Generate Secret Number")}
                     <.icon
-                      name="hero-arrow-path-mini"
+                      name="refresh_cw"
                       class={[
                         "size-6 transition-transform duration-700",
                         if(@generating, do: "animate-spin", else: "group-hover:rotate-180")
@@ -245,11 +333,11 @@ defmodule StelganoWeb.StegNumberLive do
           <div class="lg:col-span-2 space-y-8 animate-in stagger-4">
             <div class="p-8 rounded-3xl bg-danger/5 border border-danger/20 space-y-4">
               <div class="flex items-center gap-3 text-danger">
-                <.icon name="hero-exclamation-triangle-mini" class="size-6" />
-                <h3 class="font-bold uppercase tracking-widest text-sm">Persistence Warning</h3>
+                <.icon name="alert_triangle" class="size-6" />
+                <h3 class="font-bold uppercase tracking-widest text-sm">Privacy Note</h3>
               </div>
               <p class="text-slate-400 text-sm leading-relaxed font-medium">
-                This identity is transient. Once you close this session, the linkage data is purged from memory.
+                This number is not permanent. Once you close this session, it is deleted from memory.
                 <span class="text-white">
                   Coordinate with your partner to save this exact value immediately.
                 </span>
@@ -258,7 +346,7 @@ defmodule StelganoWeb.StegNumberLive do
 
             <div class="space-y-4 pt-4">
               <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 ml-1">
-                Establish Channel
+                Establish Session
               </label>
               <.link
                 navigate={
@@ -273,7 +361,7 @@ defmodule StelganoWeb.StegNumberLive do
                   )
                 ]}
               >
-                Enter Workspace <.icon name="hero-shield-check-mini" class="size-5" />
+                Enter Chat Workspace <.icon name="shield_check" class="size-5" />
               </.link>
             </div>
           </div>
@@ -284,7 +372,7 @@ defmodule StelganoWeb.StegNumberLive do
           <div class="flex items-center gap-4">
             <div class="h-px flex-1 bg-white/5"></div>
             <h2 class="text-[10px] font-bold uppercase tracking-[0.4em] text-slate-500">
-              Integration Sequence
+              How to use this number
             </h2>
             <div class="h-px flex-1 bg-white/5"></div>
           </div>
@@ -292,13 +380,13 @@ defmodule StelganoWeb.StegNumberLive do
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div
               :for={
-                {step, title, desc} <- [
-                  {1, "Identity Storage",
-                   "Append this number to your partner's profile as a secondary phone entry."},
-                  {2, "Cross-Vector Sync",
-                   "Verify both devices harbor the exact same sequence for successful link."},
-                  {3, "Workspace Entry",
-                   "Use the saved number along with your private PIN to initialize the channel."}
+                {step, title, desc, icon} <- [
+                  {1, "Save the number",
+                   "Add this number to your partner's profile in your phone's contact list.", "user_plus"},
+                  {2, "Match Number",
+                   "Check that both you and your partner have the exact same number.", "arrow_left_right"},
+                  {3, "Open Chat",
+                   "Use the saved number plus your private PIN to open the chat room.", "messages_square"}
                 ]
               }
               class="glass-card p-8 group relative overflow-hidden transition-all hover:border-primary/30"
@@ -306,10 +394,10 @@ defmodule StelganoWeb.StegNumberLive do
               <div class="absolute -right-4 -bottom-4 text-7xl font-black text-white/3 group-hover:text-primary/5 transition-colors italic">
                 {step}
               </div>
+              <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-6 ring-1 ring-primary/20">
+                <.icon name={icon} class="size-6" />
+              </div>
               <h4 class="text-white font-bold mb-3 flex items-center gap-2">
-                <span class="size-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-xs font-mono">
-                  {step}
-                </span>
                 {title}
               </h4>
               <p class="text-sm text-slate-400 leading-relaxed font-medium">
