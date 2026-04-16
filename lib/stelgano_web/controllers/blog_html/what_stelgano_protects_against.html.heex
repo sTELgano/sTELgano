@@ -1,0 +1,201 @@
+<Layouts.app flash={@flash}>
+  <article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+    <%!-- Hero --%>
+    <header class="text-center space-y-8 pt-12">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="shield_check" class="size-3" /> {@post.category}
+      </div>
+
+      <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+        What sTELgano <span class="text-gradient">Protects Against.</span>
+      </h1>
+
+      <p class="text-slate-400 text-base font-medium animate-in stagger-2">
+        And what it doesn't.
+      </p>
+
+      <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+        <span class="flex items-center gap-1.5">
+          <.icon name="calendar" class="size-3" /> {@post.date}
+        </span>
+        <span class="flex items-center gap-1.5">
+          <.icon name="clock" class="size-3" /> {@post.reading_time}
+        </span>
+      </div>
+    </header>
+
+    <%!-- Article Content --%>
+    <div class="space-y-16 animate-in stagger-4">
+      <%!-- Honest Security --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Honest Security
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-8 sm:p-10 space-y-6">
+          <p class="text-slate-300 leading-relaxed font-medium">
+            Most security products oversell. They use words like "military-grade" and "impenetrable" and imply they protect against everything. They don't. Nothing does.
+          </p>
+          <p class="text-slate-400 leading-relaxed font-medium">
+            We think honesty is better security practice. If you understand exactly what sTELgano protects against and what it doesn't, you can make an informed decision about whether it's the right tool for your situation. Overselling creates a false sense of security, and false security is worse than no security.
+          </p>
+        </div>
+      </section>
+
+      <%!-- What We Protect Against --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            What We Protect Against
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="space-y-4">
+          <div
+            :for={
+              {icon, title, desc} <- [
+                {"smartphone", "Casual Device Snooping",
+                 "There's no app to find on your home screen. No chat history to scroll through. If someone picks up your phone, they see contacts\u2014normal. If they somehow find the sTELgano URL, they see a blank form with two fields. Nothing to explain."},
+                {"eye_off", "Shoulder Surfing",
+                 "The UI is minimal by design. No message previews outside the active chat session. No notification badges. No typing indicators visible on the home screen. Someone looking over your shoulder sees nothing useful."},
+                {"wifi", "ISP and Network Inspection",
+                 "All data is encrypted in transit via TLS and at rest via AES-256-GCM. Your ISP can see you connected to a server. They cannot see what you sent, who you're talking to, or the content of any message."},
+                {"database", "Database Breaches",
+                 "The server stores only SHA-256 hashes and AES-256-GCM ciphertext. A complete database dump reveals room hashes, access hashes, and encrypted blobs. Without the client-side key, none of this data can be reversed or decrypted."},
+                {"globe", "Browser Forensics",
+                 "sTELgano uses sessionStorage exclusively\u2014no localStorage, no IndexedDB, no cookies for session data. Close the browser tab and the session is gone. There's no cache to inspect, no persistent storage to recover."},
+                {"hard_drive", "Device Seizure",
+                 "There's no app installed on the device. No application data directory. No SQLite database with chat logs. The steg number is saved as a normal phone contact, indistinguishable from any other number in your contact list."}
+              ]
+            }
+            class="glass-card p-6 sm:p-8 space-y-4 border-primary/10 bg-primary/2 group hover:bg-primary/4 transition-all duration-500"
+          >
+            <div class="flex items-center gap-4">
+              <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <.icon name={icon} class="size-5 text-primary" />
+              </div>
+              <h3 class="text-base font-extrabold text-white font-display">{title}</h3>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">
+              {desc}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- What We Don't Protect Against --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-danger/60 ml-1">
+            What We Don't Protect Against
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-danger/20 to-transparent"></div>
+        </div>
+
+        <div class="space-y-4">
+          <div
+            :for={
+              {icon, title, desc} <- [
+                {"landmark", "Nation-State Surveillance",
+                 "If a government targets you specifically with dedicated surveillance infrastructure, sTELgano is not your tool. Nation-states can compromise devices, install rootkits, perform traffic analysis at scale, and compel service providers. This is an adversary class beyond our threat model."},
+                {"scale", "Law Enforcement Subpoenas",
+                 "We can be compelled to hand over what we store: hashes and ciphertext. The data is cryptographically useless without the client-side key, but we're transparent about the fact that we can be compelled to produce it. We cannot produce what we don't have (plaintext, keys, phone numbers)."},
+                {"bug", "Targeted Malware and Keyloggers",
+                 "A keylogger on your device captures everything you type regardless of encryption. If your device is compromised with targeted malware, all bets are off. sTELgano encrypts data in your browser, but it can't protect against an attacker who has already compromised the browser's environment."},
+                {"shield_off", "Physical Coercion",
+                 "If someone physically forces you to reveal your PIN, no amount of encryption can help. Cryptography protects data at rest and in transit. It does not protect against a human being compelled to divulge a secret. This is a fundamental limitation of all encryption systems."},
+                {"alert_triangle", "Compromised Browser",
+                 "If your browser itself is backdoored\u2014through a malicious extension, a compromised update, or a supply chain attack on the browser vendor\u2014the Web Crypto API cannot be trusted. The encryption happens in the browser; if the browser is hostile, the encryption is theatre."}
+              ]
+            }
+            class="glass-card p-6 sm:p-8 space-y-4 border-danger/10 bg-danger/2 group hover:bg-danger/4 transition-all duration-500"
+          >
+            <div class="flex items-center gap-4">
+              <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <.icon name={icon} class="size-5 text-danger" />
+              </div>
+              <h3 class="text-base font-extrabold text-white font-display">{title}</h3>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">
+              {desc}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- The Threat Model in One Sentence --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Threat Model
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <.premium_card class="p-8 sm:p-10 text-center space-y-6">
+          <p class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight max-w-3xl mx-auto">
+            sTELgano protects against intimate-access attackers&mdash;a partner, family member, or colleague with physical access to your device.
+          </p>
+          <div class="h-px w-24 mx-auto bg-primary/30"></div>
+          <p class="text-slate-400 leading-relaxed font-medium max-w-2xl mx-auto">
+            This is the scenario we optimise for. The person who picks up your phone while you're in the shower. The colleague who glances at your screen. The family member who "borrows" your device. Against this threat class, sTELgano provides strong, layered protection.
+          </p>
+        </.premium_card>
+      </section>
+
+      <%!-- When to Use Something Else --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            When to Use Something Else
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-8 sm:p-10 space-y-4">
+          <p class="text-slate-300 leading-relaxed font-medium mb-4">
+            We'd rather you use the right tool than use ours in the wrong situation:
+          </p>
+          <ul class="space-y-4">
+            <li
+              :for={
+                {scenario, recommendation} <- [
+                  {"Government surveillance", "Use Tor, Tails, or a hardened operating system designed for high-threat environments."},
+                  {"Legal pressure or subpoena risk", "Consult a lawyer. Technology alone cannot protect you from legal compulsion."},
+                  {"Compromised device", "Re-image the device from a trusted source before using any secure communication tool."},
+                  {"Life-or-death stakes", "Use multiple layers of protection. No single tool is sufficient. Seek expert operational security guidance."}
+                ]
+              }
+              class="flex items-start gap-4"
+            >
+              <.icon name="arrow_right" class="size-4 text-primary shrink-0 mt-1" />
+              <div>
+                <span class="text-white font-bold text-sm">{scenario}:</span>
+                <span class="text-slate-400 text-sm font-medium"> {recommendation}</span>
+              </div>
+            </li>
+          </ul>
+          <p class="text-slate-500 leading-relaxed font-medium text-sm pt-4 border-t border-white/5 mt-6">
+            sTELgano is for everyday discretion, not extraordinary threat environments. We're honest about that because your safety depends on choosing the right tool for the right threat.
+          </p>
+        </div>
+      </section>
+    </div>
+
+    <%!-- Footer Navigation --%>
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-white/5">
+      <.link navigate={~p"/blog"} class="btn-ghost px-6 py-3 text-sm group">
+        <.icon name="arrow_left" class="size-4 group-hover:-translate-x-1 transition-transform" />
+        Back to Blog
+      </.link>
+      <.link navigate={~p"/steg-number"} class="btn-primary px-8 py-3 text-sm group">
+        Try sTELgano Now
+        <.icon name="arrow_right" class="size-4 group-hover:translate-x-1 transition-transform" />
+      </.link>
+    </div>
+  </article>
+</Layouts.app>

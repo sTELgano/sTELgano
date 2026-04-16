@@ -15,61 +15,216 @@
       </p>
     </div>
 
-    <%!-- Vision Grid --%>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-10 items-stretch animate-in stagger-4">
-      <div class="glass-card p-10 sm:p-12 flex flex-col justify-between group hover:border-primary/30 transition-all duration-500">
-        <div class="space-y-8">
+    <%!-- The Problem --%>
+    <div class="space-y-8 animate-in stagger-3">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          The Problem
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-14 rounded-2xl bg-danger/10 flex items-center justify-center border border-danger/20">
+            <.icon name="eye" class="size-7 text-danger" />
+          </div>
+          <h3 class="text-3xl font-extrabold text-white font-display">Privacy Tools Are Obvious</h3>
+        </div>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p>
+            Most privacy tools are visible. An encrypted messaging app on your phone is a red flag to anyone who picks it up. Someone scrolling through your installed apps sees Signal, Wickr, Session -- and immediately knows you are hiding something.
+          </p>
+          <p>
+            The mere <span class="text-white">presence</span> of a privacy tool reveals intent. For people facing intimate-access threats -- a suspicious partner, a controlling family member, someone with physical access to your device -- this visibility is the problem itself.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Our Approach --%>
+    <div class="space-y-8 animate-in stagger-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Our Approach
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
           <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
             <.icon name="eye_off" class="size-7 text-primary" />
           </div>
-          <div class="space-y-4">
-            <h3 class="text-3xl font-extrabold text-white font-display">Philosophy</h3>
-            <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-              <p>
-                Most privacy tools are overt—they scream "I'm using encryption."
-                sTELgano takes a different path. It uses the everyday convenience
-                of a contact list as the hiding place for your encrypted chats.
-              </p>
-              <p>
-                The protocol leverages a standard phone number as a derivation seed,
-                it into a secure private link without ever alerting a casual observer.
-                without ever alerting a casual observer.
-              </p>
-            </div>
-          </div>
+          <h3 class="text-3xl font-extrabold text-white font-display">Contact-Layer Steganography</h3>
+        </div>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p>
+            sTELgano hides the encrypted channel inside a phone number saved in your contacts. Someone scrolling through your contact list sees a normal phone number. Nothing unusual. Nothing suspicious.
+          </p>
+          <p>
+            If they open sTELgano itself, they see a blank entry form with two fields. No messages, no contacts, no chat history. <span class="text-white">Nothing to see.</span> The channel only opens when you enter the correct steg number and PIN -- credentials that exist nowhere on the device.
+          </p>
         </div>
       </div>
+    </div>
 
-      <div class="glass-card p-10 sm:p-12 space-y-10 group hover:border-primary/30 transition-all duration-500">
-        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
-          <.icon name="cpu" class="size-7 text-primary" />
-        </div>
-        <div class="space-y-8">
-          <h3 class="text-3xl font-extrabold text-white font-display">Tech Stack</h3>
-          <div class="space-y-6">
-            <div
-              :for={
-                {tech, desc} <- [
-                  {"Elixir & Phoenix",
-                   "Real-time, distributed capability with high-availability."},
-                  {"Web Crypto API",
-                   "Military-grade encryption executed entirely on the client."},
-                  {"Hyper-Glass UI", "A modern design system built for professional privacy."}
-                ]
-              }
-              class="group/item border-l-2 border-white/5 pl-8 py-2 hover:border-primary transition-all"
-            >
-              <h4 class="text-white font-extrabold mb-1 font-display uppercase tracking-wider text-sm group-hover/item:text-primary transition-colors">
-                {tech}
-              </h4>
-              <p class="text-sm text-slate-500 font-medium">{desc}</p>
-            </div>
+    <%!-- Design Philosophy --%>
+    <div class="space-y-8 animate-in stagger-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Design Philosophy
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div
+          :for={
+            {title, desc, icon} <- [
+              {"The Passcode Test",
+               "Every feature must pass: \"A suspicious partner unlocks your phone and opens sTELgano. What do they see?\" Answer: a blank entry screen with two fields. Nothing else. If a feature fails this test, it does not ship.",
+               "scan"},
+              {"N=1",
+               "At most one message exists per room at any time. Replies atomically delete the previous message. There is no chat history to scroll through, no archive to discover, no backup to forensically recover.",
+               "hash"},
+              {"Zero Knowledge",
+               "The server is intentionally blind. No function on the server ever accepts a plaintext phone number or PIN. It sees only opaque SHA-256 hashes and AES-256-GCM ciphertext. It cannot help you even if compelled.",
+               "eye_off"},
+              {"Browser-Native",
+               "No app to install. No app store review process. No update notifications that reveal usage. sTELgano runs entirely in the browser with the Web Crypto API. Close the tab and it is gone.",
+               "globe"}
+            ]
+          }
+          class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"
+        >
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <.icon
+              name={icon}
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              {title}
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              {desc}
+            </p>
           </div>
         </div>
       </div>
     </div>
 
-    <%!-- Project Links Cluster --%>
+    <%!-- The Protocol --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          The Protocol
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <.premium_card class="p-0 overflow-hidden ring-1 ring-white/5 shadow-2xl">
+        <div class="bg-slate-950/90 p-8 sm:p-12 space-y-6">
+          <div class="flex items-center gap-4">
+            <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+              <.icon name="file_code" class="size-7 text-primary" />
+            </div>
+            <div>
+              <h3 class="text-3xl font-extrabold text-white font-display">sTELgano-std-1</h3>
+              <p class="text-slate-500 text-sm font-mono font-bold uppercase tracking-wider">Open Protocol Specification</p>
+            </div>
+          </div>
+          <p class="text-slate-400 font-medium leading-relaxed text-base">
+            sTELgano is built on an open protocol that defines how two parties establish and use an encrypted communication channel hidden inside a phone contact. The protocol specifies hash derivation, key generation, message encryption, and transport -- all designed for independent implementation and self-hosting.
+          </p>
+          <.link
+            navigate={~p"/spec"}
+            class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-bold uppercase tracking-wider hover:bg-primary/20 transition-all"
+          >
+            Read the Full Specification
+            <.icon name="arrow_right" class="size-4" />
+          </.link>
+        </div>
+      </.premium_card>
+    </div>
+
+    <%!-- Tech Stack --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Tech Stack
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div
+          :for={
+            {tech, desc, icon} <- [
+              {"Elixir & Phoenix",
+               "The BEAM VM provides fault-tolerant, massively concurrent real-time communication via Phoenix Channels. Built for systems that must never go down.",
+               "cpu"},
+              {"Web Crypto API",
+               "AES-256-GCM encryption, PBKDF2 key derivation, SHA-256 hashing -- all executed entirely in the browser. Zero external cryptographic libraries.",
+               "lock"},
+              {"PostgreSQL",
+               "Binary UUIDs for all identifiers. Encrypted-at-rest capable. The database only ever stores opaque hashes and ciphertext -- never plaintext.",
+               "database"},
+              {"Oban",
+               "Background job processing for automatic data purging. Soft-deleted messages are hard-purged after 24 hours. Expired rooms are cleaned hourly.",
+               "clock"}
+            ]
+          }
+          class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"
+        >
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <.icon
+              name={icon}
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              {tech}
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              {desc}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Open Source --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Open Source
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="code" class="size-7 text-primary" />
+          </div>
+          <h3 class="text-3xl font-extrabold text-white font-display">Publicly Auditable</h3>
+        </div>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p>
+            sTELgano is licensed under <span class="text-white">AGPL-3.0</span>. Every line of code is publicly auditable. You can read exactly what runs on the server, verify the cryptographic implementation in the browser, and self-host your own instance with your own salts.
+          </p>
+          <p>
+            Built by the open-source community. Contributions are welcome -- whether that is code, security audits, translations, or documentation.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Project Links --%>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 animate-in stagger-5">
       <.link
         href="https://github.com/stelgano/stelgano"
@@ -83,10 +238,7 @@
             <div class="text-2xl font-black text-white font-display">View on GitHub</div>
           </div>
           <div class="size-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
-            <.icon
-              name="arrow_up_right"
-              class="size-6 text-slate-500 group-hover:text-primary"
-            />
+            <.icon name="arrow_up_right" class="size-6 text-slate-500 group-hover:text-primary" />
           </div>
         </div>
       </.link>
@@ -103,10 +255,41 @@
             <div class="text-2xl font-black text-white font-display">How we secure you</div>
           </div>
           <div class="size-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
-            <.icon
-              name="arrow_up_right"
-              class="size-6 text-slate-500 group-hover:text-primary"
-            />
+            <.icon name="arrow_up_right" class="size-6 text-slate-500 group-hover:text-primary" />
+          </div>
+        </div>
+      </.link>
+
+      <.link
+        navigate={~p"/spec"}
+        class="premium_card p-1 group overflow-hidden"
+      >
+        <div class="bg-slate-950/60 p-8 flex items-center justify-between hover:bg-slate-900/60 transition-all">
+          <div class="space-y-3">
+            <span class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 group-hover:text-primary transition-colors">
+              Protocol
+            </span>
+            <div class="text-2xl font-black text-white font-display">sTELgano-std-1 Spec</div>
+          </div>
+          <div class="size-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+            <.icon name="arrow_up_right" class="size-6 text-slate-500 group-hover:text-primary" />
+          </div>
+        </div>
+      </.link>
+
+      <.link
+        navigate={~p"/privacy"}
+        class="premium_card p-1 group overflow-hidden"
+      >
+        <div class="bg-slate-950/60 p-8 flex items-center justify-between hover:bg-slate-900/60 transition-all">
+          <div class="space-y-3">
+            <span class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 group-hover:text-primary transition-colors">
+              Privacy
+            </span>
+            <div class="text-2xl font-black text-white font-display">Privacy Policy</div>
+          </div>
+          <div class="size-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+            <.icon name="arrow_up_right" class="size-6 text-slate-500 group-hover:text-primary" />
           </div>
         </div>
       </.link>

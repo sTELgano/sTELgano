@@ -1,0 +1,252 @@
+<Layouts.app flash={@flash}>
+  <article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+    <%!-- Hero --%>
+    <div class="text-center space-y-8 pt-12">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="palette" class="size-3" /> {@post.category}
+      </div>
+
+      <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-tight">
+        {@post.title}
+      </h1>
+
+      <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+        <span class="flex items-center gap-1.5">
+          <.icon name="calendar" class="size-3" /> {@post.date}
+        </span>
+        <span class="flex items-center gap-1.5">
+          <.icon name="clock" class="size-3" /> {@post.reading_time}
+        </span>
+      </div>
+    </div>
+
+    <%!-- Article Content --%>
+    <div class="space-y-12 animate-in stagger-4">
+      <%!-- The Question --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Question
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="help_circle" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              Every feature we build must answer one question: <span class="text-white">&ldquo;A suspicious partner
+              unlocks your phone and opens sTELgano. What do they see?&rdquo;</span>
+            </p>
+            <p>
+              The answer must always be the same: <span class="text-primary font-semibold">a blank entry screen
+              with two fields. Nothing else.</span>
+            </p>
+            <p>
+              This is the Passcode Test. It is the single most important design constraint in the entire
+              application. Every feature, every interaction, every pixel on the screen is evaluated against
+              this question before it ships.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- Why This Matters --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Why This Matters
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="shield_alert" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              In our threat model, the attacker has <span class="text-white">physical access to your unlocked device</span>.
+              They can open any app, read any notification, scroll through any history. This is not a hypothetical
+              scenario &mdash; it is the most common real-world privacy threat for many people.
+            </p>
+            <p>
+              Traditional encrypted messengers fail this test completely. Encryption protects the wire, but it
+              does nothing to protect the screen. If someone is standing behind you &mdash; or has your phone in
+              their hand &mdash; all the end-to-end encryption in the world is meaningless.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- How Other Apps Fail --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            How Other Apps Fail
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="eye" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              <span class="text-white">Signal</span> shows a contact list. <span class="text-white">WhatsApp</span>
+              shows recent chats. <span class="text-white">Telegram</span> shows a message list. Even with
+              disappearing messages enabled, even with app locks in place &mdash; the <span class="text-primary">existence
+              of conversations is visible</span>.
+            </p>
+            <p>
+              The mere presence of a chat thread tells an attacker that you are communicating with someone.
+              The contact name, the timestamp, the unread count &mdash; all of this is metadata that survives encryption.
+              These apps protect the content but betray the context.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- How sTELgano Passes --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            How sTELgano Passes
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="check_circle" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              sTELgano shows <span class="text-white">nothing</span>. No contact list. No chat history. No recent
+              conversations. No notification badges. No &ldquo;last seen&rdquo; status.
+            </p>
+            <p>
+              When someone opens the app, they see exactly two empty fields: a number and a PIN. Without knowing
+              both the correct steg number and the correct PIN, there is no way to determine whether the app has
+              ever been used, who you have spoken to, or what was said.
+            </p>
+            <p>
+              The app looks identical whether you have an active channel or have never used it before.
+              <span class="text-primary font-semibold">That is the point.</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- Design Decisions That Follow --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Design Decisions That Follow
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+              <.icon name="bell_off" class="size-5 text-primary" />
+            </div>
+            <h3 class="text-white font-display font-bold text-lg">No Push Notifications</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              Nothing to see on the lock screen. No badges, no banners, no sounds. The absence of notifications
+              is a privacy feature.
+            </p>
+          </div>
+
+          <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+              <.icon name="app_window" class="size-5 text-primary" />
+            </div>
+            <h3 class="text-white font-display font-bold text-lg">No App Icon</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              As a PWA or browser bookmark, sTELgano can exist without a visible app icon in some
+              deployment configurations.
+            </p>
+          </div>
+
+          <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+              <.icon name="timer" class="size-5 text-primary" />
+            </div>
+            <h3 class="text-white font-display font-bold text-lg">SessionStorage Only</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              Closed tab means gone. No localStorage, no cookies persisting session data. Closing the browser
+              tab erases everything.
+            </p>
+          </div>
+
+          <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+              <.icon name="zap" class="size-5 text-primary" />
+            </div>
+            <h3 class="text-white font-display font-bold text-lg">Panic Route</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              Navigate to /x for instant clearing. No confirmation dialog, no animation. Immediate session
+              destruction.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- The Blank Screen Is the Feature --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Blank Screen Is the Feature
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="premium_card border-primary/10 p-10 sm:p-12 space-y-6">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <.icon name="monitor" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              The most important UX decision we made was <span class="text-white font-semibold">what NOT to show</span>.
+            </p>
+            <p>
+              Most apps compete on features: more buttons, more screens, more things to do. sTELgano competes on
+              absence. The fewer elements on the screen, the less an attacker can learn. The blank entry screen
+              is not a limitation of the design &mdash; it <span class="text-primary font-semibold">is</span> the design.
+            </p>
+            <p>
+              Every feature request is evaluated against the Passcode Test. If it adds visible state, it fails.
+              If it reveals that a conversation exists, it fails. If it gives an attacker any information at all,
+              it fails. The blank screen is the feature.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <%!-- Footer --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center justify-between pt-8 border-t border-white/5">
+        <.link navigate={~p"/blog"} class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+          <.icon name="arrow_left" class="size-4 group-hover:-translate-x-1 transition-transform" />
+          Back to Blog
+        </.link>
+      </div>
+
+      <div class="text-center space-y-6">
+        <p class="text-slate-500 text-sm font-medium">
+          Experience the Passcode Test for yourself.
+        </p>
+        <.link navigate={~p"/steg-number"} class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+          Start a Private Chat
+          <.icon name="arrow_right" class="size-5 group-hover:translate-x-1 transition-transform" />
+        </.link>
+      </div>
+    </div>
+  </article>
+</Layouts.app>

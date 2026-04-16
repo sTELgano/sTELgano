@@ -32,7 +32,7 @@ defmodule StelganoWeb.Layouts do
         <div class="flex items-center gap-3 sm:gap-6">
           <div class="hidden md:flex items-center gap-8 mr-4">
             <.link
-              navigate={~p"/security"}
+              navigate={~p"/spec"}
               class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all"
             >
               Spec
@@ -42,6 +42,12 @@ defmodule StelganoWeb.Layouts do
               class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all"
             >
               About
+            </.link>
+            <.link
+              navigate={~p"/blog"}
+              class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all"
+            >
+              Blog
             </.link>
           </div>
           <div class="hidden sm:block h-4 w-px bg-white/10 mx-2"></div>
