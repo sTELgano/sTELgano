@@ -1,0 +1,283 @@
+<Layouts.app flash={@flash}>
+  <article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+    <%!-- Hero --%>
+    <div class="text-center space-y-8 pt-12">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="wrench" class="size-3" /> {@post.category}
+      </div>
+
+      <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-tight">
+        {@post.title}
+      </h1>
+
+      <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+        <span class="flex items-center gap-1.5">
+          <.icon name="calendar" class="size-3" /> {@post.date}
+        </span>
+        <span class="flex items-center gap-1.5">
+          <.icon name="clock" class="size-3" /> {@post.reading_time}
+        </span>
+      </div>
+    </div>
+
+    <%!-- Article Content --%>
+    <div class="space-y-12 animate-in stagger-4">
+      <%!-- The Requirements --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Requirements
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="list_checks" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              Before writing a single line of code, we outlined exactly what the platform needed:
+              <span class="text-white">real-time messaging</span>, persistent WebSocket connections,
+              fault tolerance, minimal resource overhead, and the ability to handle many concurrent
+              connections without traditional scaling pain.
+            </p>
+            <p>
+              The server also had to be <span class="text-white">deliberately ignorant</span> &mdash; it would
+              never see plaintext, never store identifiable data, and never log anything useful to an attacker.
+              This constrained our technology choices significantly.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- Why Elixir? --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Why Elixir?
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="cpu" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              Elixir runs on the <span class="text-white">BEAM VM</span> &mdash; the same runtime that powers
+              Erlang, which was built at Ericsson for telecom systems. A chat application is quite literally
+              what the BEAM was designed for.
+            </p>
+            <p>
+              The BEAM gives us <span class="text-primary font-semibold">lightweight processes</span> (not OS
+              threads &mdash; each costs only a few kilobytes of memory), preemptive scheduling (no single
+              connection can starve others), and &ldquo;let it crash&rdquo; fault tolerance (a bug in one
+              connection does not take down the server).
+            </p>
+            <p>
+              Each connected user is a separate BEAM process. They are isolated, independently garbage-collected,
+              and supervised. If one crashes, the supervisor restarts it. The rest of the system never notices.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- Phoenix Channels --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Phoenix Channels
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="radio" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              Phoenix provides <span class="text-white">first-class WebSocket support</span> through its
+              Channels abstraction. Each chat room is a topic, each connected user is a process. The
+              runtime handles millions of connections natively &mdash; no Redis pubsub, no external
+              message broker, no additional infrastructure.
+            </p>
+            <p>
+              Our channel implementation handles message sending, read receipts, typing indicators,
+              message editing, message deletion, and room expiry &mdash; all through a single WebSocket
+              connection per user. The protocol is simple, the events are well-defined, and the server
+              logic is auditable.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- Why Not Node.js/Go/Rust? --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Why Not Node.js, Go, or Rust?
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+            <h3 class="text-white font-display font-bold text-lg">Node.js</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              Single-threaded by design. Real-time at scale requires external solutions like Socket.io
+              with Redis adapters. More moving parts, more attack surface.
+            </p>
+          </div>
+
+          <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+            <h3 class="text-white font-display font-bold text-lg">Go</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              Excellent for APIs, but WebSocket support requires more manual work. Goroutines are
+              lightweight but lack the supervision tree model that makes Elixir fault-tolerant.
+            </p>
+          </div>
+
+          <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+            <h3 class="text-white font-display font-bold text-lg">Rust</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              Unnecessary complexity for this use case. The performance ceiling of Rust is not needed
+              when the BEAM already handles millions of concurrent connections.
+            </p>
+          </div>
+        </div>
+
+        <div class="glass-card p-8 space-y-4">
+          <p class="text-slate-400 font-medium leading-relaxed text-base">
+            Phoenix gives us the best ratio of <span class="text-white">developer productivity to runtime
+            performance</span> for real-time applications. The framework was purpose-built for exactly this
+            kind of workload.
+          </p>
+        </div>
+      </section>
+
+      <%!-- The Anonymous Socket --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Anonymous Socket
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="user_x" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              Our WebSocket has <span class="text-white">no session, no auth cookie, no user ID</span>. It is
+              fully anonymous by design. Phoenix makes this trivial &mdash; you simply skip the authentication
+              in the socket&rsquo;s connect callback.
+            </p>
+            <p>
+              Most frameworks assume you want to identify users on WebSocket connections. Phoenix lets you
+              choose. We chose anonymity, and the framework did not fight us on it.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- OTP for Background Jobs --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            OTP for Background Jobs
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="cog" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              <span class="text-white">Oban</span>, built on Elixir and OTP, handles our maintenance tasks:
+              purging soft-deleted messages after 24 hours, expiring TTL rooms on the hour. The BEAM&rsquo;s
+              scheduler ensures these background jobs never interfere with real-time chat performance.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- LiveView for UI --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            LiveView for UI
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="layout" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              The entry form and admin dashboard use <span class="text-white">Phoenix LiveView</span> for
+              server-rendered interactive UI. No JavaScript framework needed for the non-chat pages. The
+              chat itself uses raw Phoenix Channels with plain JavaScript hooks for client-side crypto.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <%!-- The Result --%>
+      <section class="space-y-8">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Result
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="premium_card border-primary/10 p-10 sm:p-12 space-y-6">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <.icon name="server" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              A <span class="text-white font-semibold">single Elixir node</span> handles the full application:
+              HTTP requests, WebSocket connections, background jobs, and database interactions. Simple to deploy,
+              simple to maintain, simple to audit.
+            </p>
+            <p>
+              No microservices. No message queues. No container orchestration. One binary, one process tree,
+              one codebase. The simplicity is the security &mdash; fewer moving parts means fewer places for
+              bugs to hide.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <%!-- Footer --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center justify-between pt-8 border-t border-white/5">
+        <.link navigate={~p"/blog"} class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+          <.icon name="arrow_left" class="size-4 group-hover:-translate-x-1 transition-transform" />
+          Back to Blog
+        </.link>
+      </div>
+
+      <div class="text-center space-y-6">
+        <p class="text-slate-500 text-sm font-medium">
+          See the Elixir-powered platform in action.
+        </p>
+        <.link navigate={~p"/steg-number"} class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+          Start a Private Chat
+          <.icon name="arrow_right" class="size-5 group-hover:translate-x-1 transition-transform" />
+        </.link>
+      </div>
+    </div>
+  </article>
+</Layouts.app>

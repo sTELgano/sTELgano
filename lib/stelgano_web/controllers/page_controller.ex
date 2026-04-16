@@ -31,6 +31,11 @@ defmodule StelganoWeb.PageController do
     render(conn, :about, page_title: "About — sTELgano")
   end
 
+  @spec spec(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def spec(conn, _params) do
+    render(conn, :spec, page_title: "Spec — sTELgano")
+  end
+
   @doc """
   Serves the .well-known/security.txt file as a text response.
   Also served as a static file from priv/static/.well-known/security.txt

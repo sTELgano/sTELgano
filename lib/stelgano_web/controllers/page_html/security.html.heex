@@ -1,27 +1,85 @@
 <Layouts.app flash={@flash}>
-  <div class="max-w-5xl mx-auto space-y-16 py-12 animate-in">
+  <div class="max-w-5xl mx-auto space-y-20 py-12 animate-in pb-40">
     <%!-- Hero Header --%>
     <div class="text-center space-y-6 pt-12">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
-        <.icon name="file_text" class="size-3" /> Security Guide v1.8
+        <.icon name="shield_check" class="size-3" /> Security Architecture
       </div>
 
       <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
         Security & <span class="text-gradient">Privacy.</span>
       </h1>
 
-      <p class="text-slate-400 text-sm sm:text-base font-mono uppercase tracking-[0.4em] font-black animate-in stagger-3">
-        sTELgano-std-1 · Document Reference AE-2026
+      <p class="text-slate-500 font-mono text-[10px] font-bold uppercase tracking-[0.4em] animate-in stagger-3">
+        sTELgano-std-1 &middot; Document Reference AE-2026
       </p>
     </div>
 
-    <%!-- Derivation Chain Section --%>
+    <%!-- Our Promise --%>
     <div class="space-y-8 animate-in stagger-3">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
-          How we protect you
+          Our Promise
         </h2>
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <.icon name="lock" class="size-7 text-primary" />
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>
+            Your messages are <span class="text-white">encrypted on your device</span> before they ever leave your browser.
+            The server never sees your phone number, your PIN, or the content of your messages. It only receives
+            opaque hashes and ciphertext that are meaningless without your credentials.
+          </p>
+          <p>
+            There are <span class="text-white">no accounts to create</span>, no email addresses to provide, and no
+            profile data to fill in. You share a number with someone, each of you picks a PIN, and that is the
+            entire setup. We built sTELgano on a zero-knowledge architecture: we cannot read your messages,
+            we cannot identify you, and we cannot recover your data. That is not a limitation &mdash; it is the design.
+          </p>
+          <p>
+            No metadata is collected. No chat history is retained. No message logs exist on the server.
+            When a reply is sent, the previous message is <span class="text-white">atomically deleted</span>.
+            At most one message exists in any room at any time.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <%!-- How Encryption Works --%>
+    <div class="space-y-8 animate-in stagger-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          How Encryption Works
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="key_round" class="size-6 text-primary" />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            Derivation Chain
+          </h3>
+        </div>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-sm">
+          <p>
+            Every piece of data the server stores is derived from your shared number and PIN through
+            a series of one-way cryptographic functions. Here is what happens when you enter your credentials:
+          </p>
+          <ol class="list-decimal list-inside space-y-2 text-slate-300">
+            <li>Your phone number is <span class="text-white">normalised</span> to E.164 format &mdash; spaces, dashes, and formatting are stripped.</li>
+            <li>A <span class="text-white">room hash</span> is computed so the server can look up your room without knowing your number.</li>
+            <li>An <span class="text-white">access hash</span> is computed from your number and PIN &mdash; this proves you know the PIN without revealing it.</li>
+            <li>An <span class="text-white">encryption key</span> is derived using 600,000 rounds of PBKDF2 &mdash; this key never leaves your browser.</li>
+            <li>A <span class="text-white">sender hash</span> is computed so the server can tell which participant sent a message, without knowing who they are.</li>
+          </ol>
+        </div>
       </div>
 
       <.premium_card class="p-0 overflow-hidden ring-1 ring-white/5 shadow-2xl">
@@ -32,90 +90,71 @@
           <pre
             class="text-xs sm:text-sm md:text-base overflow-x-auto leading-relaxed font-mono whitespace-pre text-slate-300 relative z-10"
             phx-no-curly-interpolation
-          >phone       = Cleanup(phone_number)
-              <span class="text-slate-500">// We remove spaces, dashes, and other symbols.</span>
-              <span class="text-slate-500">// This ensures the number is standard and predictable.</span>
- 
- <span class="text-primary italic opacity-60"># Public Details (Stored on Server)</span>
- room_hash   = Lock(phone)
-              <span class="text-slate-500">// A unique ID for your chat room. No one can guess your phone from this.</span>
- 
- access_hash = Lock(phone + PIN)
-              <span class="text-slate-500">// A secret "keyhole" for your PIN. We never see your actual PIN.</span>
- 
- <span class="text-primary italic opacity-60"># Your Private Keys (ONLY on your phone)</span>
- enc_key     = Secure(phone + room_id)
-              <span class="text-slate-500">// This is your master encryption key. It never leaves your browser.</span>
- 
- sender_hash = ID(phone + room_hash)
-              <span class="text-slate-500">// A temporary ID used only for this session.</span></pre>
+          >phone       = normalise(phone_number)
+            <span class="text-slate-500">// Strip spaces, dashes, formatting → E.164 standard</span>
+
+<span class="text-primary italic opacity-60"># Server-side identifiers (opaque hashes)</span>
+room_hash   = SHA-256(phone + ":" + ROOM_SALT)
+            <span class="text-slate-500">// Unique room ID — cannot be reversed to recover the phone number</span>
+
+access_hash = SHA-256(phone + ":" + PIN + ":" + ACCESS_SALT)
+            <span class="text-slate-500">// Proves PIN knowledge without revealing the PIN itself</span>
+
+<span class="text-primary italic opacity-60"># Client-side secrets (never leave the browser)</span>
+enc_key     = PBKDF2(phone, room_id + ENC_SALT, 600000, SHA-256, 256-bit)
+            <span class="text-slate-500">// Master encryption key — 600K iterations per OWASP 2023</span>
+
+sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)
+            <span class="text-slate-500">// Unique sender identity per room session</span></pre>
         </div>
       </.premium_card>
     </div>
 
-    <%!-- Technical Sections Grid --%>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-4">
-      <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
-        <div class="flex items-center gap-4">
-          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner group-hover:scale-110 transition-transform">
-            <.icon name="shield_check" class="size-6 text-primary" />
-          </div>
-          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
-            Encryption Details
-          </h3>
-        </div>
-        <div class="space-y-4">
-          <div
-            :for={
-              {label, value} <- [
-                {"Algorithm", "AES-256-GCM"},
-                {"Key Entropy", "256-bit (PBKDF2)"},
-                {"Nonce Vector", "96-bit Random"},
-                {"Auth Tag", "128-bit MAC"}
-              ]
-            }
-            class="flex items-center justify-between py-4 border-b border-white/5 last:border-0 group/item"
-          >
-            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">
-              {label}
-            </span>
-            <span class="text-sm font-mono font-bold text-white group-hover/item:scale-105 transition-transform">
-              {value}
-            </span>
-          </div>
-        </div>
+    <%!-- Encryption Specifications Grid --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Encryption Specifications
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
-        <div class="flex items-center gap-4">
-          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner group-hover:scale-110 transition-transform">
-            <.icon name="sliders_horizontal" class="size-6 text-primary" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div
+          :for={
+            {label, value, desc} <- [
+              {"Cipher", "AES-256-GCM",
+               "Authenticated encryption with associated data. Industry standard for confidentiality and integrity."},
+              {"Key Derivation", "PBKDF2 600K",
+               "600,000 iterations per OWASP 2023 recommendation. Approximately 2 seconds of computation per derivation."},
+              {"Hash Function", "SHA-256",
+               "Used for all identifier hashes. Produces 256-bit digests that are computationally irreversible."},
+              {"Nonce", "96-bit Random",
+               "Cryptographically random initialisation vector generated fresh for every message encryption."},
+              {"Auth Tag", "128-bit MAC",
+               "Message authentication code that detects any tampering with the ciphertext."},
+              {"Key Length", "256-bit",
+               "Full 256-bit key space. Brute-forcing this would take longer than the age of the universe."}
+            ]
+          }
+          class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500"
+        >
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-primary transition-colors">
+              {label}
+            </span>
           </div>
-          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
-            Wait Cycles
-          </h3>
-        </div>
-        <div class="space-y-6">
-          <p class="text-slate-400 text-sm leading-relaxed font-medium">
-            We employ <span class="text-white">600,000 PBKDF2 iterations</span>, aligning with modern standards to defeat brute-force attempts at the edge.
+          <div class="text-xl font-mono font-bold text-white group-hover:text-primary transition-colors">
+            {value}
+          </div>
+          <p class="text-xs text-slate-500 leading-relaxed font-medium">
+            {desc}
           </p>
-          <div class="p-6 rounded-2xl bg-white/2 border border-white/5 space-y-4">
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                Resource Drain
-              </span>
-              <span class="text-[10px] font-mono font-bold text-primary">~2.0s</span>
-            </div>
-            <div class="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/5">
-              <div class="h-full bg-linear-to-r from-primary to-emerald-400 animate-progress w-full">
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
 
-    <%!-- Threat Model Grid --%>
+    <%!-- Threat Model --%>
     <div class="space-y-8 animate-in stagger-5">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
@@ -138,17 +177,19 @@
             <li
               :for={
                 item <- [
-                  "Casual device snooping / Shoulder surfing",
-                  "ISP / Network operator packet inspection",
-                  "Database-level identity breaches",
-                  "Browser history / Cache forensics"
+                  "Casual device snooping and shoulder surfing",
+                  "ISP and network operator packet inspection",
+                  "Server-side database breaches",
+                  "Browser history and cache forensics",
+                  "Device seizure — no app to find, no chat history to recover",
+                  "Intimate-access attackers (partner, family member with device access)"
                 ]
               }
               class="flex items-start gap-4 group/li"
             >
               <.icon
                 name="check_circle"
-                class="size-5 text-primary group-hover/li:scale-125 transition-transform"
+                class="size-5 text-primary shrink-0 group-hover/li:scale-125 transition-transform"
               />
               <span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">
                 {item}
@@ -162,16 +203,22 @@
             <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center">
               <.icon name="alert_triangle" class="size-6" />
             </div>
-            <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">Out-of-Scope Risks</h4>
+            <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">
+              Out-of-Scope Risks
+            </h4>
           </div>
+          <p class="text-sm text-slate-400 font-medium leading-relaxed">
+            We are honest about our limits. sTELgano does <span class="text-white">not</span> protect against:
+          </p>
           <ul class="space-y-4">
             <li
               :for={
                 item <- [
                   "Nation-state surveillance infrastructure",
                   "Government subpoenas and law enforcement",
-                  "Targeted endpoint malware / Keyloggers",
-                  "Coerced PIN disclosure sessions"
+                  "Targeted endpoint malware and keyloggers",
+                  "Physical coercion or forced PIN disclosure",
+                  "A compromised browser or operating system"
                 ]
               }
               class="flex items-start gap-4 group/li"
@@ -188,8 +235,101 @@
       </div>
     </div>
 
-    <%!-- Persistence Audit Table --%>
-    <div class="space-y-8 pb-40 animate-in stagger-5">
+    <%!-- The Passcode Test --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          The Passcode Test
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <.premium_card class="p-0 overflow-hidden ring-1 ring-white/5 shadow-2xl">
+        <div class="bg-slate-950/90 p-10 sm:p-12 relative">
+          <div class="absolute top-0 right-0 p-4 opacity-5">
+            <.icon name="eye_off" class="size-32 text-white" />
+          </div>
+          <div class="relative z-10 space-y-6">
+            <div class="flex items-center gap-4">
+              <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                <.icon name="scan_eye" class="size-6 text-primary" />
+              </div>
+              <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+                Design Principle
+              </h3>
+            </div>
+            <p class="text-lg text-slate-300 font-medium leading-relaxed max-w-3xl">
+              Every design decision in sTELgano must pass a single test:
+            </p>
+            <blockquote class="border-l-2 border-primary/40 pl-8 py-4">
+              <p class="text-xl text-white font-display font-bold italic leading-relaxed">
+                "A suspicious person unlocks your phone and opens sTELgano. What do they see?"
+              </p>
+            </blockquote>
+            <p class="text-lg text-slate-300 font-medium leading-relaxed max-w-3xl">
+              The answer: <span class="text-white">a blank entry screen with two fields. Nothing else.</span>
+              No message previews, no contact list, no notification badges, no chat history.
+              There is nothing to find because nothing is stored.
+            </p>
+          </div>
+        </div>
+      </.premium_card>
+    </div>
+
+    <%!-- Data Lifecycle --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Data Lifecycle
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div
+          :for={
+            {title, desc, icon, badge} <- [
+              {"N=1 Invariant",
+               "At most one message exists per room at any time. When a reply is sent, the previous message is atomically deleted in a single database transaction. No history accumulates.",
+               "message_circle", "CORE RULE"},
+              {"Soft Delete on Reply",
+               "When you reply, the previous message is immediately soft-deleted. It becomes invisible to all participants and inaccessible via the API.",
+               "trash_2", "IMMEDIATE"},
+              {"Hard Purge at 24 Hours",
+               "A background job runs daily at 03:00 UTC and permanently hard-deletes all soft-deleted messages older than 24 hours. After this, the data is irrecoverable.",
+               "clock", "24H WINDOW"},
+              {"Room Expiry via TTL",
+               "Rooms can be set to expire after a time-to-live period. An hourly background job checks for expired rooms and deactivates them. Expired rooms cannot be rejoined.",
+               "timer", "TTL ENFORCED"}
+            ]
+          }
+          class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"
+        >
+          <div class="flex items-center justify-between">
+            <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+              <.icon
+                name={icon}
+                class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+              />
+            </div>
+            <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
+              {badge}
+            </span>
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              {title}
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              {desc}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Privacy Summary Table --%>
+    <div class="space-y-8 animate-in stagger-5">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Privacy Summary
@@ -213,11 +353,17 @@
             <tbody class="divide-y divide-white/5">
               <tr
                 :for={
-                  {item, state} <- [
-                    {"Chat ID", "Encrypted Reference (SHA-256)"},
-                    {"Access Pin", "Hashed Security Token"},
-                    {"Messages", "Encrypted in browser (AES-256)"},
-                    {"Sender ID", "Temporary session data"}
+                  {item, state, color} <- [
+                    {"Phone Numbers", "Never stored — only hashed derivatives", "primary"},
+                    {"PINs", "Never stored — only hashed derivatives", "primary"},
+                    {"Plaintext Messages", "Never reach the server — encrypted client-side", "primary"},
+                    {"Encryption Keys", "Never leave the browser — derived locally", "primary"},
+                    {"Room Identifiers", "SHA-256 hash only (irreversible)", "slate"},
+                    {"Access Credentials", "SHA-256 hash only (irreversible)", "slate"},
+                    {"Ciphertext", "AES-256-GCM encrypted — deleted on reply", "slate"},
+                    {"Sender Identity", "Ephemeral hash — per-session only", "slate"},
+                    {"IP Addresses", "Rate limiting only — deleted within 48 hours", "slate"},
+                    {"User Profiles", "Do not exist — no accounts", "primary"}
                   ]
                 }
                 class="group hover:bg-white/3 transition-all"
@@ -226,8 +372,15 @@
                   {item}
                 </td>
                 <td class="p-8">
-                  <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-white/5 text-[10px] font-bold text-slate-400">
-                    <div class="size-1 bg-slate-700 rounded-full"></div>
+                  <span class={[
+                    "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-white/5 text-[10px] font-bold text-slate-400",
+                    color == "primary" && "border-primary/20 text-primary/80"
+                  ]}>
+                    <div class={[
+                      "size-1 rounded-full",
+                      if(color == "primary", do: "bg-primary", else: "bg-slate-700")
+                    ]}>
+                    </div>
                     {state}
                   </span>
                 </td>
@@ -236,6 +389,44 @@
           </table>
         </div>
       </.premium_card>
+    </div>
+
+    <%!-- Responsible Disclosure --%>
+    <div class="space-y-8 animate-in stagger-5">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Responsible Disclosure
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="bug" class="size-6 text-primary" />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            Report a Vulnerability
+          </h3>
+        </div>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-sm">
+          <p>
+            If you discover a security vulnerability in sTELgano, we encourage responsible disclosure.
+            Please report vulnerabilities privately so we can address them before they are publicly known.
+          </p>
+          <p>
+            Our security policy and contact information are published at the standard well-known location.
+          </p>
+        </div>
+        <.link
+          href="/.well-known/security.txt"
+          class="inline-flex items-center gap-3 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold text-white hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all group/link"
+        >
+          <.icon name="file_text" class="size-4 group-hover/link:text-primary transition-colors" />
+          <span class="font-mono text-xs tracking-wider">/.well-known/security.txt</span>
+          <.icon name="arrow_up_right" class="size-4 text-slate-500 group-hover/link:text-primary transition-colors" />
+        </.link>
+      </div>
     </div>
   </div>
 </Layouts.app>

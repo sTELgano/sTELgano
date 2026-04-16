@@ -85,6 +85,10 @@ defmodule StelganoWeb.Router do
     get "/privacy", PageController, :privacy
     get "/terms", PageController, :terms
     get "/about", PageController, :about
+    get "/spec", PageController, :spec
+
+    get "/blog", BlogController, :index
+    get "/blog/:slug", BlogController, :show
 
     # Serve the .well-known/security.txt file
     get "/.well-known/security.txt", PageController, :security_txt
