@@ -59,19 +59,36 @@ Chat uses a raw Phoenix Channel ([anon_room_channel.ex](lib/stelgano_web/channel
 room_hash   = SHA-256(normalise(phone) + ":" + ROOM_SALT)
 access_hash = SHA-256(normalise(phone) + ":" + PIN + ":" + ACCESS_SALT)
 enc_key     = PBKDF2(phone, room_id + ENC_SALT, 600_000 iter, SHA-256, 256-bit)
-sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
+sender_hash = SHA-256(normalise(phone) + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)
 ```
 
-PIN is NOT part of enc_key (both users need the same key but have different PINs). 600,000 PBKDF2 iterations = OWASP 2023 recommendation.
+PIN is NOT part of enc_key (both users need the same key but have different PINs). The access_hash IS part of sender_hash so that two users with the same phone but different PINs produce different sender identities. 600,000 PBKDF2 iterations = OWASP 2023 recommendation.
 
-[assets/js/crypto/phone-gen.js](assets/js/crypto/phone-gen.js) — steg number generator (E.164 format, country-aware, uses `crypto.getRandomValues`).
+`phone-number-generator-js` npm package — steg number generator (E.164 format, 227 countries supported via `CountryNames` enum). Installed in `assets/package.json`. Replaces the former custom `phone-gen.js`.
 
-[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks importing from `../crypto/anon.js`.
+[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks: `AnonChat` (main orchestrator), `AutoResize` (textarea), `IntersectionReader` (read receipts), `PhoneGenerator` (country selector + number generation on `/steg-number` page).
+
+### ChatLive state machine
+
+`ChatLive` uses a single `@state` atom to track the current screen:
+
+```
+:entry → :deriving → :connecting → :chat → :locked → :expired
+```
+
+- `:entry` — blank form with PIN field (phone pre-populated and read-only when arriving from `/steg-number?phone=`, otherwise editable). Passcode test compliant.
+- `:deriving` — three-dot loading while hashes are computed
+- `:connecting` — three-dot loading while PBKDF2 derives the encryption key
+- `:chat` — active chat with message area, input, and header controls
+- `:locked` — PIN re-entry screen (re-derives key without re-joining channel)
+- `:expired` — terminal state after room expiry
+
+The `can_type?/1` helper enforces turn-based input: you can type when the room is empty or when the last message is from the other party.
 
 ### LiveViews
 
 - `ChatLive` — chat UI; crypto + channel interaction happen in JS hooks, not server-side
-- `StegNumberLive` — steg number generator at `/steg-number`
+- `StegNumberLive` — steg number generator at `/steg-number` with country selector dropdown and "Open channel" flow (copies number to clipboard, navigates to `/chat?phone=<e164>`)
 - `AdminDashboardLive` — aggregate metrics at `/admin` (HTTP Basic Auth via `AdminAuth` plug)
 
 ### Background jobs (Oban)
@@ -85,13 +102,14 @@ PIN is NOT part of enc_key (both users need the same key but have different PINs
 - `SecurityHeaders` — HSTS, X-Robots-Tag, Cache-Control: no-store
 - `RateLimiter` — IP-based throttling via PlugAttack (ETS-backed, runs in endpoint before router)
 - `AdminAuth` — HTTP Basic Auth for `/admin` scope
-- CSP in router: strict `default-src 'self'` with specific allowances
+- CSP in router: strict `default-src 'self'` with specific allowances for fonts.googleapis.com/gstatic.com
 - Panic route: `GET /x` — instant session clear, no confirmation
+- Service worker (`priv/static/sw.js`) — privacy-first caching: app shell cache-first, sensitive routes (`/chat`, `/steg-number`) network-only, panic route (`/x`) clears all caches
 
 ### Routes
 
 - `/` — homepage; `/security`, `/privacy`, `/terms`, `/about` — static pages
-- `/chat` — anonymous chat LiveView (entry point for users)
+- `/chat` — anonymous chat LiveView; accepts optional `?phone=<e164>` query param to pre-populate phone field
 - `/steg-number` — steg number generator
 - `/admin` — admin dashboard (behind `:admin_auth` pipeline)
 - `/.well-known/security.txt` — security disclosure info
@@ -103,7 +121,7 @@ PIN is NOT part of enc_key (both users need the same key but have different PINs
 - Use `Req` for HTTP requests (already included), not HTTPoison/Tesla/httpc
 - Tailwind CSS v4 — no `tailwind.config.js`; uses `@import "tailwindcss"` syntax in `app.css`
 - Write Tailwind-based components manually — do NOT use daisyUI components
-- No inline `<script>` tags in templates — use colocated JS hooks (`.HookName` prefix) or external hooks in `assets/js/`
+- No inline `<script>` tags in templates (except theme bootstrap and SW registration in root layout) — use colocated JS hooks or external hooks in `assets/js/`
 - No third-party analytics, tracking pixels, or external scripts — CSP enforces this
 - AGPL-3.0 licence; all source files need SPDX header: `# SPDX-License-Identifier: AGPL-3.0-only`
 - UI terminology: "steg number" (technical), "the number in your contacts" (user-facing); "channel" not "conversation"
@@ -135,4 +153,17 @@ Run `mix precommit` before submitting changes — it runs the full quality suite
 
 ## Design system
 
-Colour palette uses CSS custom properties with light/dark variants. Key tokens: `--accent` (green: trust/safety), `--bg-base`, `--text-primary`. Typography: Figtree (body), Fraunces (headings), IBM Plex Mono (code/hashes). Chat bubble geometry: sent `border-radius: 20px 20px 4px 20px`, received `20px 20px 20px 4px`. All motion respects `prefers-reduced-motion`. Mobile-first: 320px minimum width, 44x44px touch targets.
+Dark-first glassmorphism UI. All surfaces use `backdrop-filter: blur(16px)` with translucent dark backgrounds. Accent colour is emerald green (`#10B981`).
+
+**Fonts:** Outfit (display/headings), Inter (body/UI), JetBrains Mono (code/hashes). Loaded via Google Fonts CDN.
+
+**Key CSS tokens:** `--color-primary` (#10B981), `--bg-dark` (#030712), `--text-main` (#f9fafb), `--text-muted` (#9ca3af), `--color-surface` (rgba(17,24,39,0.6)), `--color-surface-border` (rgba(255,255,255,0.1)).
+
+**Component classes:** `.glass-panel`, `.glass-input`, `.glass-button`, `.btn-ghost`, `.btn-danger`, `.btn-icon`, `.entry-card`, `.chat-layout`, `.bubble.sent`, `.bubble.received`, `.modal-card`, `.lock-overlay`, `.wordmark`.
+
+**Chat bubble geometry:** sent `border-radius: 1.5rem 1.5rem 0.25rem 1.5rem` (24px with 4px tail bottom-right), received `1.5rem 1.5rem 1.5rem 0.25rem` (4px tail bottom-left). Sent uses emerald gradient, received uses frosted glass.
+
+**Touch targets:** 56px minimum height on interactive elements (exceeds WCAG 44px). All motion respects `prefers-reduced-motion`. Mobile-first: 320px minimum width.
+
+**SessionStorage keys** (5 items, cleared on logout/panic/room-expiry):
+- `stelegano_phone`, `stelegano_room_id`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`

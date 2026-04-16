@@ -65,7 +65,7 @@ defmodule Stelgano.Rooms do
   def join_room(room_hash, access_hash)
       when is_binary(room_hash) and is_binary(access_hash) do
     case Repo.get_by(Room, room_hash: room_hash, is_active: true) do
-      nil       -> {:error, :not_found}
+      nil -> {:error, :not_found}
       %Room{} = room -> handle_access(room, access_hash)
     end
   end
@@ -156,7 +156,7 @@ defmodule Stelgano.Rooms do
   def expire_room(room_id) when is_binary(room_id) do
     Repo.transaction(fn ->
       room = Repo.get!(Room, room_id)
-      now  = DateTime.truncate(DateTime.utc_now(), :second)
+      now = DateTime.truncate(DateTime.utc_now(), :second)
 
       Repo.update_all(
         from(m in Message, where: m.room_id == ^room_id and is_nil(m.deleted_at)),
@@ -218,9 +218,9 @@ defmodule Stelgano.Rooms do
       |> Repo.insert!()
     end)
     |> case do
-      {:ok, message}              -> {:ok, message}
-      {:error, :sender_blocked}   -> {:error, :sender_blocked}
-      {:error, changeset}         -> {:error, changeset}
+      {:ok, message} -> {:ok, message}
+      {:error, :sender_blocked} -> {:error, :sender_blocked}
+      {:error, changeset} -> {:error, changeset}
     end
   end
 
@@ -334,15 +334,13 @@ defmodule Stelgano.Rooms do
           rooms_last_90_days: non_neg_integer()
         }
   def aggregate_metrics do
-    now            = DateTime.utc_now()
-    day_ago        = DateTime.add(now, -86_400, :second)
+    now = DateTime.utc_now()
+    day_ago = DateTime.add(now, -86_400, :second)
     ninety_days_ago = DateTime.add(now, -90 * 86_400, :second)
 
     %{
-      active_rooms:
-        Repo.aggregate(from(r in Room, where: r.is_active == true), :count),
-      rooms_today:
-        Repo.aggregate(from(r in Room, where: r.inserted_at >= ^day_ago), :count),
+      active_rooms: Repo.aggregate(from(r in Room, where: r.is_active == true), :count),
+      rooms_today: Repo.aggregate(from(r in Room, where: r.inserted_at >= ^day_ago), :count),
       messages_today:
         Repo.aggregate(from(m in Message, where: m.inserted_at >= ^day_ago), :count),
       rooms_last_90_days:

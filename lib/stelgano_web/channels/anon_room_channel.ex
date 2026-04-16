@@ -56,11 +56,11 @@ defmodule StelganoWeb.AnonRoomChannel do
   @impl true
   def join("anon_room:" <> room_hash, payload, socket) do
     access_hash = Map.get(payload, "access_hash", "")
-    raw_sender  = Map.get(payload, "sender_hash", "")
+    raw_sender = Map.get(payload, "sender_hash", "")
 
-    with :ok               <- validate_hex64(room_hash, :invalid_room),
-         {:ok, room}       <- Rooms.join_room(room_hash, access_hash),
-         :ok               <- validate_hex64(raw_sender, :invalid_sender) do
+    with :ok <- validate_hex64(room_hash, :invalid_room),
+         {:ok, room} <- Rooms.join_room(room_hash, access_hash),
+         :ok <- validate_hex64(raw_sender, :invalid_sender) do
       socket =
         socket
         |> assign(:room_id, room.id)
@@ -75,10 +75,17 @@ defmodule StelganoWeb.AnonRoomChannel do
 
       {:ok, reply, socket}
     else
-      {:error, :invalid_room}   -> {:error, %{reason: "invalid_room"}}
-      {:error, :invalid_sender} -> {:error, %{reason: "invalid_sender"}}
-      {:error, :not_found}      -> {:error, %{reason: "not_found"}}
-      {:error, :locked, _}      -> {:error, %{reason: "locked"}}
+      {:error, :invalid_room} ->
+        {:error, %{reason: "invalid_room"}}
+
+      {:error, :invalid_sender} ->
+        {:error, %{reason: "invalid_sender"}}
+
+      {:error, :not_found} ->
+        {:error, %{reason: "not_found"}}
+
+      {:error, :locked, _} ->
+        {:error, %{reason: "locked"}}
 
       {:error, :unauthorized, remaining} ->
         {:error, %{reason: "unauthorized", attempts_remaining: remaining}}
@@ -94,9 +101,9 @@ defmodule StelganoWeb.AnonRoomChannel do
   @impl true
   def handle_in("send_message", %{"ciphertext" => ct_b64, "iv" => iv_b64}, socket) do
     with {:ok, ciphertext} <- decode_base64(ct_b64),
-         {:ok, iv}         <- decode_base64(iv_b64),
-         :ok               <- check_size(ciphertext),
-         {:ok, message}    <-
+         {:ok, iv} <- decode_base64(iv_b64),
+         :ok <- check_size(ciphertext),
+         {:ok, message} <-
            Rooms.send_message(
              socket.assigns.room_id,
              socket.assigns.sender_hash,
@@ -110,10 +117,10 @@ defmodule StelganoWeb.AnonRoomChannel do
       broadcast_from!(socket, "new_message", payload)
       {:reply, {:ok, %{message_id: message.id}}, socket}
     else
-      {:error, :sender_blocked}  -> {:reply, {:error, %{reason: "not_your_turn"}}, socket}
-      {:error, :too_large}       -> {:reply, {:error, %{reason: "message_too_large"}}, socket}
-      {:error, :bad_base64}      -> {:reply, {:error, %{reason: "invalid_encoding"}}, socket}
-      {:error, _}                -> {:reply, {:error, %{reason: "send_failed"}}, socket}
+      {:error, :sender_blocked} -> {:reply, {:error, %{reason: "not_your_turn"}}, socket}
+      {:error, :too_large} -> {:reply, {:error, %{reason: "message_too_large"}}, socket}
+      {:error, :bad_base64} -> {:reply, {:error, %{reason: "invalid_encoding"}}, socket}
+      {:error, _} -> {:reply, {:error, %{reason: "send_failed"}}, socket}
     end
   end
 
@@ -145,8 +152,8 @@ defmodule StelganoWeb.AnonRoomChannel do
         socket
       ) do
     with {:ok, ciphertext} <- decode_base64(ct_b64),
-         {:ok, iv}         <- decode_base64(iv_b64),
-         {:ok, _message}   <-
+         {:ok, iv} <- decode_base64(iv_b64),
+         {:ok, _message} <-
            Rooms.edit_message(
              message_id,
              socket.assigns.room_id,
@@ -162,10 +169,10 @@ defmodule StelganoWeb.AnonRoomChannel do
 
       {:reply, {:ok, %{}}, socket}
     else
-      {:error, :not_found}    -> {:reply, {:error, %{reason: "not_found"}}, socket}
+      {:error, :not_found} -> {:reply, {:error, %{reason: "not_found"}}, socket}
       {:error, :not_editable} -> {:reply, {:error, %{reason: "not_editable"}}, socket}
-      {:error, :bad_base64}   -> {:reply, {:error, %{reason: "invalid_encoding"}}, socket}
-      {:error, _}             -> {:reply, {:error, %{reason: "edit_failed"}}, socket}
+      {:error, :bad_base64} -> {:reply, {:error, %{reason: "invalid_encoding"}}, socket}
+      {:error, _} -> {:reply, {:error, %{reason: "edit_failed"}}, socket}
     end
   end
 
@@ -180,8 +187,11 @@ defmodule StelganoWeb.AnonRoomChannel do
         broadcast!(socket, "message_deleted", %{message_id: message_id})
         {:reply, {:ok, %{}}, socket}
 
-      {:error, :not_found}     -> {:reply, {:error, %{reason: "not_found"}}, socket}
-      {:error, :not_deletable} -> {:reply, {:error, %{reason: "not_deletable"}}, socket}
+      {:error, :not_found} ->
+        {:reply, {:error, %{reason: "not_found"}}, socket}
+
+      {:error, :not_deletable} ->
+        {:reply, {:error, %{reason: "not_deletable"}}, socket}
     end
   end
 
@@ -207,7 +217,10 @@ defmodule StelganoWeb.AnonRoomChannel do
         {:reply, {:ok, %{}}, socket}
 
       {:error, reason} ->
-        Logger.warning("expire_room failed for room #{socket.assigns.room_id}: #{inspect(reason)}")
+        Logger.warning(
+          "expire_room failed for room #{socket.assigns.room_id}: #{inspect(reason)}"
+        )
+
         {:reply, {:error, %{reason: "expire_failed"}}, socket}
     end
   end
@@ -246,7 +259,7 @@ defmodule StelganoWeb.AnonRoomChannel do
   defp decode_base64(b64) when is_binary(b64) do
     case Base.decode64(b64) do
       {:ok, binary} -> {:ok, binary}
-      :error        -> {:error, :bad_base64}
+      :error -> {:error, :bad_base64}
     end
   end
 
@@ -265,11 +278,11 @@ defmodule StelganoWeb.AnonRoomChannel do
   @spec message_payload(Rooms.Message.t()) :: map()
   defp message_payload(message) do
     %{
-      id:          message.id,
+      id: message.id,
       sender_hash: message.sender_hash,
-      ciphertext:  Base.encode64(message.ciphertext),
-      iv:          Base.encode64(message.iv),
-      read_at:     message.read_at,
+      ciphertext: Base.encode64(message.ciphertext),
+      iv: Base.encode64(message.iv),
+      read_at: message.read_at,
       inserted_at: message.inserted_at
     }
   end

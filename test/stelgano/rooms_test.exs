@@ -212,7 +212,8 @@ defmodule Stelgano.RoomsTest do
       live_count =
         Repo.aggregate(
           from(m in Message,
-            where: m.room_id == ^room.id and is_nil(m.deleted_at)),
+            where: m.room_id == ^room.id and is_nil(m.deleted_at)
+          ),
           :count
         )
 
@@ -303,7 +304,9 @@ defmodule Stelgano.RoomsTest do
 
     test "returns :not_found for wrong sender", %{room: room, msg: msg} do
       wrong_sh = hex64(111)
-      assert {:error, :not_found} = Rooms.edit_message(msg.id, room.id, wrong_sh, ciphertext(), iv())
+
+      assert {:error, :not_found} =
+               Rooms.edit_message(msg.id, room.id, wrong_sh, ciphertext(), iv())
     end
   end
 

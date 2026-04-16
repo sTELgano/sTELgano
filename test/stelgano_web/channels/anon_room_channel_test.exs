@@ -45,6 +45,7 @@ defmodule StelganoWeb.AnonRoomChannelTest do
   describe "join" do
     test "creates room on first join and returns room_id" do
       rh = hex64(10)
+
       {:ok, reply, _socket} =
         AnonSocket
         |> socket("anon_socket", %{})
@@ -91,6 +92,7 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
     test "rejects join with invalid sender_hash" do
       rh = hex64(30)
+
       assert {:error, %{reason: "invalid_sender"}} =
                AnonSocket
                |> socket("anon_socket", %{})
@@ -211,11 +213,13 @@ defmodule StelganoWeb.AnonRoomChannelTest do
       ref1 = push(socket, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
       assert_reply ref1, :ok, %{message_id: msg_id}
 
-      ref2 = push(socket, "edit_message", %{
-        "message_id" => msg_id,
-        "ciphertext" => valid_ct(),
-        "iv" => valid_iv()
-      })
+      ref2 =
+        push(socket, "edit_message", %{
+          "message_id" => msg_id,
+          "ciphertext" => valid_ct(),
+          "iv" => valid_iv()
+        })
+
       assert_reply ref2, :ok, _
       assert_broadcast "message_edited", %{message_id: ^msg_id}
     end
@@ -228,11 +232,13 @@ defmodule StelganoWeb.AnonRoomChannelTest do
       ref1 = push(socket1, "send_message", %{"ciphertext" => valid_ct(), "iv" => valid_iv()})
       assert_reply ref1, :ok, %{message_id: msg_id}
 
-      ref2 = push(socket2, "edit_message", %{
-        "message_id" => msg_id,
-        "ciphertext" => valid_ct(),
-        "iv" => valid_iv()
-      })
+      ref2 =
+        push(socket2, "edit_message", %{
+          "message_id" => msg_id,
+          "ciphertext" => valid_ct(),
+          "iv" => valid_iv()
+        })
+
       assert_reply ref2, :error, %{reason: "not_found"}
     end
   end

@@ -14,9 +14,9 @@ Two people share a phone number saved in their contacts. Each picks their own PI
 
 ## How it works
 
-1. **Generate a steg number** — a random international phone number. Save it in the other person's contacts alongside their real number. It looks like every other number.
+1. **Generate a steg number** — pick a country, generate a random international phone number. The number is copied to your clipboard. Save it in the other person's contacts alongside their real number. It looks like every other number.
 2. **Choose your own PIN** — never shared with anyone. The PIN never leaves your device.
-3. **Open the channel** — enter the steg number and your PIN. Your browser derives all keys locally via the Web Crypto API. The server sees only hashes and ciphertext.
+3. **Open the channel** — click "Open channel" (or enter the steg number manually on a return visit) and enter your PIN. Your browser derives all keys locally via the Web Crypto API. The server sees only hashes and ciphertext.
 
 ### The N=1 invariant
 

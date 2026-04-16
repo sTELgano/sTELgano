@@ -4,8 +4,8 @@
   "description": "Private messaging hidden in the contact layer",
   "start_url": "/chat",
   "display": "standalone",
-  "background_color": "#FAFAF9",
-  "theme_color": "#2D6A4F",
+  "background_color": "#030712",
+  "theme_color": "#10B981",
   "orientation": "portrait",
   "icons": [
     {

@@ -3,321 +3,534 @@
 
 defmodule StelganoWeb.ChatLive do
   @moduledoc """
-  LiveView for the chat entry screen and authenticated chat interface.
+  LiveView for the anonymous chat interface.
+
+  ## State machine
+
+  The LiveView uses a single `@state` atom to track the current screen:
+
+    :entry → :deriving → :connecting → :chat → :locked → :expired
 
   ## Lifecycle
 
   1. User lands on `/chat` — sees the entry screen (two masked fields).
-  2. On submit, the browser-side JS (`assets/js/hooks/chat.js`) derives
-     `room_hash` and `access_hash` via the Web Crypto API and joins the
-     Phoenix Channel directly.
-  3. All crypto (PBKDF2, AES-GCM) runs in the browser; the LiveView
-     serves only the shell and session-state coordination.
-  4. The LiveView tracks whether the user has joined (`@joined`), whether
-     a message is waiting (`@waiting`), the current lock state, and the
-     inactivity timer preference.
+  2. On submit, the `AnonChat` JS hook derives hashes via Web Crypto API.
+  3. LiveView validates access via `Stelgano.Rooms.join_room/2`.
+  4. JS hook joins the Phoenix Channel and derives the encryption key.
+  5. All message crypto (AES-256-GCM) runs client-side; server sees only ciphertext.
 
-  ## Session storage (browser-side)
+  ## N=1 invariant
 
-  The following values live in `sessionStorage` (cleared on tab close):
-  - `phone` — normalised phone number
-  - `room_id` — server-generated UUID returned on channel join
-  - `sender_hash` — SHA-256(phone + room_hash + SENDER_SALT)
-  - `enc_key` — CryptoKey object (JS memory only; never serialised)
-
-  The LiveView does **not** hold any of these values server-side.
+  At most one message exists per room at any time. When a reply is sent,
+  the previous message is atomically deleted. The `can_type?/1` helper
+  enforces turn-based input: you can only type when the room is empty
+  or when the last message is from the other party.
 
   ## Passcode Test compliance
 
   The entry screen shows nothing that would reveal a conversation exists:
-  - No recent conversation history
-  - No contact names or identifiers
-  - No "conversation with X" or timestamp information
-  - Neutral error message on failure ("Could not open this room")
+  a blank screen with two fields. Nothing else.
   """
 
   use StelganoWeb, :live_view
 
+  @max_chars 4_000
+  @counter_warn_at 3_500
+  @counter_danger_at 3_900
+
+  # Expose constants as assigns so HEEx templates can reference them via @max_chars etc.
+  defp assign_constants(socket) do
+    socket
+    |> assign(:max_chars, @max_chars)
+    |> assign(:counter_warn_at, @counter_warn_at)
+    |> assign(:counter_danger_at, @counter_danger_at)
+  end
+
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    prefilled_phone = Map.get(params, "phone", "")
+
     socket =
       socket
       |> assign(:page_title, "sTELgano")
-      |> assign(:joined, false)
-      |> assign(:locked, false)
-      |> assign(:room_expired, false)
-      |> assign(:entry_error, nil)
+      |> assign(:state, :entry)
+      |> assign(:phone_visible, false)
+      |> assign(:phone_locked, prefilled_phone != "")
+      |> assign(:error, nil)
       |> assign(:attempts_remaining, nil)
-      |> assign(:lock_attempts, 0)
-      |> assign(:inactivity_timeout, "5min")
-      |> assign(:show_number, false)
-      |> assign(:deriving, false)
+      |> assign(:room_id, nil)
+      |> assign(:room_hash, nil)
+      |> assign(:sender_hash, nil)
+      |> assign(:message, nil)
+      |> assign(:char_count, 0)
+      |> assign(:typing_visible, false)
+      |> assign(:lock_pin, "")
+      |> assign(:lock_attempts, 5)
+      |> assign(:lock_error, nil)
+      |> assign(:confirm_expire, false)
+      |> assign(:ttl_expires_at, nil)
+      |> assign(:_pending_phone, prefilled_phone)
+      |> assign(:_pending_pin, "")
+      |> assign_constants()
 
     {:ok, socket}
   end
 
-  @impl true
-  def handle_event("toggle_number_visibility", _params, socket) do
-    {:noreply, assign(socket, :show_number, !socket.assigns.show_number)}
-  end
+  # ---------------------------------------------------------------------------
+  # Events
+  # ---------------------------------------------------------------------------
 
   @impl true
-  def handle_event("set_deriving", %{"value" => value}, socket) do
-    {:noreply, assign(socket, :deriving, value == "true")}
-  end
-
-  @impl true
-  def handle_event("channel_joined", %{"room_id" => _room_id}, socket) do
+  def handle_event("entry_submit", %{"phone" => phone, "pin" => pin}, socket) do
     socket =
       socket
-      |> assign(:joined, true)
-      |> assign(:entry_error, nil)
-      |> assign(:attempts_remaining, nil)
+      |> assign(:state, :deriving)
+      |> assign(:_pending_phone, phone)
+      |> assign(:_pending_pin, pin)
+
+    {:noreply, push_event(socket, "channel_join", %{action: "join", phone: phone, pin: pin})}
+  end
+
+  @impl true
+  def handle_event("entry_change", %{"phone" => phone, "pin" => pin}, socket) do
+    {:noreply, socket |> assign(:_pending_phone, phone) |> assign(:_pending_pin, pin)}
+  end
+
+  @impl true
+  def handle_event("toggle_phone_visibility", _params, socket) do
+    {:noreply, assign(socket, :phone_visible, !socket.assigns.phone_visible)}
+  end
+
+  @impl true
+  def handle_event("channel_authenticate", params, socket) do
+    %{"room_hash" => room_hash, "access_hash" => access_hash, "sender_hash" => sender_hash} =
+      params
+
+    case Stelgano.Rooms.join_room(room_hash, access_hash) do
+      {:ok, room} ->
+        socket =
+          socket
+          |> assign(:state, :connecting)
+          |> assign(:room_id, room.id)
+          |> assign(:room_hash, room_hash)
+          |> assign(:sender_hash, sender_hash)
+          |> assign(:error, nil)
+          |> assign(:attempts_remaining, nil)
+
+        {:noreply,
+         push_event(socket, "channel_join_now", %{
+           room_id: room.id,
+           sender_hash: sender_hash,
+           room_hash: room_hash,
+           phone: socket.assigns._pending_phone
+         })}
+
+      {:error, :locked, remaining} ->
+        socket =
+          socket
+          |> assign(:state, :entry)
+          |> assign(:error, "Too many failed attempts. Try again in 30 minutes.")
+          |> assign(:attempts_remaining, remaining)
+
+        {:noreply, socket}
+
+      {:error, :unauthorized, remaining} ->
+        socket =
+          socket
+          |> assign(:state, :entry)
+          |> assign(:error, "Could not open this room.")
+          |> assign(:attempts_remaining, remaining)
+
+        {:noreply, socket}
+
+      {:error, _} ->
+        socket =
+          socket
+          |> assign(:state, :entry)
+          |> assign(:error, "Could not open this room.")
+
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("channel_join_error", _params, socket) do
+    socket =
+      socket
+      |> assign(:state, :entry)
+      |> assign(:error, "Could not connect. Please try again.")
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("channel_error", %{"reason" => reason} = payload, socket) do
-    {error_msg, remaining} =
-      case reason do
-        "locked" ->
-          {"Too many failed attempts. Try again in 30 minutes.", nil}
+  def handle_event("key_derivation_start", _params, socket) do
+    {:noreply, assign(socket, :state, :connecting)}
+  end
 
-        "unauthorized" ->
-          remaining = Map.get(payload, "attempts_remaining", nil)
-          {"Could not open this room.", remaining}
+  @impl true
+  def handle_event("key_derivation_complete", _params, socket) do
+    {:noreply, socket}
+  end
 
-        _ ->
-          {"Could not open this room.", nil}
-      end
-
+  @impl true
+  def handle_event("key_derivation_error", _params, socket) do
     socket =
       socket
-      |> assign(:entry_error, error_msg)
-      |> assign(:attempts_remaining, remaining)
-      |> assign(:deriving, false)
+      |> assign(:state, :entry)
+      |> assign(:error, "Key derivation failed. Please try again.")
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("lock_session", _params, socket) do
-    {:noreply, assign(socket, :locked, true)}
-  end
+  def handle_event("join_with_message", params, socket) do
+    msg = %{
+      id: params["id"],
+      plaintext: params["plaintext"],
+      sender_hash: params["sender_hash"],
+      is_mine: params["is_mine"],
+      read_at: params["read_at"],
+      inserted_at: params["inserted_at"],
+      edited: false
+    }
 
-  @impl true
-  def handle_event("unlock_attempt", %{"correct" => "true"}, socket) do
     socket =
       socket
-      |> assign(:locked, false)
-      |> assign(:lock_attempts, 0)
+      |> assign(:state, :chat)
+      |> assign(:message, msg)
+      |> assign(:ttl_expires_at, params["ttl_expires_at"])
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("unlock_attempt", %{"correct" => "false"}, socket) do
-    new_attempts = socket.assigns.lock_attempts + 1
-
+  def handle_event("join_empty", params, socket) do
     socket =
-      if new_attempts >= 5 do
-        # Force full logout after 5 failed lock-screen attempts
+      socket
+      |> assign(:state, :chat)
+      |> assign(:message, nil)
+      |> assign(:ttl_expires_at, params["ttl_expires_at"])
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("message_received", params, socket) do
+    msg = %{
+      id: params["id"],
+      plaintext: params["plaintext"],
+      sender_hash: params["sender_hash"],
+      is_mine: params["is_mine"],
+      inserted_at: params["inserted_at"],
+      read_at: nil,
+      edited: false
+    }
+
+    {:noreply, socket |> assign(:message, msg) |> assign(:typing_visible, false)}
+  end
+
+  @impl true
+  def handle_event("message_read_confirmed", %{"message_id" => _mid}, socket) do
+    msg = socket.assigns.message
+
+    if msg do
+      {:noreply,
+       assign(socket, :message, %{msg | read_at: DateTime.utc_now() |> DateTime.to_iso8601()})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event(
+        "message_edit_received",
+        %{"message_id" => _mid, "plaintext" => plaintext},
         socket
-        |> assign(:joined, false)
-        |> assign(:locked, false)
-        |> assign(:lock_attempts, 0)
-        |> assign(:entry_error, "Session cleared after too many failed unlock attempts.")
-      else
-        assign(socket, :lock_attempts, new_attempts)
-      end
+      ) do
+    msg = socket.assigns.message
 
-    {:noreply, socket}
+    if msg do
+      {:noreply, assign(socket, :message, %{msg | plaintext: plaintext, edited: true})}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
-  def handle_event("leave_session", _params, socket) do
-    socket =
-      socket
-      |> assign(:joined, false)
-      |> assign(:locked, false)
-      |> assign(:lock_attempts, 0)
-      |> assign(:room_expired, false)
-
-    {:noreply, socket}
+  def handle_event("message_delete_received", _params, socket) do
+    {:noreply, assign(socket, :message, nil)}
   end
 
   @impl true
-  def handle_event("room_expired", _params, socket) do
-    {:noreply, assign(socket, :room_expired, true)}
+  def handle_event("edit_success", %{"message_id" => _mid}, socket) do
+    msg = socket.assigns.message
+
+    if msg,
+      do: {:noreply, assign(socket, :message, %{msg | edited: true})},
+      else: {:noreply, socket}
   end
 
   @impl true
-  def handle_event("set_inactivity_timeout", %{"value" => value}, socket) do
-    {:noreply, assign(socket, :inactivity_timeout, value)}
+  def handle_event("typing_indicator", _params, socket) do
+    Process.send_after(self(), :clear_typing, 3_000)
+    {:noreply, assign(socket, :typing_visible, true)}
   end
+
+  @impl true
+  def handle_event("room_expired_received", _params, socket) do
+    {:noreply, socket |> assign(:state, :expired) |> assign(:message, nil)}
+  end
+
+  # No-ops for JS-handled events
+  @impl true
+  def handle_event("send_error", _p, socket), do: {:noreply, socket}
+  @impl true
+  def handle_event("edit_error", _p, socket), do: {:noreply, socket}
+  @impl true
+  def handle_event("delete_error", _p, socket), do: {:noreply, socket}
+  @impl true
+  def handle_event("decrypt_error", _p, socket), do: {:noreply, socket}
+  @impl true
+  def handle_event("read_receipt_js", _p, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("send_message", _params, socket) do
+    {:noreply, push_event(socket, "send_encrypted", %{})}
+  end
+
+  @impl true
+  def handle_event("input_change", %{"value" => value}, socket) do
+    {:noreply, assign(socket, :char_count, String.length(value || ""))}
+  end
+
+  @impl true
+  def handle_event("lock_chat", _params, socket) do
+    {:noreply, assign(socket, :state, :locked)}
+  end
+
+  @impl true
+  def handle_event("unlock_chat", %{"pin" => pin}, socket) do
+    {:noreply,
+     push_event(socket, "rederive_key", %{
+       room_id: socket.assigns.room_id,
+       pin: pin
+     })}
+  end
+
+  @impl true
+  def handle_event("rederive_success", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:state, :connecting)
+     |> push_event("channel_join_now", %{
+       room_id: socket.assigns.room_id,
+       sender_hash: socket.assigns.sender_hash,
+       room_hash: socket.assigns.room_hash,
+       phone: socket.assigns._pending_phone
+     })}
+  end
+
+  @impl true
+  def handle_event("rederive_failed", _params, socket) do
+    remaining = socket.assigns.lock_attempts - 1
+
+    if remaining <= 0 do
+      {:noreply,
+       socket
+       |> assign(:state, :entry)
+       |> assign(:message, nil)
+       |> assign(:lock_attempts, 5)
+       |> assign(:lock_error, nil)
+       |> assign(:error, "Session cleared after too many failed attempts.")
+       |> push_event("disconnect_channel", %{})}
+    else
+      {:noreply,
+       socket
+       |> assign(:lock_attempts, remaining)
+       |> assign(
+         :lock_error,
+         "Wrong PIN. #{remaining} #{if remaining == 1, do: "attempt", else: "attempts"} left."
+       )}
+    end
+  end
+
+  @impl true
+  def handle_event("leave_chat", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:state, :entry)
+     |> assign(:message, nil)
+     |> assign(:room_id, nil)
+     |> assign(:room_hash, nil)
+     |> assign(:sender_hash, nil)
+     |> assign(:phone_locked, false)
+     |> assign(:_pending_phone, "")
+     |> assign(:lock_attempts, 5)
+     |> assign(:lock_error, nil)
+     |> push_event("disconnect_channel", %{})}
+  end
+
+  @impl true
+  def handle_event("clear_session", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:state, :entry)
+     |> assign(:message, nil)
+     |> assign(:room_id, nil)
+     |> assign(:phone_locked, false)
+     |> assign(:_pending_phone, "")
+     |> assign(:lock_attempts, 5)
+     |> push_event("disconnect_channel", %{})}
+  end
+
+  @impl true
+  def handle_event("confirm_expire", _params, socket) do
+    {:noreply, assign(socket, :confirm_expire, true)}
+  end
+
+  @impl true
+  def handle_event("cancel_expire", _params, socket) do
+    {:noreply, assign(socket, :confirm_expire, false)}
+  end
+
+  @impl true
+  def handle_event("expire_room", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:confirm_expire, false)
+     |> push_event("expire_room_js", %{})}
+  end
+
+  @impl true
+  def handle_event("back_to_entry", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:state, :entry)
+     |> assign(:message, nil)
+     |> assign(:error, nil)
+     |> assign(:room_id, nil)
+     |> assign(:phone_locked, false)
+     |> assign(:_pending_phone, "")}
+  end
+
+  # ---------------------------------------------------------------------------
+  # Info handlers
+  # ---------------------------------------------------------------------------
+
+  @impl true
+  def handle_info(:clear_typing, socket) do
+    {:noreply, assign(socket, :typing_visible, false)}
+  end
+
+  # ---------------------------------------------------------------------------
+  # Render — delegates to state-specific renderers
+  # ---------------------------------------------------------------------------
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <div class="min-h-screen flex flex-col" id="chat-root" phx-hook="ChatRoot">
-        <%= if @joined do %>
-          <%= if @locked do %>
-            <.lock_screen lock_attempts={@lock_attempts} />
-          <% else %>
-            <%= if @room_expired do %>
-              <.room_expired_screen />
-            <% else %>
-              <.chat_screen inactivity_timeout={@inactivity_timeout} />
-            <% end %>
-          <% end %>
-        <% else %>
-          <.entry_screen
-            show_number={@show_number}
-            deriving={@deriving}
-            entry_error={@entry_error}
-            attempts_remaining={@attempts_remaining}
-          />
-        <% end %>
-      </div>
-    </Layouts.app>
+    <div id="chat-root" phx-hook="AnonChat">
+      {render_state(assigns)}
+    </div>
     """
   end
 
+  defp render_state(%{state: :entry} = assigns), do: render_entry(assigns)
+  defp render_state(%{state: :deriving} = assigns), do: render_deriving(assigns)
+  defp render_state(%{state: :connecting} = assigns), do: render_connecting(assigns)
+  defp render_state(%{state: :chat} = assigns), do: render_chat(assigns)
+  defp render_state(%{state: :locked} = assigns), do: render_locked(assigns)
+  defp render_state(%{state: :expired} = assigns), do: render_expired(assigns)
+
   # ---------------------------------------------------------------------------
-  # Entry screen component
+  # :entry
   # ---------------------------------------------------------------------------
 
-  attr :show_number, :boolean, required: true
-  attr :deriving, :boolean, required: true
-  attr :entry_error, :string, default: nil
-  attr :attempts_remaining, :integer, default: nil
-
-  defp entry_screen(assigns) do
+  defp render_entry(assigns) do
     ~H"""
-    <div
-      id="entry-screen"
-      class="flex flex-col items-center justify-center min-h-screen px-4 py-12"
-    >
-      <%!-- Wordmark --%>
-      <div class="mb-10 select-none">
-        <span class="text-4xl font-light tracking-tight" style="color: var(--text-secondary)">
-          s
-        </span><span
-          class="text-4xl font-semibold tracking-widest"
-          style="color: var(--accent); letter-spacing: 0.04em"
-        >
-          TEL
-        </span><span class="text-4xl font-light tracking-tight" style="color: var(--text-secondary)">
-          gano
-        </span>
-      </div>
-
-      <%!-- Entry form — all crypto happens in the ChatEntry JS hook --%>
-      <div
-        id="entry-form-wrapper"
-        phx-hook="ChatEntry"
-        class="w-full max-w-sm space-y-4"
-      >
-        <%!-- Phone / steg number field --%>
-        <div class="relative">
-          <input
-            id="steg-number-input"
-            name="steg_number"
-            type={if @show_number, do: "text", else: "password"}
-            inputmode="tel"
-            autocomplete="off"
-            autocorrect="off"
-            spellcheck="false"
-            placeholder="Steg number"
-            class="w-full px-4 py-3 rounded-lg text-base transition-colors duration-150
-                   focus:outline-none focus:ring-2"
-            style="background: var(--bg-raised); border: 1px solid var(--border);
-                   color: var(--text-primary);
-                   --tw-ring-color: var(--accent);"
-          />
-          <button
-            type="button"
-            phx-click="toggle_number_visibility"
-            class="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded
-                   transition-opacity duration-150 hover:opacity-70"
-            style="color: var(--text-muted);"
-            aria-label={if @show_number, do: "Hide number", else: "Show number"}
-          >
-            <%= if @show_number do %>
-              <.icon name="hero-eye-slash" class="w-5 h-5" />
-            <% else %>
-              <.icon name="hero-eye" class="w-5 h-5" />
-            <% end %>
-          </button>
+    <div class="entry-screen">
+      <div class="entry-card">
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+          <a href="/" class="wordmark" style="font-size: 1.4rem;">
+            <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
+          </a>
         </div>
 
-        <%!-- PIN field --%>
-        <div>
-          <input
-            id="pin-input"
-            name="pin"
-            type="password"
-            inputmode="numeric"
-            maxlength="12"
-            autocomplete="off"
-            placeholder="PIN"
-            class="w-full px-4 py-3 rounded-lg text-base transition-colors duration-150
-                   focus:outline-none focus:ring-2"
-            style="background: var(--bg-raised); border: 1px solid var(--border);
-                   color: var(--text-primary);
-                   --tw-ring-color: var(--accent);"
-          />
-        </div>
-
-        <%!-- Error message --%>
-        <%= if @entry_error do %>
-          <div
-            id="entry-error"
-            class="text-sm rounded-lg px-4 py-3"
-            style="background: color-mix(in srgb, var(--danger) 10%, transparent);
-                   color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);"
-          >
-            {@entry_error}
+        <%= if @error do %>
+          <div class="entry-error">
+            {@error}
             <%= if @attempts_remaining do %>
-              <span class="block text-xs mt-1 opacity-75">
+              <span style="display: block; font-size: 0.75rem; margin-top: 0.25rem; opacity: 0.75;">
                 {@attempts_remaining} {if @attempts_remaining == 1, do: "attempt", else: "attempts"} remaining
               </span>
             <% end %>
           </div>
         <% end %>
 
-        <%!-- Submit button --%>
-        <button
-          id="entry-submit"
-          type="button"
-          disabled={@deriving}
-          class={[
-            "w-full py-3 px-4 rounded-lg font-medium text-base transition-all duration-150",
-            "focus:outline-none focus:ring-2",
-            if(@deriving, do: "opacity-60 cursor-not-allowed", else: "hover:opacity-90 active:scale-95")
-          ]}
-          style="background: var(--accent); color: var(--accent-fg);
-                 --tw-ring-color: var(--accent);"
-        >
-          <%= if @deriving do %>
-            <span class="flex items-center justify-center gap-2">
-              <.icon name="hero-arrow-path" class="w-4 h-4 animate-spin" />
-              Verifying…
-            </span>
+        <form id="entry-form" phx-submit="entry_submit" phx-change="entry_change" class="stack-md">
+          <%= if @phone_locked do %>
+            <div class="phone-field-wrapper">
+              <input
+                id="entry-phone"
+                name="phone"
+                type="text"
+                class="glass-input glass-input-mono"
+                value={@_pending_phone}
+                readonly
+                style="padding-right: 3rem; opacity: 0.7; cursor: not-allowed;"
+              />
+              <span class="phone-toggle" style="opacity: 0.4;">
+                <.icon name="hero-lock-closed-micro" class="w-5 h-5" />
+              </span>
+            </div>
           <% else %>
-            Enter
+            <div class="phone-field-wrapper">
+              <input
+                id="entry-phone"
+                name="phone"
+                type={if @phone_visible, do: "text", else: "password"}
+                class="glass-input glass-input-mono"
+                placeholder="Shared phone number"
+                autocomplete="off"
+                value={@_pending_phone}
+                style="padding-right: 3rem;"
+              />
+              <button
+                type="button"
+                id="phone-toggle-btn"
+                class="phone-toggle"
+                phx-click="toggle_phone_visibility"
+                tabindex="-1"
+              >
+                <%= if @phone_visible do %>
+                  <.icon name="hero-eye-slash-micro" class="w-5 h-5" />
+                <% else %>
+                  <.icon name="hero-eye-micro" class="w-5 h-5" />
+                <% end %>
+              </button>
+            </div>
           <% end %>
-        </button>
 
-        <%!-- Navigation links --%>
-        <div class="flex justify-between text-sm pt-2" style="color: var(--text-muted);">
-          <.link navigate={~p"/steg-number"} class="hover:underline underline-offset-2">
-            Need a steg number?
-          </.link>
-          <.link navigate={~p"/security"} class="hover:underline underline-offset-2">
-            How it works
+          <input
+            id="entry-pin"
+            name="pin"
+            type="password"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            class="glass-input"
+            placeholder="Your PIN"
+            autocomplete="current-password"
+          />
+
+          <button id="entry-submit" type="submit" class="glass-button">
+            Open
+          </button>
+        </form>
+
+        <div style="text-align: center; margin-top: 1rem;">
+          <.link navigate={~p"/steg-number"} class="link-muted">
+            Generate a shared number
           </.link>
         </div>
       </div>
@@ -326,250 +539,178 @@ defmodule StelganoWeb.ChatLive do
   end
 
   # ---------------------------------------------------------------------------
-  # Chat screen component (rendered once joined)
+  # :deriving
   # ---------------------------------------------------------------------------
 
-  attr :inactivity_timeout, :string, required: true
-
-  defp chat_screen(assigns) do
+  defp render_deriving(assigns) do
     ~H"""
-    <div
-      id="chat-screen"
-      phx-hook="ChatSession"
-      data-inactivity-timeout={@inactivity_timeout}
-      class="flex flex-col h-screen"
-      style="background: var(--bg-base);"
-    >
-      <%!-- Session header --%>
-      <header
-        id="chat-header"
-        class="flex items-center justify-between px-4 py-3 border-b"
-        style="background: var(--bg-surface); border-color: var(--border);"
-      >
-        <div class="flex items-center gap-1">
-          <span class="text-lg font-light select-none" style="color: var(--text-secondary);">
-            s
-          </span><span
-            class="text-lg font-semibold"
-            style="color: var(--accent); letter-spacing: 0.04em"
-          >
-            TEL
-          </span><span class="text-lg font-light select-none" style="color: var(--text-secondary);">
-            gano
-          </span>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <%!-- Inactivity timeout selector --%>
-          <select
-            id="inactivity-timeout-select"
-            phx-change="set_inactivity_timeout"
-            name="value"
-            class="text-xs px-2 py-1 rounded border focus:outline-none"
-            style="background: var(--bg-raised); border-color: var(--border);
-                   color: var(--text-secondary);"
-            title="Auto-lock after"
-          >
-            <option value="30s">Lock: 30s</option>
-            <option value="1min">Lock: 1min</option>
-            <option value="5min" selected>Lock: 5min</option>
-            <option value="15min">Lock: 15min</option>
-            <option value="30min">Lock: 30min</option>
-            <option value="never">Lock: Never</option>
-          </select>
-
-          <%!-- Lock --%>
-          <button
-            id="lock-btn"
-            type="button"
-            phx-click="lock_session"
-            class="p-2 rounded-lg transition-opacity duration-150 hover:opacity-70"
-            style="color: var(--text-secondary);"
-            title="Lock session"
-          >
-            <.icon name="hero-lock-closed" class="w-5 h-5" />
-          </button>
-
-          <%!-- Theme toggle --%>
-          <button
-            id="theme-toggle-btn"
-            type="button"
-            phx-hook="ThemeToggle"
-            class="p-2 rounded-lg transition-opacity duration-150 hover:opacity-70"
-            style="color: var(--text-secondary);"
-            title="Toggle theme"
-          >
-            <.icon name="hero-sun" class="w-5 h-5 dark-hidden" />
-            <.icon name="hero-moon" class="w-5 h-5 light-hidden" />
-          </button>
-
-          <%!-- Expire room --%>
-          <button
-            id="expire-room-btn"
-            type="button"
-            phx-hook="ExpireRoom"
-            class="p-2 rounded-lg transition-opacity duration-150 hover:opacity-70"
-            style="color: var(--danger);"
-            title="End this conversation"
-          >
-            <.icon name="hero-trash" class="w-5 h-5" />
-          </button>
-
-          <%!-- Leave --%>
-          <button
-            id="leave-btn"
-            type="button"
-            phx-click="leave_session"
-            class="p-2 rounded-lg transition-opacity duration-150 hover:opacity-70 text-sm font-medium"
-            style="color: var(--text-secondary);"
-            title="Leave (does not expire room)"
-          >
-            Leave
-          </button>
-        </div>
-      </header>
-
-      <%!-- Message area — controlled entirely by JS hook --%>
-      <div
-        id="message-area"
-        class="flex-1 overflow-y-auto px-4 py-4 space-y-3"
-        style="background: var(--bg-base);"
-      >
-        <%!-- Empty state — shown by JS when no message exists --%>
-        <div id="empty-state" class="hidden flex flex-col items-center justify-center h-full py-16 text-center">
-          <p class="text-sm" style="color: var(--text-muted);">
-            No messages yet. Send the first one.
-          </p>
-        </div>
-
-        <%!-- Counterparty typing indicator — shown by JS --%>
-        <div id="typing-indicator" class="hidden flex items-center gap-1 px-4 py-2">
-          <span class="typing-dot" style="background: var(--text-muted);"></span>
-          <span class="typing-dot" style="background: var(--text-muted);"></span>
-          <span class="typing-dot" style="background: var(--text-muted);"></span>
-        </div>
-
-        <%!-- Messages rendered by JS into this container --%>
-        <div id="messages-container"></div>
-      </div>
-
-      <%!-- Input area — sticky at bottom --%>
-      <div
-        id="input-area"
-        class="border-t px-4 py-3"
-        style="background: var(--bg-surface); border-color: var(--border);"
-      >
-        <%!-- Waiting state — shown by JS when it's not user's turn --%>
-        <div id="waiting-state" class="hidden items-center gap-3 py-2">
-          <div class="flex gap-1">
-            <span class="waiting-dot"></span>
-            <span class="waiting-dot"></span>
-            <span class="waiting-dot"></span>
-          </div>
-          <span class="text-sm" style="color: var(--text-muted);">Waiting for reply…</span>
-        </div>
-
-        <%!-- Active input — shown by JS when it's user's turn --%>
-        <div id="active-input" class="flex items-end gap-2">
-          <textarea
-            id="message-input"
-            rows="1"
-            maxlength="4000"
-            placeholder="Write a message…"
-            class="flex-1 resize-none overflow-hidden rounded-xl px-4 py-3 text-sm
-                   transition-colors duration-150 focus:outline-none focus:ring-2"
-            style="background: var(--bg-raised); border: 1px solid var(--border);
-                   color: var(--text-primary); max-height: 140px;
-                   --tw-ring-color: var(--accent);"
-          ></textarea>
-          <button
-            id="send-btn"
-            type="button"
-            class="flex-shrink-0 p-3 rounded-xl transition-all duration-150
-                   hover:opacity-90 active:scale-95"
-            style="background: var(--accent); color: var(--accent-fg);"
-            title="Send (Enter)"
-          >
-            <.icon name="hero-paper-airplane" class="w-5 h-5" />
-          </button>
-        </div>
-
-        <%!-- Character counter — shown by JS at 3500+ chars --%>
-        <div id="char-counter" class="hidden text-xs text-right mt-1" style="color: var(--text-muted);">
-          <span id="char-count">0</span>/4000
-        </div>
-      </div>
-    </div>
-    """
-  end
-
-  # ---------------------------------------------------------------------------
-  # Lock screen component
-  # ---------------------------------------------------------------------------
-
-  attr :lock_attempts, :integer, required: true
-
-  defp lock_screen(assigns) do
-    ~H"""
-    <div
-      id="lock-screen"
-      phx-hook="LockScreen"
-      class="fixed inset-0 z-50 flex flex-col items-center justify-center px-4"
-      style="background: var(--bg-base);"
-    >
-      <%!-- Wordmark --%>
-      <div class="mb-10 select-none">
-        <span class="text-3xl font-light" style="color: var(--text-secondary)">s</span><span
-          class="text-3xl font-semibold"
-          style="color: var(--accent); letter-spacing: 0.04em"
+    <div class="entry-screen">
+      <div class="entry-card entry-card-center">
+        <a
+          href="/"
+          class="wordmark"
+          style="font-size: 1.4rem; margin-bottom: 2rem; display: inline-block;"
         >
-          TEL
-        </span><span class="text-3xl font-light" style="color: var(--text-secondary)">gano</span>
+          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
+        </a>
+        <div
+          class="dots dots-center"
+          style="display: flex; justify-content: center; margin-bottom: 1rem;"
+        >
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+        <p class="status-copy">Verifying…</p>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # :connecting
+  # ---------------------------------------------------------------------------
+
+  defp render_connecting(assigns) do
+    ~H"""
+    <div class="entry-screen">
+      <div class="entry-card entry-card-center">
+        <a
+          href="/"
+          class="wordmark"
+          style="font-size: 1.4rem; margin-bottom: 2rem; display: inline-block;"
+        >
+          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
+        </a>
+        <div
+          class="dots dots-center"
+          style="display: flex; justify-content: center; margin-bottom: 1rem;"
+        >
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+        <p class="status-copy">Deriving encryption key…</p>
+        <p class="status-copy-small">This takes a moment on first open.</p>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # :chat
+  # ---------------------------------------------------------------------------
+
+  defp render_chat(assigns) do
+    ~H"""
+    <div class="chat-layout">
+      <%!-- Header --%>
+      <div class="chat-header">
+        <a href="/" class="wordmark wordmark-small">
+          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
+        </a>
+        <div class="chat-header-actions">
+          <button class="btn-icon" phx-click="lock_chat" title="Lock">
+            <.icon name="hero-lock-closed-micro" class="w-5 h-5" />
+          </button>
+          <button
+            class="btn-icon"
+            style="color: var(--text-muted);"
+            phx-click="confirm_expire"
+            title="End conversation"
+          >
+            <.icon name="hero-trash-micro" class="w-5 h-5" />
+          </button>
+          <button class="btn-icon" phx-click="leave_chat" title="Leave">
+            <.icon name="hero-arrow-right-on-rectangle-micro" class="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
-      <div class="w-full max-w-xs space-y-4">
-        <p class="text-center text-sm" style="color: var(--text-secondary);">
-          Enter PIN to resume
-        </p>
+      <%!-- TTL bar --%>
+      <div class="ttl-bar">
+        <div class="ttl-bar-fill" id="ttl-bar-fill" style="width: 100%;"></div>
+      </div>
 
-        <input
-          id="lock-pin-input"
-          type="password"
-          inputmode="numeric"
-          maxlength="12"
-          autocomplete="off"
-          placeholder="PIN"
-          class="w-full px-4 py-3 rounded-lg text-base text-center
-                 focus:outline-none focus:ring-2 transition-colors duration-150"
-          style="background: var(--bg-raised); border: 1px solid var(--border);
-                 color: var(--text-primary); --tw-ring-color: var(--accent);"
-        />
-
-        <%= if @lock_attempts > 0 do %>
-          <p class="text-center text-xs" style="color: var(--danger);">
-            Wrong PIN. {5 - @lock_attempts} {if 5 - @lock_attempts == 1, do: "attempt", else: "attempts"} remaining.
-          </p>
+      <%!-- Message area --%>
+      <div class="chat-messages" role="log" aria-live="polite">
+        <%!-- Typing indicator --%>
+        <%= if @typing_visible do %>
+          <div class="typing-indicator">
+            <div class="dots">
+              <div class="dot"></div>
+              <div class="dot"></div>
+              <div class="dot"></div>
+            </div>
+          </div>
         <% end %>
 
-        <button
-          id="lock-unlock-btn"
-          type="button"
-          class="w-full py-3 rounded-lg font-medium text-base
-                 hover:opacity-90 active:scale-95 transition-all duration-150"
-          style="background: var(--accent); color: var(--accent-fg);"
-        >
-          Unlock
-        </button>
+        <%!-- Current message --%>
+        <%= if @message do %>
+          <.render_message_bubble msg={@message} />
+        <% end %>
+      </div>
 
-        <div class="text-center">
-          <button
-            type="button"
-            phx-click="leave_session"
-            class="text-xs hover:underline underline-offset-2 transition-opacity duration-150 hover:opacity-70"
-            style="color: var(--text-muted);"
-          >
-            Clear session
-          </button>
+      <%!-- Input area --%>
+      <%= if can_type?(assigns) do %>
+        <.render_input_area char_count={@char_count} />
+      <% else %>
+        <div class="chat-input-area">
+          <div class="waiting-state">Waiting for reply…</div>
+        </div>
+      <% end %>
+
+      <%!-- Expire confirmation modal --%>
+      <%= if @confirm_expire do %>
+        <div class="modal-backdrop">
+          <div class="modal-card">
+            <div class="modal-title">End this conversation?</div>
+            <div class="modal-body">
+              This cannot be undone. All messages will be permanently deleted.
+            </div>
+            <div class="modal-actions">
+              <button class="btn-ghost" phx-click="cancel_expire">Cancel</button>
+              <button class="btn-danger" phx-click="expire_room">End</button>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # Message bubble
+  # ---------------------------------------------------------------------------
+
+  attr :msg, :map, required: true
+
+  defp render_message_bubble(assigns) do
+    side = if assigns.msg.is_mine, do: "sent", else: "received"
+    assigns = assign(assigns, :side, side)
+
+    ~H"""
+    <div
+      id={"bubble-wrapper-#{@msg.id}"}
+      class={"bubble-wrapper #{@side}"}
+      phx-hook={unless @msg.is_mine || @msg.read_at, do: "IntersectionReader"}
+      data-message-id={@msg.id}
+    >
+      <div>
+        <div id={"bubble-#{@msg.id}"} class={"bubble #{@side}"}>
+          {@msg.plaintext}
+        </div>
+        <div class="bubble-meta">
+          <%= if @msg.edited do %>
+            <span class="bubble-edited">edited</span>
+          <% end %>
+          <%= if @msg.is_mine do %>
+            <%= if @msg.read_at do %>
+              <span class="tick-double">✓✓</span>
+            <% else %>
+              <span class="tick-single">✓</span>
+            <% end %>
+          <% end %>
         </div>
       </div>
     </div>
@@ -577,31 +718,119 @@ defmodule StelganoWeb.ChatLive do
   end
 
   # ---------------------------------------------------------------------------
-  # Room expired screen
+  # Input area
   # ---------------------------------------------------------------------------
 
-  defp room_expired_screen(assigns) do
+  attr :char_count, :integer, required: true
+
+  defp render_input_area(assigns) do
     ~H"""
-    <div class="flex flex-col items-center justify-center min-h-screen px-4 text-center">
-      <div class="mb-6">
-        <span class="text-muted-icon"><.icon name="hero-lock-closed" class="w-12 h-12 mx-auto" /></span>
+    <div class="chat-input-area">
+      <div class="chat-input-row">
+        <textarea
+          id="chat-textarea"
+          class="chat-textarea"
+          placeholder="Write a message…"
+          rows="1"
+          maxlength={@max_chars}
+          phx-hook="AutoResize"
+          phx-keyup="input_change"
+          phx-update="ignore"
+        ></textarea>
+        <button
+          id="btn-send"
+          class="btn-icon"
+          style="background: var(--color-primary); color: #fff; border-radius: 50%; width: 48px; height: 48px; min-width: 48px;"
+          phx-click="send_message"
+        >
+          <.icon name="hero-paper-airplane-micro" class="w-5 h-5" />
+        </button>
       </div>
-      <p class="text-lg font-medium mb-2" style="color: var(--text-primary);">
-        Conversation ended
-      </p>
-      <p class="text-sm mb-8" style="color: var(--text-secondary);">
-        This room has been permanently deleted.
-      </p>
-      <button
-        type="button"
-        phx-click="leave_session"
-        class="px-6 py-3 rounded-lg font-medium text-sm
-               hover:opacity-90 active:scale-95 transition-all duration-150"
-        style="background: var(--accent); color: var(--accent-fg);"
-      >
-        Start fresh
-      </button>
+      <%= if @char_count >= @counter_warn_at do %>
+        <p class={"char-counter #{if @char_count >= @counter_danger_at, do: "danger", else: "warning"}"}>
+          {@char_count}/{@max_chars}
+        </p>
+      <% end %>
     </div>
     """
   end
+
+  # ---------------------------------------------------------------------------
+  # :locked
+  # ---------------------------------------------------------------------------
+
+  defp render_locked(assigns) do
+    ~H"""
+    <div class="lock-overlay" role="dialog">
+      <div class="lock-card">
+        <div style="margin-bottom: 2rem;">
+          <a href="/" class="wordmark" style="font-size: 1.4rem;">
+            <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
+          </a>
+        </div>
+
+        <p class="lock-pin-label">Enter PIN to resume</p>
+
+        <form id="lock-form" phx-submit="unlock_chat" class="stack-md">
+          <input
+            id="lock-pin-input"
+            name="pin"
+            type="password"
+            autofocus
+            class="glass-input glass-input-mono"
+            style="text-align: center; letter-spacing: 0.2em;"
+            placeholder="****"
+          />
+          <%= if @lock_error do %>
+            <p id="lock-error" class="lock-error">{@lock_error}</p>
+          <% end %>
+          <button id="lock-submit" type="submit" class="glass-button" style="margin-top: 1rem;">
+            Resume
+          </button>
+        </form>
+
+        <button id="lock-clear" class="lock-clear" phx-click="clear_session">
+          Clear session
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # :expired
+  # ---------------------------------------------------------------------------
+
+  defp render_expired(assigns) do
+    ~H"""
+    <div class="entry-screen">
+      <div class="entry-card entry-card-center">
+        <a
+          href="/"
+          class="wordmark"
+          style="font-size: 1.4rem; margin-bottom: 1.5rem; display: inline-block;"
+        >
+          <span class="wm-s">s</span><span class="wm-tel">TEL</span><span class="wm-gano">gano</span>
+        </a>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">This conversation has ended.</p>
+        <button
+          class="glass-button"
+          phx-click="back_to_entry"
+          style="max-width: 200px; margin: 0 auto;"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # Helpers
+  # ---------------------------------------------------------------------------
+
+  defp can_type?(%{state: :chat, message: nil}), do: true
+  defp can_type?(%{state: :chat, message: %{is_mine: true}}), do: false
+  defp can_type?(%{state: :chat, message: %{is_mine: false}}), do: true
+  defp can_type?(_), do: false
 end

@@ -1,13 +1,27 @@
 <Layouts.app flash={@flash}>
   <div class="max-w-2xl mx-auto px-4 py-16">
-    <a href="/" class="text-sm hover:underline mb-8 inline-block" style="color: var(--text-muted);">← Back</a>
+    <a
+      href="/"
+      class="text-sm hover:underline mb-8 inline-block"
+      style="color: var(--text-muted);"
+    >
+      ← Back
+    </a>
 
-    <h1 class="text-3xl font-light mb-2" style="color: var(--text-primary);">Cryptographic specification</h1>
+    <h1 class="text-3xl font-light mb-2" style="color: var(--text-primary);">
+      Cryptographic specification
+    </h1>
     <p class="text-sm mb-12" style="color: var(--text-muted);">sTELgano-std-1 · April 2026</p>
 
     <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">Derivation chain</h2>
-      <pre class="rounded-xl p-4 text-xs overflow-x-auto" style="background: var(--bg-raised); color: var(--text-secondary); font-family: 'IBM Plex Mono', monospace;" phx-no-curly-interpolation>
+      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">
+        Derivation chain
+      </h2>
+      <pre
+        class="rounded-xl p-4 text-xs overflow-x-auto"
+        style="background: var(--bg-raised); color: var(--text-secondary); font-family: 'IBM Plex Mono', monospace;"
+        phx-no-curly-interpolation
+      >
 phone       = normalise(raw_input)
               strips: spaces · dashes · dots · + · parentheses
               result: digits only with country code prefix
@@ -32,18 +46,33 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
     </section>
 
     <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">Message encryption</h2>
+      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">
+        Message encryption
+      </h2>
       <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
         <li><strong style="color: var(--text-primary);">Algorithm:</strong> AES-256-GCM</li>
-        <li><strong style="color: var(--text-primary);">Key:</strong> 256-bit from PBKDF2 above</li>
-        <li><strong style="color: var(--text-primary);">IV/Nonce:</strong> 96-bit, cryptographically random per message (crypto.getRandomValues)</li>
-        <li><strong style="color: var(--text-primary);">Auth tag:</strong> 128-bit GCM default — tampered ciphertext throws before plaintext is returned</li>
-        <li><strong style="color: var(--text-primary);">Storage:</strong> server stores binary (nonce || ciphertext || auth_tag), base64 in transit</li>
+        <li>
+          <strong style="color: var(--text-primary);">Key:</strong> 256-bit from PBKDF2 above
+        </li>
+        <li>
+          <strong style="color: var(--text-primary);">IV/Nonce:</strong>
+          96-bit, cryptographically random per message (crypto.getRandomValues)
+        </li>
+        <li>
+          <strong style="color: var(--text-primary);">Auth tag:</strong>
+          128-bit GCM default — tampered ciphertext throws before plaintext is returned
+        </li>
+        <li>
+          <strong style="color: var(--text-primary);">Storage:</strong>
+          server stores binary (nonce || ciphertext || auth_tag), base64 in transit
+        </li>
       </ul>
     </section>
 
     <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">PBKDF2 iteration count</h2>
+      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">
+        PBKDF2 iteration count
+      </h2>
       <p class="text-sm" style="color: var(--text-secondary);">
         600,000 iterations is the OWASP 2023 recommendation for PBKDF2-HMAC-SHA256. The phone number (the PBKDF2 password) is typically 10–13 digits — relatively low entropy. The encryption key protects all message content — the highest-value target. 600,000 iterations on a modern mobile device takes approximately 1.5–2.5 seconds — acceptable for a one-time join operation.
       </p>
@@ -53,7 +82,9 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
       <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">Threat model</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <h3 class="text-sm font-medium mb-3" style="color: var(--accent);">Protected against</h3>
+          <h3 class="text-sm font-medium mb-3" style="color: var(--accent);">
+            Protected against
+          </h3>
           <ul class="space-y-1 text-sm" style="color: var(--text-secondary);">
             <li>Partner with device access</li>
             <li>Family members, casual snooping</li>
@@ -62,7 +93,9 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
           </ul>
         </div>
         <div>
-          <h3 class="text-sm font-medium mb-3" style="color: var(--danger);">Not protected against</h3>
+          <h3 class="text-sm font-medium mb-3" style="color: var(--danger);">
+            Not protected against
+          </h3>
           <ul class="space-y-1 text-sm" style="color: var(--text-secondary);">
             <li>Government subpoenas</li>
             <li>Nation-state surveillance</li>
@@ -74,13 +107,19 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
     </section>
 
     <section class="mb-12">
-      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">What the server stores</h2>
+      <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">
+        What the server stores
+      </h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm" style="border-collapse: collapse;">
           <thead>
             <tr style="border-bottom: 1px solid var(--border);">
-              <th class="text-left py-2 pr-4 font-medium" style="color: var(--text-primary);">Value</th>
-              <th class="text-left py-2 font-medium" style="color: var(--text-primary);">Server can reverse?</th>
+              <th class="text-left py-2 pr-4 font-medium" style="color: var(--text-primary);">
+                Value
+              </th>
+              <th class="text-left py-2 font-medium" style="color: var(--text-primary);">
+                Server can reverse?
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -93,8 +132,12 @@ sender_hash = SHA-256(phone + ":" + room_hash + ":" + SENDER_SALT)
               <td class="py-2" style="color: var(--text-muted);">No</td>
             </tr>
             <tr style="border-bottom: 1px solid var(--border);">
-              <td class="py-2 pr-4" style="color: var(--text-secondary);">Encrypted ciphertext</td>
-              <td class="py-2" style="color: var(--text-muted);">No — enc_key never reaches server</td>
+              <td class="py-2 pr-4" style="color: var(--text-secondary);">
+                Encrypted ciphertext
+              </td>
+              <td class="py-2" style="color: var(--text-muted);">
+                No — enc_key never reaches server
+              </td>
             </tr>
             <tr>
               <td class="py-2 pr-4" style="color: var(--text-secondary);">sender_hash</td>

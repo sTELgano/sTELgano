@@ -4,10 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="csrf-token" content={get_csrf_token()} />
+    <%!-- Favicons --%>
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
     <%!-- PWA manifest — enables standalone mode (hides address bar when added to home screen) --%>
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#2D6A4F" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#52B788" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#10B981" />
     <%!-- Minimal title — reveals nothing about the nature of the service in browser history --%>
     <.live_title default="sTELgano">
       {assigns[:page_title]}
@@ -19,29 +22,38 @@
          Reads only from localStorage — no server-side state. --%>
     <script>
       (() => {
+        const STORAGE_KEY = "stelgano:theme";
         const setTheme = (theme) => {
           if (theme === "system") {
-            localStorage.removeItem("phx:theme");
+            localStorage.removeItem(STORAGE_KEY);
             document.documentElement.removeAttribute("data-theme");
           } else {
-            localStorage.setItem("phx:theme", theme);
+            localStorage.setItem(STORAGE_KEY, theme);
             document.documentElement.setAttribute("data-theme", theme);
           }
         };
         if (!document.documentElement.hasAttribute("data-theme")) {
-          const stored = localStorage.getItem("phx:theme");
+          const stored = localStorage.getItem(STORAGE_KEY);
           if (stored && stored !== "system") {
             document.documentElement.setAttribute("data-theme", stored);
           }
         }
         window.addEventListener("storage", (e) => {
-          if (e.key === "phx:theme") setTheme(e.newValue || "system");
+          if (e.key === STORAGE_KEY) setTheme(e.newValue || "system");
         });
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+        window.addEventListener("phx:set-theme", (e) => {
+          if (e.detail?.theme) setTheme(e.detail.theme);
+        });
       })();
     </script>
+    <%!-- Service worker registration — serves from root for full scope --%>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      }
+    </script>
   </head>
-  <body style="background: var(--bg-base); color: var(--text-primary);">
+  <body>
     {@inner_content}
   </body>
 </html>

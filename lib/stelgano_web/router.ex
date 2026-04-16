@@ -38,6 +38,7 @@ defmodule StelganoWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {StelganoWeb.Layouts, :root}
     plug :protect_from_forgery
+
     plug :put_secure_browser_headers, %{
       "content-security-policy" =>
         "default-src 'self'; " <>
@@ -58,6 +59,7 @@ defmodule StelganoWeb.Router do
       "cross-origin-embedder-policy" => "same-origin",
       "cross-origin-resource-policy" => "same-origin"
     }
+
     plug StelganoWeb.Plugs.SecurityHeaders
   end
 
