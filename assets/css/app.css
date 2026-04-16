@@ -1,0 +1,211 @@
+/* SPDX-FileCopyrightText: 2026 sTELgano Contributors */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/*
+ * sTELgano — app.css
+ *
+ * Tailwind v4 with sTELgano design tokens (§3 of the PRD).
+ *
+ * NOTE: daisyUI is intentionally NOT imported here.
+ * All components are hand-written with Tailwind utilities and CSS custom
+ * properties. The daisyUI vendor files remain in assets/vendor/ only because
+ * they were included in the Phoenix generator scaffold.
+ *
+ * Fonts: loaded via @import from Google Fonts CDN.
+ * TODO: self-host these fonts in priv/static/fonts/ to eliminate the
+ * external request and allow a stricter Content-Security-Policy.
+ * See compliance_and_recommendations.md §9 for instructions.
+ */
+
+@import "tailwindcss" source(none);
+@source "../css";
+@source "../js";
+@source "../../lib/stelgano_web";
+
+@plugin "../vendor/heroicons";
+
+/* ---------------------------------------------------------------------------
+   Google Fonts
+   --------------------------------------------------------------------------- */
+@import url("https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400&display=swap");
+
+/* ---------------------------------------------------------------------------
+   sTELgano design tokens — light mode (default)
+   --------------------------------------------------------------------------- */
+:root {
+  /* Backgrounds */
+  --bg-base:        #FAFAF9;
+  --bg-surface:     #FFFFFF;
+  --bg-raised:      #F4F3F1;
+
+  /* Borders */
+  --border:         #E5E3DF;
+
+  /* Typography */
+  --text-primary:   #1A1A19;
+  --text-secondary: #6B6860;
+  --text-muted:     #A8A69F;
+
+  /* Accent — green (safe, verified, go) */
+  --accent:         #2D6A4F;
+  --accent-soft:    #D8F3DC;
+  --accent-fg:      #FFFFFF;
+
+  /* Chat bubbles */
+  --received:       #F4F3F1;
+  --received-fg:    #1A1A19;
+
+  /* Status colours */
+  --danger:         #C0392B;
+  --warning:        #E67E22;
+}
+
+/* ---------------------------------------------------------------------------
+   Dark mode tokens — activated by data-theme="dark" on <html>
+   --------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  --bg-base:        #0F0F0E;
+  --bg-surface:     #1A1A19;
+  --bg-raised:      #242422;
+  --border:         #2E2E2B;
+  --text-primary:   #F0EFEC;
+  --text-secondary: #8A8880;
+  --text-muted:     #555450;
+  --accent:         #52B788;
+  --accent-soft:    #1B4332;
+  --accent-fg:      #D8F3DC;
+  --received:       #2A2A28;
+  --received-fg:    #F0EFEC;
+  --danger:         #E74C3C;
+  --warning:        #F39C12;
+}
+
+/* System dark mode fallback when no data-theme is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-base:        #0F0F0E;
+    --bg-surface:     #1A1A19;
+    --bg-raised:      #242422;
+    --border:         #2E2E2B;
+    --text-primary:   #F0EFEC;
+    --text-secondary: #8A8880;
+    --text-muted:     #555450;
+    --accent:         #52B788;
+    --accent-soft:    #1B4332;
+    --accent-fg:      #D8F3DC;
+    --received:       #2A2A28;
+    --received-fg:    #F0EFEC;
+    --danger:         #E74C3C;
+    --warning:        #F39C12;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+   --------------------------------------------------------------------------- */
+html {
+  font-family: "Figtree", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100dvh;
+}
+
+/* ---------------------------------------------------------------------------
+   LiveView custom variants
+   --------------------------------------------------------------------------- */
+@custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* LiveView wrapper divs — transparent for layout */
+[data-phx-session], [data-phx-teleported-src] { display: contents }
+
+/* ---------------------------------------------------------------------------
+   Animations
+   --------------------------------------------------------------------------- */
+
+/* Typing indicator — counterparty is typing */
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: typingBounce 600ms ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 150ms; }
+.typing-dot:nth-child(3) { animation-delay: 300ms; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(-6px); }
+}
+
+/* Waiting for reply indicator */
+.waiting-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: waitingBounce 600ms ease-in-out infinite;
+}
+.waiting-dot:nth-child(2) { animation-delay: 150ms; }
+.waiting-dot:nth-child(3) { animation-delay: 300ms; }
+
+@keyframes waitingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%           { transform: translateY(-5px); opacity: 1; }
+}
+
+/* ---------------------------------------------------------------------------
+   Theme icon visibility helpers
+   --------------------------------------------------------------------------- */
+[data-theme="dark"]  .dark-hidden  { display: none; }
+[data-theme="light"] .light-hidden { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .dark-hidden { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile keyboard-safe sticky chat input
+   Uses env(safe-area-inset-bottom) for iPhone notch/home-bar support
+   --------------------------------------------------------------------------- */
+#input-area {
+  position: sticky;
+  bottom: 0;
+  /* stylelint-disable-next-line */
+  bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* ---------------------------------------------------------------------------
+   Scrollbar — minimal, matches theme
+   --------------------------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Focus ring — use accent colour consistently
+   --------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Monospace — IBM Plex Mono for hashes, protocol IDs, code
+   --------------------------------------------------------------------------- */
+code, pre, .font-mono {
+  font-family: "IBM Plex Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+/* Icon colour helpers — used instead of inline style on <.icon> which only accepts name/class */
+.text-muted-icon { color: var(--text-muted); }
+.text-accent-icon { color: var(--accent); }
+.text-danger-icon { color: var(--danger); }
+.text-secondary-icon { color: var(--text-secondary); }

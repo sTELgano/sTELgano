@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <%!-- PWA manifest — enables standalone mode (hides address bar when added to home screen) --%>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2D6A4F" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#52B788" media="(prefers-color-scheme: dark)" />
+    <%!-- Minimal title — reveals nothing about the nature of the service in browser history --%>
+    <.live_title default="sTELgano">
+      {assigns[:page_title]}
+    </.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
+    </script>
+    <%!-- Theme bootstrap: runs before paint to prevent flash of wrong theme.
+         Reads only from localStorage — no server-side state. --%>
+    <script>
+      (() => {
+        const setTheme = (theme) => {
+          if (theme === "system") {
+            localStorage.removeItem("phx:theme");
+            document.documentElement.removeAttribute("data-theme");
+          } else {
+            localStorage.setItem("phx:theme", theme);
+            document.documentElement.setAttribute("data-theme", theme);
+          }
+        };
+        if (!document.documentElement.hasAttribute("data-theme")) {
+          const stored = localStorage.getItem("phx:theme");
+          if (stored && stored !== "system") {
+            document.documentElement.setAttribute("data-theme", stored);
+          }
+        }
+        window.addEventListener("storage", (e) => {
+          if (e.key === "phx:theme") setTheme(e.newValue || "system");
+        });
+        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+      })();
+    </script>
+  </head>
+  <body style="background: var(--bg-base); color: var(--text-primary);">
+    {@inner_content}
+  </body>
+</html>

@@ -1,0 +1,137 @@
+<Layouts.app flash={@flash}>
+  <%!-- Hero --%>
+  <section class="min-h-screen flex flex-col items-center justify-center px-4 py-20 text-center"
+    style="background: var(--bg-base);">
+
+    <div class="mb-8 select-none">
+      <span class="text-5xl md:text-6xl font-light tracking-tight" style="color: var(--text-secondary);">s</span><span
+        class="text-5xl md:text-6xl font-semibold"
+        style="color: var(--accent); letter-spacing: 0.04em;">TEL</span><span
+        class="text-5xl md:text-6xl font-light tracking-tight" style="color: var(--text-secondary);">gano</span>
+    </div>
+
+    <p class="text-lg md:text-xl mb-3 font-light" style="color: var(--text-secondary);">
+      Hidden in the contact layer.
+    </p>
+
+    <p class="text-sm md:text-base max-w-md mb-10" style="color: var(--text-muted);">
+      A shared phone number in your contacts app. A personal PIN you choose. No account. No history. One message at a time.
+    </p>
+
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="/chat"
+        class="px-8 py-4 rounded-2xl font-medium text-base transition-all duration-150 hover:opacity-90 active:scale-95"
+        style="background: var(--accent); color: var(--accent-fg);">
+        Open a channel
+      </a>
+      <a href="/security"
+        class="px-8 py-4 rounded-2xl font-medium text-base transition-all duration-150 hover:opacity-80"
+        style="background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border);">
+        Read the spec
+      </a>
+    </div>
+  </section>
+
+  <%!-- How it works --%>
+  <section class="px-4 py-20 max-w-2xl mx-auto">
+    <h2 class="text-2xl font-light mb-12 text-center" style="color: var(--text-primary);">How it works</h2>
+    <div class="space-y-8">
+      <div class="flex gap-6">
+        <span class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
+          style="background: var(--accent-soft); color: var(--accent);">1</span>
+        <div>
+          <h3 class="font-medium mb-1" style="color: var(--text-primary);">Generate a steg number</h3>
+          <p class="text-sm" style="color: var(--text-secondary);">
+            Create a random international phone number. Save it in the other person's contacts alongside their real number. It looks like every other number in the app.
+          </p>
+        </div>
+      </div>
+      <div class="flex gap-6">
+        <span class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
+          style="background: var(--accent-soft); color: var(--accent);">2</span>
+        <div>
+          <h3 class="font-medium mb-1" style="color: var(--text-primary);">Choose your own PIN</h3>
+          <p class="text-sm" style="color: var(--text-secondary);">
+            Pick a PIN you never share with anyone. Each of you chooses independently. The server stores only a hash of number + PIN; the PIN never leaves your device.
+          </p>
+        </div>
+      </div>
+      <div class="flex gap-6">
+        <span class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
+          style="background: var(--accent-soft); color: var(--accent);">3</span>
+        <div>
+          <h3 class="font-medium mb-1" style="color: var(--text-primary);">Open the channel</h3>
+          <p class="text-sm" style="color: var(--text-secondary);">
+            Go to stelgano.com, enter the steg number and your PIN. Your browser encrypts every message with AES-256-GCM. We never see the plaintext.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%!-- What the server stores --%>
+  <section class="px-4 py-20" style="background: var(--bg-surface);">
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-2xl font-light mb-2 text-center" style="color: var(--text-primary);">What the server stores</h2>
+      <p class="text-sm text-center mb-10" style="color: var(--text-muted);">Honesty is the product.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="rounded-2xl p-6" style="background: var(--bg-raised); border: 1px solid var(--border);">
+          <h3 class="font-medium mb-4" style="color: var(--text-primary);">Stores</h3>
+          <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
+            <li>Hash of phone number (SHA-256, not reversible)</li>
+            <li>Hash of phone + PIN (SHA-256, not reversible)</li>
+            <li>Encrypted message ciphertext</li>
+            <li>Anonymous sender identifier</li>
+          </ul>
+        </div>
+        <div class="rounded-2xl p-6" style="background: var(--bg-raised); border: 1px solid var(--border);">
+          <h3 class="font-medium mb-4" style="color: var(--text-primary);">Never stores</h3>
+          <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
+            <li>Phone number in any form</li>
+            <li>PIN in any form</li>
+            <li>Encryption key</li>
+            <li>Message plaintext</li>
+            <li>Your real identity</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Protection scope --%>
+  <section class="px-4 py-20 max-w-2xl mx-auto">
+    <h2 class="text-2xl font-light mb-10 text-center" style="color: var(--text-primary);">What we protect — and what we don't</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-8">
+      <div>
+        <h3 class="text-sm font-medium mb-3" style="color: var(--accent);">Protected against</h3>
+        <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
+          <li>A partner who picks up your unlocked phone</li>
+          <li>Family members with device access</li>
+          <li>Browser history inspection</li>
+          <li>Database breach — no readable data</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-medium mb-3" style="color: var(--danger);">Not protected against</h3>
+        <ul class="space-y-2 text-sm" style="color: var(--text-secondary);">
+          <li>Government subpoenas</li>
+          <li>Nation-state surveillance</li>
+          <li>Law enforcement with a warrant</li>
+          <li>Institutional monitoring</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Footer --%>
+  <footer class="px-4 py-8 border-t text-center" style="border-color: var(--border);">
+    <div class="flex flex-wrap justify-center gap-6 text-xs mb-4" style="color: var(--text-muted);">
+      <a href="/security" class="hover:underline">Security</a>
+      <a href="/privacy" class="hover:underline">Privacy</a>
+      <a href="/terms" class="hover:underline">Terms</a>
+      <a href="/about" class="hover:underline">About</a>
+      <a href="/steg-number" class="hover:underline">Number generator</a>
+    </div>
+    <p class="text-xs" style="color: var(--text-muted);">sTELgano · AGPL-3.0</p>
+  </footer>
+</Layouts.app>

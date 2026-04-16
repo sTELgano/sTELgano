@@ -1,0 +1,2 @@
+# Dialyzer PLT directory — committed as empty dir so CI cache works
+# The actual PLT files are gitignored

@@ -1,0 +1,122 @@
+sTELgano
+Copyright (C) 2026 sTELgano Contributors
+
+This product includes software developed by third parties.
+A full list of dependencies with their licences follows.
+
+--------------------------------------------------------------------------------
+ELIXIR DEPENDENCIES
+--------------------------------------------------------------------------------
+
+bandit — MIT Licence
+  https://github.com/mtrudel/bandit
+
+dns_cluster — MIT Licence
+  https://github.com/phoenixframework/dns_cluster
+
+ecto_sql — Apache-2.0 Licence
+  https://github.com/elixir-ecto/ecto_sql
+
+esbuild — MIT Licence
+  https://github.com/phoenixframework/esbuild
+
+gettext — Apache-2.0 Licence
+  https://github.com/elixir-gettext/gettext
+
+jason — Apache-2.0 Licence
+  https://github.com/michalmuskala/jason
+
+lazy_html — MIT Licence
+  https://github.com/phoenixframework/lazy_html
+
+oban — BSL / Commercial (Oban Pro) — core Oban is Apache-2.0
+  https://github.com/sorentwo/oban
+
+phoenix — MIT Licence
+  https://github.com/phoenixframework/phoenix
+
+phoenix_ecto — MIT Licence
+  https://github.com/phoenixframework/phoenix_ecto
+
+phoenix_html — MIT Licence
+  https://github.com/phoenixframework/phoenix_html
+
+phoenix_live_dashboard — MIT Licence
+  https://github.com/phoenixframework/phoenix_live_dashboard
+
+phoenix_live_reload — MIT Licence
+  https://github.com/phoenixframework/phoenix_live_reload
+
+phoenix_live_view — MIT Licence
+  https://github.com/phoenixframework/phoenix_live_view
+
+postgrex — Apache-2.0 Licence
+  https://github.com/elixir-ecto/postgrex
+
+req — Apache-2.0 Licence
+  https://github.com/wojtekmach/req
+
+swoosh — MIT Licence
+  https://github.com/swoosh/swoosh
+
+tailwind — MIT Licence
+  https://github.com/phoenixframework/tailwind
+
+telemetry_metrics — Apache-2.0 Licence
+  https://github.com/beam-telemetry/telemetry_metrics
+
+telemetry_poller — Apache-2.0 Licence
+  https://github.com/beam-telemetry/telemetry_poller
+
+--------------------------------------------------------------------------------
+JAVASCRIPT DEPENDENCIES (vendored)
+--------------------------------------------------------------------------------
+
+topbar — MIT Licence
+  https://github.com/buunguyen/topbar
+
+heroicons — MIT Licence (icons) / Heroicons Licence
+  https://github.com/tailwindlabs/heroicons
+
+daisyUI — MIT Licence
+  https://github.com/saadeghi/daisyui
+  NOTE: daisyUI is vendored but intentionally not used in production styles.
+  It is included in the vendor directory from the Phoenix generator scaffold only.
+
+phoenix (npm) — MIT Licence
+  https://github.com/phoenixframework/phoenix
+
+phoenix_live_view (npm) — MIT Licence
+  https://github.com/phoenixframework/phoenix_live_view
+
+--------------------------------------------------------------------------------
+FONTS
+--------------------------------------------------------------------------------
+
+Figtree — SIL Open Font Licence 1.1
+  https://fonts.google.com/specimen/Figtree
+
+Fraunces — SIL Open Font Licence 1.1
+  https://fonts.google.com/specimen/Fraunces
+
+IBM Plex Mono — SIL Open Font Licence 1.1
+  https://fonts.google.com/specimen/IBM+Plex+Mono
+
+NOTE: These fonts are currently loaded via Google Fonts CDN. For complete
+privacy compliance and to eliminate the external request, self-host them in
+priv/static/fonts/ and reference via local @font-face rules in app.css.
+See compliance_and_recommendations.md §9 for instructions.
+
+--------------------------------------------------------------------------------
+FULL LICENCE TEXTS
+--------------------------------------------------------------------------------
+
+Complete licence texts for all dependencies can be retrieved by running:
+
+    mix licenses
+
+in the project root (requires the `licensir` mix task).
+
+MIT Licence text: https://opensource.org/licenses/MIT
+Apache-2.0 text: https://www.apache.org/licenses/LICENSE-2.0
+SIL OFL-1.1 text: https://scripts.sil.org/OFL
