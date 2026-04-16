@@ -201,8 +201,9 @@
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
               <span class="text-white">Oban</span>, built on Elixir and OTP, handles our maintenance tasks:
-              purging soft-deleted messages after 24 hours, expiring TTL rooms on the hour. The BEAM&rsquo;s
-              scheduler ensures these background jobs never interfere with real-time chat performance.
+              expiring TTL rooms on the hour and hard-deleting their messages. Messages replaced by
+              replies are hard-deleted immediately in the same transaction &mdash; no background job needed.
+              The BEAM&rsquo;s scheduler ensures these background jobs never interfere with real-time chat performance.
             </p>
           </div>
         </div>

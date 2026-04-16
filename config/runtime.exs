@@ -150,7 +150,6 @@ if config_env() == :prod do
       {Oban.Plugins.Pruner, max_age: 7 * 24 * 60 * 60},
       {Oban.Plugins.Cron,
        crontab: [
-         {"0 3 * * *", Stelgano.Jobs.PurgeMessages},
          {"0 * * * *", Stelgano.Jobs.ExpireTtlRooms}
        ]}
     ],

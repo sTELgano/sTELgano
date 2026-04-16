@@ -16,12 +16,12 @@ defmodule Stelgano.Rooms.Message do
   At most one non-deleted message exists per room at any time.  This is
   enforced atomically in `Stelgano.Rooms` via database transactions.
 
-  ## Soft delete
+  ## Immediate hard delete
 
-  Messages are soft-deleted (`deleted_at` is set) rather than hard-deleted so
-  that the N=1 enforcement query (`WHERE deleted_at IS NULL`) is unambiguous.
-  A background cleanup job (`Stelgano.Rooms.Cleanup`) periodically hard-deletes
-  old soft-deleted rows.
+  When a reply arrives, the previous message is hard-deleted from the database
+  in the same transaction that inserts the new message. No soft-delete, no
+  deferred purge — the old row is gone immediately. This maximises privacy by
+  ensuring discarded messages spend zero time on disk after replacement.
   """
 
   use Ecto.Schema
@@ -34,7 +34,6 @@ defmodule Stelgano.Rooms.Message do
           ciphertext: binary() | nil,
           iv: binary() | nil,
           read_at: DateTime.t() | nil,
-          deleted_at: DateTime.t() | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
         }
@@ -47,7 +46,6 @@ defmodule Stelgano.Rooms.Message do
     field :ciphertext, :binary
     field :iv, :binary
     field :read_at, :utc_datetime
-    field :deleted_at, :utc_datetime
 
     belongs_to :room, Stelgano.Rooms.Room
 
@@ -77,14 +75,6 @@ defmodule Stelgano.Rooms.Message do
   @spec mark_read_changeset(t()) :: Ecto.Changeset.t()
   def mark_read_changeset(%__MODULE__{} = message) do
     change(message, read_at: DateTime.truncate(DateTime.utc_now(), :second))
-  end
-
-  @doc """
-  Changeset to soft-delete a message (N=1 enforcement).
-  """
-  @spec soft_delete_changeset(t()) :: Ecto.Changeset.t()
-  def soft_delete_changeset(%__MODULE__{} = message) do
-    change(message, deleted_at: DateTime.truncate(DateTime.utc_now(), :second))
   end
 
   @doc """

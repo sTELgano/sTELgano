@@ -283,7 +283,7 @@
             :for={
               {label, duration, desc} <- [
                 {"Messages", "Deleted on reply",
-                 "Soft-deleted immediately when a reply is sent (N=1 invariant). Hard-purged after 24 hours by an automated background job."},
+                 "Hard-deleted immediately when a reply is sent (N=1 invariant). The previous message row is permanently removed from the database in the same transaction. No deferred cleanup."},
                 {"Rooms", "TTL-based expiry",
                  "Rooms expire based on their configured time-to-live. An hourly job deactivates expired rooms permanently."},
                 {"IP Logs", "48 hours maximum",

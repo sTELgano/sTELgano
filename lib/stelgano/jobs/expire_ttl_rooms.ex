@@ -6,7 +6,7 @@ defmodule Stelgano.Jobs.ExpireTtlRooms do
   Oban job that expires rooms whose `ttl_expires_at` has passed.
 
   Runs hourly. For each expired room it:
-  1. Sets `is_active = false` and soft-deletes all messages.
+  1. Sets `is_active = false` and hard-deletes all messages.
   2. Broadcasts `room_expired` to the room's Phoenix Channel topic so any
      connected clients redirect to the entry screen immediately.
 

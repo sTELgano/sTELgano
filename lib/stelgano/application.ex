@@ -10,7 +10,7 @@ defmodule Stelgano.Application do
   - Ecto Repo (PostgreSQL)
   - DNSCluster (Fly.io multi-node discovery)
   - Phoenix PubSub (real-time channel broadcasts)
-  - Oban (background jobs: message purge, TTL expiry)
+  - Oban (background jobs: TTL room expiry)
   - PlugAttack ETS storage (IP-based rate limiting)
   - Phoenix Endpoint (HTTP server)
   """

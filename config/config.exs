@@ -21,15 +21,13 @@ config :stelgano, Stelgano.Mailer, adapter: Swoosh.Adapters.Local
 
 # Oban — background job configuration
 # Queues:
-#   :maintenance  — low-priority cleanup jobs (purge messages, expire TTL rooms)
+#   :maintenance  — low-priority cleanup jobs (expire TTL rooms)
 config :stelgano, Oban,
   repo: Stelgano.Repo,
   plugins: [
     Oban.Plugins.Pruner,
     {Oban.Plugins.Cron,
      crontab: [
-       # Purge soft-deleted messages older than 24h — daily at 03:00 UTC
-       {"0 3 * * *", Stelgano.Jobs.PurgeMessages},
        # Expire rooms whose TTL has passed — every hour
        {"0 * * * *", Stelgano.Jobs.ExpireTtlRooms}
      ]}
