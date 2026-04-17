@@ -138,7 +138,7 @@ mix sobelow --config   # Phoenix security scanning
 | Path | Description |
 |------|-------------|
 | `/` | Homepage |
-| `/chat` | Anonymous chat (accepts `?phone=<e164>`) |
+| `/chat` | Anonymous chat (no URL params; phone handoff via sessionStorage) |
 | `/steg-number` | Steg number generator |
 | `/spec` | Protocol specification |
 | `/blog` | Blog index |

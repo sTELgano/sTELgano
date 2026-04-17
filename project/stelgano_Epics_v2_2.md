@@ -82,10 +82,12 @@
 **Acceptance criteria:**
 - An "Open channel with this number" button appears after number generation
 - A warning card instructs the user to save the number in contacts before proceeding — "Once you leave this page, the number cannot be recovered"
-- Clicking the button navigates to `/chat?phone=<e164>`
+- Clicking the button writes the number to a one-shot `sessionStorage` key (`stelegano_handoff_phone`) and navigates to `/chat` — the URL carries **no** user data
+- On `/chat` mount, the `AnonChat` hook reads the handoff key, deletes it, and fires a `prefill_phone` event to the LiveView
 - The `/chat` entry screen shows the phone field pre-populated and read-only (locked with a lock icon)
 - The user only needs to enter their PIN to open the channel
 - When leaving or clearing the chat session, the phone field becomes editable again
+- The phone is **never** placed in the address bar, browser history, referer headers, or server request logs
 
 ---
 

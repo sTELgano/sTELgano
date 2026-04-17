@@ -9,7 +9,8 @@ defmodule StelganoWeb.StegNumberLive do
   - Country selector for targeted number generation
   - A generated steg number (via client-side JS hook using phone-number-generator-js)
   - Copy-to-clipboard with 2-second confirmation
-  - "Open Channel" button that navigates to `/chat` with the number pre-populated
+  - "Open Channel" button that hands the number to `/chat` via a one-shot
+    `sessionStorage` key (`stelegano_handoff_phone`) — the URL stays clean
   - The "hidden in plain sight" setup guide
 
   ## Passcode Test
@@ -623,14 +624,17 @@ defmodule StelganoWeb.StegNumberLive do
                      - If PAID selected: The "Pay & Secure" button below becomes the primary action.
                 --%>
 
-                <%= if @availability == :taken or 
+                <%= if @availability == :taken or
                        (@availability == :available and (not @monetization_enabled or @selected_tier == "free")) do %>
-                  <.link
-                    navigate={
+                  <button
+                    id="enter-chat-btn"
+                    type="button"
+                    phx-hook="ChannelHandoff"
+                    data-phone={
                       case {@entry_mode, @generated_number} do
-                        {:generate, %{e164: e164}} -> ~p"/chat?phone=#{e164}"
-                        {:manual, _} when @manual_number != "" -> ~p"/chat?phone=#{@manual_number}"
-                        _ -> "#"
+                        {:generate, %{e164: e164}} -> e164
+                        {:manual, _} when @manual_number != "" -> @manual_number
+                        _ -> ""
                       end
                     }
                     class={[
@@ -643,7 +647,7 @@ defmodule StelganoWeb.StegNumberLive do
                       (Free)
                     <% end %>
                     <.icon name="shield_check" class="size-5" />
-                  </.link>
+                  </button>
                   <p
                     :if={@monetization_enabled and @availability == :available}
                     class="mt-3 text-[10px] text-slate-500 text-center uppercase tracking-widest"
