@@ -23,6 +23,8 @@ defmodule StelganoWeb.StegNumberLive do
   import StelganoWeb.Helpers.PriceFormatter, only: [format_price: 2]
 
   alias Stelgano.Monetization
+  alias Stelgano.Repo
+  alias Stelgano.Rooms.Room
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -39,41 +41,42 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:currency, Monetization.currency())
       |> assign(:free_ttl_days, Monetization.free_ttl_days())
       |> assign(:paid_ttl_days, Monetization.paid_ttl_days())
-      |> assign(:selected_country, "Kenya")
+      |> assign(:entry_mode, :generate)
+      |> assign(:manual_number, "")
+      |> assign(:room_details, nil)
+      |> assign(:selected_country, nil)
+      |> assign(:selected_iso, nil)
+      |> assign(:search_query, "")
       |> assign(:show_countries, false)
-      |> assign(:countries, [
-        {"Kenya", "Kenya"},
-        {"United States", "United_States"},
-        {"United Kingdom", "United_Kingdom"},
-        {"Germany", "Germany"},
-        {"France", "France"},
-        {"Canada", "Canada"},
-        {"Japan", "Japan"},
-        {"Australia", "Australia"},
-        {"India", "India"},
-        {"Brazil", "Brazil"},
-        {"South Africa", "South_Africa"},
-        {"Nigeria", "Nigeria"},
-        {"Egypt", "Egypt"},
-        {"Morocco", "Morocco"},
-        {"Ethiopia", "Ethiopia"},
-        {"Ghana", "Ghana"},
-        {"Tanzania", "Tanzania"},
-        {"Uganda", "Uganda"},
-        {"Rwanda", "Rwanda"}
-      ])
+      |> assign(:all_countries, StelganoWeb.Data.Countries.list())
+      # Will be populated on select/search
+      |> assign(:countries, [])
+      |> assign(:selected_tier, nil)
+      |> assign(:manual_error, nil)
 
     {:ok, socket}
   end
 
   @impl Phoenix.LiveView
-  def handle_event("number_generated", %{"number" => number, "display" => display}, socket) do
+  def handle_event(
+        "number_generated",
+        %{"number" => number, "display" => display} = params,
+        socket
+      ) do
+    room_hash = Map.get(params, "room_hash")
+
+    availability =
+      if room_hash,
+        do: if(Stelgano.Rooms.room_exists?(room_hash), do: :taken, else: :available),
+        else: :idle
+
     socket =
       socket
       |> assign(:generated_number, %{e164: number, display: display})
       |> assign(:copied, false)
-      |> assign(:availability, :idle)
+      |> assign(:availability, availability)
       |> assign(:generating, false)
+      |> assign(:selected_tier, nil)
 
     {:noreply, socket}
   end
@@ -84,15 +87,33 @@ defmodule StelganoWeb.StegNumberLive do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("set_countries", %{"countries" => countries}, socket) do
-    # Convert list of maps to list of tuples for HEEx
-    country_tuples = Enum.map(countries, fn %{"name" => name, "value" => val} -> {name, val} end)
-    {:noreply, assign(socket, :countries, country_tuples)}
+  def handle_event("search_country", %{"value" => query}, socket) do
+    filtered =
+      if query == "" do
+        []
+      else
+        Enum.filter(socket.assigns.all_countries, fn {name, _val, _iso} ->
+          String.contains?(String.downcase(name), String.downcase(query))
+        end)
+      end
+
+    {:noreply,
+     assign(socket, search_query: query, countries: filtered, show_countries: query != "")}
   end
 
   @impl Phoenix.LiveView
-  def handle_event("update_country", %{"country" => country}, socket) do
-    {:noreply, assign(socket, selected_country: country, show_countries: false)}
+  def handle_event("update_country", %{"country" => country, "iso" => iso}, socket) do
+    socket =
+      socket
+      |> assign(
+        selected_country: country,
+        selected_iso: iso,
+        show_countries: false,
+        search_query: ""
+      )
+      |> push_event("country_selected", %{country: country, iso: String.upcase(iso)})
+
+    {:noreply, socket}
   end
 
   @impl Phoenix.LiveView
@@ -119,12 +140,103 @@ defmodule StelganoWeb.StegNumberLive do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("switch_mode", %{"mode" => mode}, socket) do
+    mode = String.to_existing_atom(mode)
+
+    socket =
+      socket
+      |> assign(:entry_mode, mode)
+      |> assign(:generated_number, nil)
+      |> assign(:manual_number, "")
+      |> assign(:room_details, nil)
+      |> assign(:availability, :idle)
+      |> assign(:selected_tier, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("manual_number_change", %{"value" => number} = params, socket) do
+    is_valid = Map.get(params, "is_valid", true)
+
+    # If the number is identical to what we already have (after normalization), ignore the reset logic.
+    # This prevents the blur event or redundant updates from resetting the availability/tier state.
+    if normalize(socket.assigns.manual_number) == normalize(number) do
+      {:noreply, socket}
+    else
+      error =
+        if not is_valid and number != "",
+          do: "Invalid format for #{socket.assigns.selected_country}",
+          else: nil
+
+      {:noreply,
+       socket
+       |> assign(
+         manual_number: number,
+         manual_error: error,
+         availability: :idle,
+         selected_tier: nil
+       )}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("check_manual_number", %{"number" => number, "room_hash" => room_hash}, socket) do
+    room = Repo.get_by(Room, room_hash: room_hash, is_active: true)
+
+    socket =
+      if room do
+        socket
+        |> assign(:availability, :taken)
+        |> assign(:room_details, %{
+          tier: room.tier,
+          ttl_expires_at: room.ttl_expires_at
+        })
+      else
+        socket
+        |> assign(:availability, :available)
+        |> assign(:room_details, nil)
+      end
+      |> assign(:manual_number, number)
+      |> assign(:manual_error, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("select_tier", %{"tier" => tier}, socket) do
+    # Selection of tier for a new manual number
+    # This will be handled when they click "Enter Chat Workspace"
+    # or we could store it in assigns
+    {:noreply, assign(socket, :selected_tier, tier)}
+  end
+
+  @impl Phoenix.LiveView
   def handle_event("initiate_payment", %{"token_hash" => token_hash}, socket) do
     if Monetization.enabled?() do
       handle_payment_initiation(socket, token_hash)
     else
       {:noreply, put_flash(socket, :error, "Payments are not enabled")}
     end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("restore_country", %{"country" => country}, socket) do
+    # Validate country against available list
+    found = Enum.find(socket.assigns.all_countries, fn {_, v, _} -> v == country end)
+
+    socket =
+      if found do
+        {_, name, iso} = found
+
+        socket
+        |> assign(selected_country: name, selected_iso: iso)
+        |> push_event("country_selected", %{country: name, iso: String.upcase(iso)})
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   defp handle_payment_initiation(socket, token_hash) do
@@ -156,352 +268,475 @@ defmodule StelganoWeb.StegNumberLive do
     {:noreply, assign(socket, :copied, false)}
   end
 
+  defp normalize(num) when is_binary(num), do: String.replace(num, ~r/[^0-9]/, "")
+  defp normalize(_), do: ""
+
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <div class="max-w-4xl mx-auto space-y-16 animate-in">
-        <%!-- Hero Header --%>
-        <div class="text-center space-y-8 pt-12">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
-            <.icon name="sparkles" class="size-3" /> Secret Number Generator
+      <div class="max-w-2xl mx-auto space-y-12 animate-in pb-20 px-4">
+        <%!-- High Priority Warning --%>
+        <div class="warning-card animate-in stagger-1">
+          <.icon name="alert_triangle" class="icon size-6" />
+          <div class="space-y-1">
+            <h3 class="font-bold uppercase tracking-widest text-[10px]">
+              Privacy & Persistence Notice
+            </h3>
+            <p class="text-sm leading-relaxed">
+              These numbers are temporary.
+              <span class="text-white">
+                Coordinate with your partner to save this value immediately.
+              </span>
+              Once this session is closed, the un-saved number cannot be recovered.
+            </p>
           </div>
+        </div>
 
-          <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter text-white font-display mb-8">
-            Secret Number <span class="text-gradient">Generator</span>
+        <%!-- Header --%>
+        <div class="text-center space-y-6 pt-6">
+          <h1 class="text-4xl sm:text-6xl font-black tracking-tighter text-white font-display">
+            Channel <span class="text-gradient">Identity</span>
           </h1>
-
-          <p class="text-slate-400 text-lg sm:text-2xl font-medium leading-tight max-w-2xl mx-auto animate-in stagger-3">
-            Generate a secret number to create your private channel. Use it to establish an invisible link with your partner.
+          <p class="text-slate-400 text-lg font-medium max-w-xl mx-auto">
+            Generate a new identity or join using an existing secret number.
           </p>
         </div>
 
-        <%!-- Generator Section --%>
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-10 items-start">
-          <div class="lg:col-span-3 space-y-6 animate-in stagger-3">
-            <.premium_card
-              id="generator-card"
-              phx-hook="PhoneGenerator"
-              class="p-1 sm:p-1 overflow-hidden"
-            >
-              <div class="p-8 sm:p-10 space-y-10">
-                <%!-- Identity Selector --%>
+        <%!-- Main selection and action area --%>
+        <div class="space-y-10">
+          <div class="glass-card p-1">
+            <div class="p-8 sm:p-10 space-y-10">
+              <%!-- Global Country Context --%>
+              <div class="space-y-6">
                 <div class="space-y-4">
-                  <div class="flex items-center justify-between px-1">
-                    <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
-                      Select Country
-                    </label>
-                  </div>
-                  <div class="relative group">
-                    <div class="absolute inset-0 bg-primary/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                  <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 ml-1">
+                    Channel Destination (Country)
+                  </label>
+
+                  <div
+                    class="relative group"
+                    id="country-search-container"
+                    phx-click-away="close_countries"
+                  >
+                    <div class="relative">
+                      <input
+                        type="text"
+                        name="country_search"
+                        id="country-search-input"
+                        placeholder={
+                          if(@selected_country,
+                            do: String.replace(@selected_country, "_", " "),
+                            else: "Search or select country..."
+                          )
+                        }
+                        class="bg-slate-900/80 border-2 border-white/5 text-white font-bold focus:ring-2 focus:ring-primary/40 focus:outline-none w-full py-4 px-6 rounded-2xl pr-14 transition-all hover:bg-slate-800"
+                        phx-keyup="search_country"
+                        phx-focus="search_country"
+                        phx-value-value={@search_query}
+                        autocomplete="off"
+                      />
+                      <div class="absolute right-6 top-1/2 -translate-y-1/2 text-slate-500">
+                        <%= if @selected_country do %>
+                          <.icon name="hero-check-badge" class="size-5 text-emerald-400" />
+                        <% else %>
+                          <.icon name="hero-magnifying-glass" class="size-5" />
+                        <% end %>
+                      </div>
                     </div>
 
-                    <%!-- Custom Premium Dropdown --%>
-                    <div class="relative z-20">
-                      <h4 class="text-white font-bold mb-4 flex items-center gap-2">
-                        <.icon name="badge_check" class="size-5 text-primary" /> Secure your number
-                      </h4>
-                      <button
-                        type="button"
-                        phx-click="toggle_countries"
-                        class="glass-input w-full flex items-center justify-between gap-4 text-left group/btn"
-                      >
-                        <span class="flex items-center gap-3">
-                          <.icon name="globe" class="size-5 text-primary/60" />
-                          <span class="font-bold text-white">
-                            {Enum.find_value(@countries, "Select Matrix", fn {name, val} ->
-                              if val == @selected_country, do: name
-                            end)}
-                          </span>
-                        </span>
-                        <.icon
-                          name="chevron_down"
-                          class={[
-                            "size-5 text-slate-500 transition-transform duration-300",
-                            @show_countries && "rotate-180 text-primary"
-                          ]}
-                        />
-                      </button>
-
-                      <%= if @show_countries do %>
-                        <div
-                          class="absolute top-full left-0 right-0 mt-3 p-2 glass-card-premium z-50 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 animate-in"
-                          phx-click-away="close_countries"
+                    <%!-- Dropdown list --%>
+                    <%= if @show_countries and @countries != [] do %>
+                      <div class="absolute z-50 w-full mt-2 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                        <button
+                          :for={{name, val, iso} <- @countries}
+                          phx-click="update_country"
+                          phx-value-country={val}
+                          phx-value-iso={iso}
+                          class="w-full px-6 py-4 text-left hover:bg-white/5 text-slate-300 hover:text-white transition-all border-b border-white/5 last:border-0 flex items-center justify-between group"
                         >
-                          <div class="grid grid-cols-1 gap-1">
-                            <button
-                              :for={{name, val} <- @countries}
-                              type="button"
-                              phx-click="update_country"
-                              phx-value-country={val}
-                              class={[
-                                "w-full px-4 py-3 rounded-xl text-left text-sm font-bold transition-all flex items-center justify-between group/item",
-                                if(@selected_country == val,
-                                  do:
-                                    "bg-primary text-slate-950 shadow-[0_0_15px_rgba(0,255,163,0.3)]",
-                                  else: "text-slate-400 hover:bg-white/5 hover:text-white"
-                                )
-                              ]}
-                            >
-                              <span class="flex items-center gap-3">
-                                <.icon
-                                  name="map_pin"
-                                  class="size-4 opacity-40 group-hover/item:opacity-100 transition-opacity"
-                                />
-                                {name}
-                              </span>
-                              <%= if @selected_country == val do %>
-                                <.icon name="check_circle" class="size-4" />
-                              <% end %>
-                            </button>
-                          </div>
-                        </div>
-                      <% end %>
-                    </div>
+                          <span class="font-bold tracking-wide">{name}</span>
+                          <.icon
+                            name="hero-chevron-right"
+                            class="size-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                          />
+                        </button>
+                      </div>
+                    <% end %>
 
-                    <input type="hidden" name="country" id="country-select" value={@selected_country} />
+                    <%= if @show_countries and @countries == [] and @search_query != "" do %>
+                      <div class="absolute z-50 w-full mt-2 bg-slate-900 border border-white/10 rounded-2xl p-6 text-center text-slate-500 text-xs uppercase tracking-widest font-bold">
+                        No matching countries
+                      </div>
+                    <% end %>
                   </div>
+
+                  <div phx-hook="CountryPersistence" id="persistence-hook" class="hidden"></div>
                 </div>
+              </div>
 
-                <%!-- High-Impact Number Display --%>
-                <div class="relative py-12 px-8 rounded-3xl bg-slate-950/50 border border-white/5 shadow-inner overflow-hidden group">
-                  <div class="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-                  </div>
+              <%!-- Mode Toggle --%>
+              <div class="flex p-1 bg-slate-900/50 rounded-2xl border border-white/5">
+                <button
+                  phx-click="switch_mode"
+                  phx-value-mode="generate"
+                  class={[
+                    "flex-1 py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+                    if(@entry_mode == :generate,
+                      do: "bg-white text-slate-950 shadow-lg",
+                      else: "text-slate-500 hover:text-slate-300"
+                    )
+                  ]}
+                >
+                  Generate New
+                </button>
+                <button
+                  phx-click="switch_mode"
+                  phx-value-mode="manual"
+                  class={[
+                    "flex-1 py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+                    if(@entry_mode == :manual,
+                      do: "bg-white text-slate-950 shadow-lg",
+                      else: "text-slate-500 hover:text-slate-300"
+                    )
+                  ]}
+                >
+                  Manual Entry
+                </button>
+              </div>
 
-                  <%= if @generating do %>
-                    <div class="relative z-10 py-12 text-center space-y-8 animate-in">
-                      <div class="relative size-20 mx-auto">
-                        <div class="absolute inset-0 rounded-full border-2 border-primary/20 border-t-primary animate-spin">
-                        </div>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                          <.icon name="cpu" class="size-10 text-primary animate-pulse" />
-                        </div>
-                      </div>
-                      <div class="space-y-2">
-                        <h3 class="text-white font-black uppercase tracking-[0.2em] text-[10px] mb-4 flex items-center gap-2">
-                          <.icon name="shield_check" class="size-4" /> Security Setup
-                        </h3>
-                        <p class="text-xs text-slate-500 font-mono">Randomizing identity seed...</p>
-                      </div>
-                    </div>
-                  <% else %>
+              <%= if @entry_mode == :generate do %>
+                <%!-- Generator Layout --%>
+                <div
+                  class="space-y-8 animate-in"
+                  phx-hook="PhoneGenerator"
+                  id="generator-hook"
+                  data-country={@selected_country}
+                  data-iso={@selected_iso}
+                >
+                  <div class="relative py-12 px-8 rounded-3xl bg-slate-950/50 border border-white/5 text-center overflow-hidden group">
+                    <div class="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent"></div>
+
                     <%= if @generated_number do %>
-                      <div class="relative z-10 text-center space-y-6 animate-in">
-                        <div class="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/60">
-                          Your Secret Number
+                      <div class="relative z-10 space-y-6">
+                        <div class="font-mono font-black text-white tracking-widest text-4xl sm:text-5xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)]">
+                          {@generated_number.display}
                         </div>
-                        <div
-                          id="generated-display"
-                          class={[
-                            "font-mono font-black text-white tracking-widest drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] transition-all break-all overflow-hidden",
-                            if(String.length(@generated_number.display) > 15,
-                              do: "text-2xl sm:text-3xl md:text-4xl",
-                              else: "text-4xl sm:text-5xl md:text-6xl"
-                            )
-                          ]}
-                        >
-                          {@generated_number && @generated_number.display}
-                        </div>
-                        <div class="flex flex-col items-center gap-6 pt-2">
+
+                        <%= if @availability == :available do %>
+                          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                            <.icon name="sparkles" class="size-3" /> New Identity Available
+                          </div>
+                        <% end %>
+
+                        <div class="flex flex-wrap items-center justify-center gap-4">
                           <button
-                            id="copy-btn"
                             type="button"
                             phx-click="copied"
-                            data-number={@generated_number && @generated_number.e164}
+                            data-number={@generated_number.e164}
+                            id="copy-generated-btn"
                             class={[
-                              "inline-flex items-center gap-3 px-8 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all active:scale-95",
+                              "inline-flex items-center gap-3 px-8 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all",
                               if(@copied,
-                                do:
-                                  "bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.4)]",
+                                do: "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20",
                                 else: "bg-white/5 text-white hover:bg-white/10 border border-white/10"
                               )
                             ]}
                           >
                             <%= if @copied do %>
-                              <.icon name="check_circle" class="size-4" /> Copied to Clipboard
+                              <.icon name="check_circle" class="size-5" /> Copied
                             <% else %>
-                              <.icon name="clipboard" class="size-4" /> Copy Number
+                              <.icon name="clipboard" class="size-5" /> Copy Number
                             <% end %>
                           </button>
 
-                          <div
-                            id="availability-check"
-                            class="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 border border-white/5"
+                          <button
+                            type="button"
+                            id="regen-btn"
+                            class={[
+                              "inline-flex items-center gap-3 px-8 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all",
+                              "bg-white/5 text-white hover:bg-white/10 border border-white/10",
+                              !@selected_country &&
+                                "opacity-20 cursor-not-allowed grayscale pointer-events-none"
+                            ]}
+                            title="Regenerate"
+                            disabled={is_nil(@selected_country)}
                           >
-                            <%= cond do %>
-                              <% @availability == :available -> %>
-                                <div class="size-1.5 rounded-full bg-emerald-500"></div>
-                                <span class="text-[9px] font-black uppercase tracking-widest text-emerald-500">
-                                  Number Available
-                                </span>
-                              <% @availability == :taken -> %>
-                                <div class="size-1.5 rounded-full bg-danger animate-pulse"></div>
-                                <span class="text-[9px] font-black uppercase tracking-widest text-danger">
-                                  Active Room Detected
-                                </span>
-                              <% true -> %>
-                                <div class="size-1.5 rounded-full bg-slate-700"></div>
-                                <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                  Awaiting Analysis
-                                </span>
-                            <% end %>
-                          </div>
+                            <.icon
+                              name="refresh_cw"
+                              class={["size-5 text-primary", @generating && "animate-spin"]}
+                            />
+                            {if @generating, do: "Generating...", else: "Refresh"}
+                          </button>
                         </div>
                       </div>
                     <% else %>
-                      <div class="relative z-10 py-10 text-center animate-in">
-                        <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6 group-hover:border-primary/20 transition-colors">
-                          <.icon
-                            name="phone"
-                            class="size-10 text-slate-700 group-hover:text-slate-500 transition-colors"
-                          />
-                        </div>
-                        <p class="text-slate-500 font-bold uppercase tracking-[0.2em] text-sm group-hover:text-slate-400 transition-colors">
-                          Waiting to create number
-                        </p>
+                      <div class="relative z-10 py-6 text-slate-600 font-bold uppercase tracking-widest text-xs">
+                        {if @generating, do: "Generating...", else: "Select country to generate"}
                       </div>
                     <% end %>
-                  <% end %>
+                  </div>
                 </div>
-
-                <button
-                  type="button"
-                  id="generate-btn"
-                  disabled={@generating}
-                  class={[
-                    "btn-primary w-full py-5 text-lg group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]",
-                    @generating && "opacity-50 grayscale cursor-not-allowed shadow-none"
-                  ]}
+              <% else %>
+                <%!-- Manual Entry Layout --%>
+                <div
+                  class="space-y-8 animate-in"
+                  phx-hook="PhoneGenerator"
+                  id="manual-hook"
+                  data-iso={@selected_iso}
                 >
-                  <span class="relative z-10 flex items-center gap-3">
-                    {if(@generated_number, do: "Generate New Number", else: "Generate Secret Number")}
-                    <.icon
-                      name="refresh_cw"
-                      class={[
-                        "size-6 transition-transform duration-700",
-                        if(@generating, do: "animate-spin", else: "group-hover:rotate-180")
-                      ]}
-                    />
-                  </span>
-                </button>
-              </div>
-            </.premium_card>
-          </div>
+                  <div class="space-y-4">
+                    <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 ml-1">
+                      Enter Secret Number
+                    </label>
+                    <div class="relative">
+                      <input
+                        type="tel"
+                        id="manual-number-input"
+                        value={@manual_number}
+                        placeholder="Enter phone number..."
+                        class={[
+                          "glass-input w-full font-mono text-xl text-center pl-12",
+                          @manual_error && "border-red-500/50"
+                        ]}
+                      />
+                      <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+                        <.icon name="phone" class="size-5" />
+                      </div>
 
-          <div class="lg:col-span-2 space-y-8 animate-in stagger-4">
-            <div class="p-8 rounded-3xl bg-danger/5 border border-danger/20 space-y-4">
-              <div class="flex items-center gap-3 text-danger">
-                <.icon name="alert_triangle" class="size-6" />
-                <h3 class="font-bold uppercase tracking-widest text-sm">Privacy Note</h3>
-              </div>
-              <p class="text-slate-400 text-sm leading-relaxed font-medium">
-                This number is not permanent. Once you close this session, it is deleted from memory.
-                <span class="text-white">
-                  Coordinate with your partner to save this exact value immediately.
-                </span>
-              </p>
-            </div>
-
-            <div class="space-y-4 pt-4">
-              <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 ml-1">
-                Establish Session
-              </label>
-              <.link
-                navigate={
-                  ~p"/chat?#{if @generated_number, do: [phone: @generated_number.e164], else: []}"
-                }
-                id="open-channel-btn"
-                class={[
-                  "w-full py-5 rounded-2xl flex items-center justify-center gap-3 font-bold uppercase tracking-widest transition-all",
-                  if(@generated_number,
-                    do: "bg-white text-slate-950 shadow-xl hover:scale-[1.02]",
-                    else: "bg-white/5 text-slate-600 cursor-not-allowed pointer-events-none"
-                  )
-                ]}
-              >
-                Enter Chat Workspace <.icon name="shield_check" class="size-5" />
-              </.link>
-            </div>
-
-            <%= if @monetization_enabled and @generated_number do %>
-              <div class="space-y-4 pt-6 border-t border-white/5">
-                <div class="space-y-3">
-                  <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 ml-1">
-                    Keep This Number
-                  </label>
-                  <p class="text-slate-400 text-sm leading-relaxed font-medium">
-                    Free numbers expire after {@free_ttl_days} days.
-                    Secure yours for {@paid_ttl_days} days.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  id="extend-btn"
-                  phx-hook="PaymentInitiator"
-                  data-number={@generated_number && @generated_number.e164}
-                  disabled={@payment_loading}
-                  class={[
-                    "w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-bold uppercase tracking-widest text-sm transition-all border",
-                    if(@payment_loading,
-                      do: "bg-white/5 text-slate-500 cursor-wait border-white/5",
-                      else:
-                        "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/30"
-                    )
-                  ]}
-                >
-                  <%= if @payment_loading do %>
-                    <div class="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin">
+                      <%= if @manual_error do %>
+                        <div class="mt-2 text-[10px] font-bold uppercase tracking-wider text-red-500 animate-in">
+                          <.icon name="alert-circle" class="size-3 inline mr-1" /> {@manual_error}
+                        </div>
+                      <% end %>
                     </div>
-                    Processing...
-                  <% else %>
-                    <.icon name="shield_check" class="size-5" />
-                    Secure for 1 year &mdash; {format_price(@price_cents, @currency)}
+                  </div>
+
+                  <%= if @availability != :idle do %>
+                    <div class={[
+                      "p-6 rounded-2xl border animate-in",
+                      if(@availability == :available,
+                        do: "bg-emerald-500/5 border-emerald-500/20",
+                        else: "bg-primary/5 border-primary/20"
+                      )
+                    ]}>
+                      <div class="flex items-center gap-3">
+                        <%= if @availability == :available do %>
+                          <.icon name="sparkles" class="size-5 text-emerald-500" />
+                          <div class="space-y-1">
+                            <h4 class="text-emerald-500 font-bold text-sm">
+                              New Identity Detected
+                            </h4>
+                            <p class="text-xs text-slate-400">
+                              Choose a tier to establish this channel.
+                            </p>
+                          </div>
+                        <% else %>
+                          <.icon name="shield_check" class="size-5 text-primary" />
+                          <div class="space-y-1">
+                            <h4 class="text-primary font-bold text-sm">Existing Channel Linked</h4>
+                            <div
+                              :if={@room_details}
+                              class="text-xs text-slate-400 flex items-center gap-2"
+                            >
+                              <span class="uppercase tracking-widest">
+                                {@room_details.tier} Tier
+                              </span>
+                              <span class="size-1 rounded-full bg-slate-700"></span>
+                              <span>
+                                <%= if @room_details.ttl_expires_at do %>
+                                  Expires {Calendar.strftime(
+                                    @room_details.ttl_expires_at,
+                                    "%b %d, %Y"
+                                  )}
+                                <% else %>
+                                  Permanent Identity
+                                <% end %>
+                              </span>
+                            </div>
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
                   <% end %>
-                </button>
-              </div>
-            <% end %>
-          </div>
-        </div>
+                </div>
+              <% end %>
 
-        <%!-- Step Guide --%>
-        <div class="space-y-8 pb-20 animate-in stagger-5">
-          <div class="flex items-center gap-4">
-            <div class="h-px flex-1 bg-white/5"></div>
-            <h2 class="text-[10px] font-bold uppercase tracking-[0.4em] text-slate-500">
-              How to use this number
-            </h2>
-            <div class="h-px flex-1 bg-white/5"></div>
+              <%!-- Promotion / Tier Selection --%>
+              <%= if (@entry_mode == :manual and @availability == :available and @monetization_enabled) or
+                     (@entry_mode == :generate and not is_nil(@generated_number) and @availability == :available and @monetization_enabled) do %>
+                <div class="glass-card p-6 space-y-6 border-emerald-500/20 shadow-emerald-500/5 animate-in">
+                  <h3 class="text-xs font-bold uppercase tracking-widest text-emerald-500">
+                    Tier Selection
+                  </h3>
+                  <div class="space-y-3">
+                    <button
+                      phx-click="select_tier"
+                      phx-value-tier="free"
+                      class={[
+                        "w-full p-4 rounded-xl border text-left transition-all",
+                        if(@selected_tier == "free",
+                          do: "bg-white/10 border-white/20 ring-2 ring-white/20",
+                          else: "bg-white/5 border-white/5 hover:border-white/20"
+                        )
+                      ]}
+                    >
+                      <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-white text-sm">Free Tier</span>
+                        <span class="text-[10px] font-black uppercase text-slate-500">Default</span>
+                      </div>
+                      <p class="text-[10px] text-slate-400 uppercase tracking-widest">
+                        Expires in {@free_ttl_days} Days
+                      </p>
+                    </button>
+
+                    <button
+                      phx-click="select_tier"
+                      phx-value-tier="paid"
+                      class={[
+                        "w-full p-4 rounded-xl border text-left transition-all group",
+                        if(@selected_tier == "paid",
+                          do: "bg-primary/10 border-primary/20 ring-2 ring-primary/20",
+                          else: "bg-white/5 border-white/5 hover:border-primary/20"
+                        )
+                      ]}
+                    >
+                      <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-primary text-sm">Dedicated Tier</span>
+                        <span class="text-[10px] font-black uppercase text-primary/60">
+                          Best Value
+                        </span>
+                      </div>
+                      <p class="text-[10px] text-slate-400 uppercase tracking-widest">
+                        1 Year &mdash; {format_price(@price_cents, @currency)}
+                      </p>
+                    </button>
+                  </div>
+                </div>
+              <% end %>
+
+              <%!-- Action Button area --%>
+              <div class="space-y-4">
+                <%!-- 
+                  Logic: 
+                  1. If number is TAKEN (existing), show the standard "Enter Chat" button.
+                  2. If number is AVAILABLE (new):
+                     - If no tier selected: Show disabled button.
+                     - If FREE selected: Show "Enter Chat (Free)" button.
+                     - If PAID selected: The "Pay & Secure" button below becomes the primary action.
+                --%>
+
+                <%= if @availability == :taken or 
+                       (@availability == :available and (not @monetization_enabled or @selected_tier == "free")) do %>
+                  <.link
+                    navigate={
+                      case {@entry_mode, @generated_number} do
+                        {:generate, %{e164: e164}} -> ~p"/chat?phone=#{e164}"
+                        {:manual, _} when @manual_number != "" -> ~p"/chat?phone=#{@manual_number}"
+                        _ -> "#"
+                      end
+                    }
+                    class={[
+                      "w-full py-5 rounded-2xl flex items-center justify-center gap-3 font-bold uppercase tracking-widest transition-all",
+                      "bg-white text-slate-950 shadow-xl hover:scale-[1.02] hover:shadow-white/10"
+                    ]}
+                  >
+                    Enter Chat Workspace
+                    <%= if @monetization_enabled and @availability == :available do %>
+                      (Free)
+                    <% end %>
+                    <.icon name="shield_check" class="size-5" />
+                  </.link>
+                  <p
+                    :if={@monetization_enabled and @availability == :available}
+                    class="mt-3 text-[10px] text-slate-500 text-center uppercase tracking-widest"
+                  >
+                    Your identity expires in {@free_ttl_days} days
+                  </p>
+                <% end %>
+
+                <%= if @availability == :available and @selected_tier == "paid" do %>
+                  <button
+                    id="checkout-btn"
+                    phx-hook="PaymentInitiator"
+                    disabled={@payment_loading}
+                    class={[
+                      "w-full py-5 rounded-2xl flex items-center justify-center gap-3 bg-primary text-slate-950 font-black uppercase tracking-widest text-xs shadow-xl transition-all",
+                      if(@payment_loading,
+                        do: "opacity-50 cursor-not-allowed",
+                        else: "hover:scale-[1.02] hover:shadow-primary/40 shadow-primary/20"
+                      )
+                    ]}
+                  >
+                    <%= if @payment_loading do %>
+                      <.icon name="refresh_cw" class="size-5 animate-spin" /> Initializing...
+                    <% else %>
+                      Pay & Secure Identity <.icon name="credit_card" class="size-5 text-slate-950" />
+                    <% end %>
+                  </button>
+                  <p class="mt-3 text-[10px] text-slate-400 text-center uppercase tracking-widest">
+                    Secures identity for 1 Year &bull; {format_price(@price_cents, @currency)}
+                  </p>
+                <% end %>
+
+                <%= if @monetization_enabled and @availability == :available and is_nil(@selected_tier) do %>
+                  <div class="w-full py-5 rounded-2xl bg-white/5 border border-white/10 text-slate-500 flex flex-col items-center justify-center gap-1 font-bold uppercase tracking-widest cursor-not-allowed group">
+                    <span class="text-xs flex items-center gap-2">
+                      Select Tier to Continue <.icon name="hero-lock-closed" class="size-4" />
+                    </span>
+                    <span class="text-[8px] text-slate-600 lowercase tracking-normal font-medium">
+                      Choose Free or Paid above
+                    </span>
+                  </div>
+                <% end %>
+
+                <%!-- Initial state (no number yet) --%>
+                <%= if @availability == :idle do %>
+                  <div class="w-full py-5 rounded-2xl bg-white/5 border border-white/5 text-slate-600 flex items-center justify-center gap-3 font-bold uppercase tracking-widest cursor-not-allowed italic">
+                    {if @entry_mode == :generate,
+                      do: "Generate identity first",
+                      else: "Enter number first"}
+                  </div>
+                <% end %>
+              </div>
+            </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div
-              :for={
-                {step, title, desc, icon} <- [
-                  {1, "Save the number",
-                   "Add this number to your partner's profile in your phone's contact list.",
-                   "user_plus"},
-                  {2, "Match Number",
-                   "Check that both you and your partner have the exact same number.",
-                   "arrow_left_right"},
-                  {3, "Open Chat",
-                   "Use the saved number plus your private PIN to open the chat room.",
-                   "messages_square"}
-                ]
-              }
-              class="glass-card p-8 group relative overflow-hidden transition-all hover:border-primary/30"
-            >
-              <div class="absolute -right-4 -bottom-4 text-7xl font-black text-white/3 group-hover:text-primary/5 transition-colors italic">
-                {step}
+          <%!-- Instructions --%>
+          <div class="space-y-8 pt-10">
+            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 text-center mb-6">
+              Protocol Onboarding & Guidance
+            </h3>
+
+            <div class="space-y-6">
+              <div
+                :for={
+                  {step, icon, title, text, guidance} <- [
+                    {1, "hero-user-plus", "1. Save in Phonebook",
+                     "Add this number to your partner's actual contact list.",
+                     "This camouflages the channel as a regular contact in your native address book."},
+                    {2, "hero-share", "2. Share Channel ID", "Give this number to your partner.",
+                     "Communicate this number securely. Your PIN is personal and stays on your device."},
+                    {3, "hero-shield-check", "3. Establishment",
+                     "Once both parties connect, a zero-trace link is armed.",
+                     "All messages are locally encrypted and wiped atomically upon reply."}
+                  ]
+                }
+                class="glass-card p-8 flex flex-col md:flex-row gap-8 items-start relative group hover:border-white/10 transition-all duration-500"
+              >
+                <div class="size-16 rounded-2xl bg-white/5 flex items-center justify-center text-primary border border-white/5 shadow-inner group-hover:scale-110 transition-transform duration-500">
+                  <.icon name={icon} class="size-8" />
+                </div>
+                <div class="flex-1 space-y-4">
+                  <div class="space-y-1">
+                    <h4 class="font-bold text-white text-xl font-display tracking-tight">{title}</h4>
+                    <p class="text-slate-400 leading-relaxed font-medium">{text}</p>
+                  </div>
+                  <div class="p-4 rounded-xl bg-slate-900/50 border border-white/5 text-xs text-slate-500 leading-relaxed italic">
+                    {guidance}
+                  </div>
+                </div>
               </div>
-              <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-6 ring-1 ring-primary/20">
-                <.icon name={icon} class="size-6" />
-              </div>
-              <h4 class="text-white font-bold mb-3 flex items-center gap-2">
-                {title}
-              </h4>
-              <p class="text-sm text-slate-400 leading-relaxed font-medium">
-                {desc}
-              </p>
             </div>
           </div>
         </div>

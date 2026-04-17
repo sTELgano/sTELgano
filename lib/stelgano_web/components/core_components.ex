@@ -527,7 +527,7 @@ defmodule StelganoWeb.CoreComponents do
       |> String.replace("-micro", "")
       |> String.replace("-solid", "")
       |> String.replace("-", "_")
-      |> String.to_existing_atom()
+      |> String.to_atom()
 
     # Flatten attributes into a clean map for Lucideicons
     # 1. Merge global attributes from 'rest' (unrecognized by Phoenix components)

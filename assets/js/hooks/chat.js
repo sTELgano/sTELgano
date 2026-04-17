@@ -18,6 +18,7 @@
 import { AnonCrypto } from "../crypto/anon.js";
 import { generatePhoneNumber, CountryNames } from "phone-number-generator-js";
 import { Socket } from "phoenix";
+import { AsYouType } from "libphonenumber-js";
 
 // ---------------------------------------------------------------------------
 // Module-level state (mutable closure singletons)
@@ -110,6 +111,15 @@ export const AnonChat = {
     this.handleEvent("delete_message_js", ({ message_id }) =>
       this.deleteMessage(message_id)
     );
+    this.handleEvent("set_textarea_value", ({ value }) => {
+      const textarea = document.getElementById("chat-textarea");
+      if (textarea) {
+        textarea.value = value;
+        // Trigger resize
+        const event = new Event("input", { bubbles: true });
+        textarea.dispatchEvent(event);
+      }
+    });
 
     // Typing detection on textarea
     this.el.addEventListener("input", (e) => {
@@ -440,42 +450,17 @@ export const AnonChat = {
 
 export const PhoneGenerator = {
   mounted() {
-    // Synchronise full country list to server on mount
-    const countries = Object.keys(CountryNames)
-      .filter((k) => isNaN(k))
-      .map((k) => ({
-        name: k.replace(/_/g, " ").replace(/'/g, "'"),
-        value: k,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const isManualMode = this.el.id === "manual-hook";
 
-    this.pushEvent("set_countries", { countries });
+    if (isManualMode) {
+      this.initManualMode();
+    } else {
+      this.initGeneratorMode();
+    }
 
+    // Handle Copy Button
     this.el.addEventListener("click", (e) => {
-      // Handle Generate Button
-      const generateBtn = e.target.closest("#generate-btn");
-      if (generateBtn && !generateBtn.disabled) {
-        const countryInput = document.getElementById("country-select");
-        if (!countryInput) return;
-
-        this.pushEvent("start_generation", {});
-
-        setTimeout(() => {
-          const selected = countryInput.value;
-          const config = selected ? { countryName: CountryNames[selected] } : {};
-          const number = generatePhoneNumber(config);
-          this.pushEvent("number_generated", { number: number, display: number });
-
-          // Auto-copy to clipboard
-          navigator.clipboard.writeText(number).then(
-            () => this.pushEvent("copied", {}),
-            () => {}
-          );
-        }, 600); // Reduced to 600ms for snappier feel
-      }
-
-      // Handle Copy Button
-      const copyBtn = e.target.closest("#copy-btn");
+      const copyBtn = e.target.closest("#copy-generated-btn");
       if (copyBtn) {
         const number = copyBtn.dataset.number;
         if (number) {
@@ -486,7 +471,157 @@ export const PhoneGenerator = {
         }
       }
     });
+
+    // Synchronise countries logic removed -- now handled by native Elixir database.
   },
+
+  initGeneratorMode() {
+    this.selectedCountry = this.el.dataset.country;
+
+    // We use event delegation on the hook container because regen-btn 
+    // might be rendered conditionally after the hook mounts.
+    this.el.addEventListener("click", (e) => {
+      if (e.target.closest("#regen-btn")) {
+        this.generate();
+      }
+    });
+
+    this.handleEvent("country_selected", ({ country }) => {
+      this.selectedCountry = country;
+      this.generate();
+    });
+
+    // Auto-generate if country is already selected but no number is displayed
+    if (this.selectedCountry && !this.el.querySelector("#copy-generated-btn")) {
+      this.generate();
+    }
+  },
+
+  async generate() {
+    if (!this.selectedCountry) return;
+
+    this.pushEvent("start_generation", {});
+    
+    // Artificial delay for "calculating" feel
+    await new Promise(r => setTimeout(r, 600));
+
+    const config = { countryName: CountryNames[this.selectedCountry] };
+    const number = generatePhoneNumber(config);
+    const roomHash = await AnonCrypto.roomHash(number);
+    
+    this.pushEvent("number_generated", { number: number, display: number, room_hash: roomHash });
+
+    // Auto-copy to clipboard
+    navigator.clipboard.writeText(number).then(
+      () => this.pushEvent("copied", {}),
+      () => {}
+    );
+  },
+
+  initManualMode() {
+    const input = document.getElementById("manual-number-input");
+    if (!input) return;
+
+    // Track the current ISO code for formatting, initializing from dataset if present
+    this.currentIso = (this.el.dataset.iso || "").toUpperCase();
+
+    this.handleEvent("country_selected", ({ iso }) => {
+      // libphonenumber-js requires Uppercase ISO
+      this.currentIso = (iso || "").toUpperCase();
+      
+      // Fixed placeholder as requested
+      input.placeholder = "shared phone number";
+
+      // Re-trigger formatting on country change if input has value
+      if (input.value) {
+        this.formatInput();
+      }
+    });
+
+    this.formatInput = () => {
+      const val = input.value;
+      if (!val) return;
+
+      const formatter = new AsYouType(this.currentIso);
+      const formatted = formatter.input(val);
+      
+      // Update input
+      input.value = formatted;
+      
+      handleManualChange(formatted);
+    };
+
+    const handleManualChange = async (number) => {
+      const input = this.el.querySelector("#manual-number-input");
+      const formatter = new AsYouType(this.currentIso);
+      formatter.input(number);
+      const phoneNumber = formatter.getNumber();
+      
+      const isValid = !!(phoneNumber && phoneNumber.isValid());
+      
+      if (input) {
+        if (!number) {
+          input.classList.remove("is-valid", "is-invalid");
+        } else if (isValid) {
+          input.classList.add("is-valid");
+          input.classList.remove("is-invalid");
+        } else {
+          input.classList.add("is-invalid");
+          input.classList.remove("is-valid");
+        }
+      }
+
+      if (isValid) {
+        const fullNumber = phoneNumber.number;
+        const roomHash = await AnonCrypto.roomHash(fullNumber);
+        this.pushEvent("check_manual_number", { 
+          number: fullNumber, 
+          room_hash: roomHash,
+          original_input: number
+        });
+      } else {
+        this.pushEvent("manual_number_change", { 
+          value: number,
+          is_valid: false
+        });
+      }
+    };
+
+    input.addEventListener("input", () => {
+      this.formatInput();
+    });
+  },
+
+  updated() {
+    const isManualMode = this.el.id === "manual-hook";
+    if (isManualMode) {
+      const nextIso = (this.el.dataset.iso || "").toUpperCase();
+      if (nextIso !== this.currentIso) {
+        this.currentIso = nextIso;
+        if (this.formatInput) {
+          this.formatInput();
+        }
+      }
+    }
+  }
+};
+
+/**
+ * CountryPersistence hook — remembers the selected country in localStorage
+ */
+export const CountryPersistence = {
+  mounted() {
+    const stored = sessionStorage.getItem("stelgano_selected_country");
+    if (stored) {
+      this.pushEvent("restore_country", { country: stored });
+    }
+
+    this.handleEvent("country_selected", ({ country }) => {
+      if (country) {
+        sessionStorage.setItem("stelgano_selected_country", country);
+      }
+    });
+  }
 };
 
 // ---------------------------------------------------------------------------

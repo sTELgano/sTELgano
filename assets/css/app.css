@@ -1,8 +1,11 @@
 /* SPDX-FileCopyrightText: 2026 sTELgano Contributors */
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "../css";
+@source "../js";
 @source "../../lib/stelgano_web";
+
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap");
 
@@ -58,6 +61,18 @@
   --glow-primary: 0 0 25px rgba(0, 255, 163, 0.25);
 }
 
+@theme {
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-glow: var(--color-primary-glow);
+  --color-primary-soft: var(--color-primary-soft);
+  
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  
+  --color-warning: var(--warning);
+}
+
 /* ===========================================================================
    Base & Global Styles
    =========================================================================== */
@@ -68,6 +83,10 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   scroll-behavior: smooth;
+}
+
+*:focus, *:focus-visible {
+  outline: none !important;
 }
 
 body {
@@ -197,6 +216,16 @@ body {
   transform: translateY(-1px);
 }
 
+.glass-input.is-valid {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 20px var(--color-primary-soft);
+}
+
+.glass-input.is-invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 20px var(--danger-soft);
+}
+
 /* Premium Buttons */
 .btn-primary {
   background: linear-gradient(135deg, var(--color-primary), #00d98b);
@@ -244,6 +273,25 @@ body {
   color: var(--color-primary);
   transform: translateY(-2px);
   box-shadow: 0 10px 20px -10px rgba(0, 255, 163, 0.2);
+}
+
+/* Warning Card (Orange) */
+.warning-card {
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: var(--radius-xl);
+  padding: 1.25rem;
+  color: rgba(251, 191, 36, 0.9);
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  box-shadow: 0 8px 32px -4px rgba(251, 191, 36, 0.05);
+}
+
+.warning-card .icon {
+  color: var(--warning);
+  flex-shrink: 0;
+  margin-top: 0.125rem;
 }
 
 /* ===========================================================================
@@ -341,6 +389,24 @@ body {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes spin-reverse {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.5; filter: blur(10px); }
+  50% { opacity: 1; filter: blur(15px); }
+}
+
+.animate-spin-reverse {
+  animation: spin-reverse 3s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
 }
 
 .animate-in {

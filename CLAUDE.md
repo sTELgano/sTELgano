@@ -124,7 +124,6 @@ Payment flow:
 - `AdminAuth` — HTTP Basic Auth for `/admin` scope
 - CSP in router: strict `default-src 'self'` with specific allowances for fonts.googleapis.com/gstatic.com
 - Panic route: `GET /x` — instant session clear, no confirmation
-- Service worker (`priv/static/sw.js`) — privacy-first caching: app shell cache-first, sensitive routes (`/chat`, `/steg-number`) network-only, panic route (`/x`) clears all caches
 
 ### Routes
 
@@ -145,7 +144,7 @@ Payment flow:
 - Use `Req` for HTTP requests (already included), not HTTPoison/Tesla/httpc
 - Tailwind CSS v4 — no `tailwind.config.js`; uses `@import "tailwindcss"` syntax in `app.css`
 - Write Tailwind-based components manually — do NOT use daisyUI components
-- No inline `<script>` tags in templates (except theme bootstrap and SW registration in root layout) — use colocated JS hooks or external hooks in `assets/js/`
+- No inline `<script>` tags in templates (except theme bootstrap in root layout) — use colocated JS hooks or external hooks in `assets/js/`
 - No third-party analytics, tracking pixels, or external scripts — CSP enforces this
 - AGPL-3.0 licence; all source files need SPDX header: `# SPDX-License-Identifier: AGPL-3.0-only`
 - UI terminology: "steg number" (technical), "the number in your contacts" (user-facing); "channel" not "conversation"
