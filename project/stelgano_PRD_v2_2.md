@@ -972,7 +972,7 @@ stelgano/
 ├── priv/
 │   ├── repo/migrations/            6 migrations (rooms, access, messages, oban, rate_limit, remove_deleted_at)
 │   └── static/
-│       ├── sw.js                    service worker (privacy-first caching)
+│       ├── manifest.json            PWA manifest (standalone mode)
 │       ├── manifest.json            PWA manifest
 │       ├── favicon.ico
 │       └── images/

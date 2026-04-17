@@ -16,6 +16,7 @@ import {
   IntersectionReader,
   PaymentInitiator,
   PhoneGenerator,
+  CountryPersistence,
 } from "./hooks/chat.js"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -30,6 +31,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
     IntersectionReader,
     PaymentInitiator,
     PhoneGenerator,
+    CountryPersistence,
   },
 })
 

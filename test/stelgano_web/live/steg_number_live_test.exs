@@ -2,32 +2,31 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule StelganoWeb.StegNumberLiveTest do
-  @moduledoc "Tests for the steg number generator LiveView."
+  @moduledoc "Tests for the redesigned Channel Identity (steg-number) LiveView."
 
   use StelganoWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
 
+  alias Stelgano.Repo
+  alias Stelgano.Rooms.Room
+
   describe "GET /steg-number" do
-    test "renders the generator page", %{conn: conn} do
+    test "renders the identity page", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/steg-number")
-      assert html =~ "Secret Number Generator"
+      assert html =~ "Channel"
+      assert html =~ "Identity"
     end
 
-    test "shows setup guide steps", %{conn: conn} do
+    test "shows redesigned setup guide", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/steg-number")
-      assert html =~ "Save the number"
-      assert html =~ "Add this number"
+      assert html =~ "Save in Phonebook"
     end
 
-    test "has generate button", %{conn: conn} do
+    test "has mode selectors", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
-      assert has_element?(view, "#generate-btn")
-    end
-
-    test "has availability indicator", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/steg-number")
-      assert has_element?(view, "#generator-card")
+      assert has_element?(view, "button", "Generate New")
+      assert has_element?(view, "button", "Manual Entry")
     end
   end
 
@@ -44,7 +43,7 @@ defmodule StelganoWeb.StegNumberLiveTest do
       assert html =~ "+44 7700 900 123"
     end
 
-    test "shows copy button and availability after generation", %{conn: conn} do
+    test "shows copy button in generator mode", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
 
       render_hook(view, "number_generated", %{
@@ -52,50 +51,52 @@ defmodule StelganoWeb.StegNumberLiveTest do
         "display" => "+44 7700 900 456"
       })
 
-      assert has_element?(view, "#copy-btn")
-      assert has_element?(view, "#availability-check")
+      assert has_element?(view, "#copy-generated-btn")
     end
   end
 
-  describe "check_availability event" do
-    test "shows available message for unused room_hash", %{conn: conn} do
+  describe "manual entry flow" do
+    test "switches to manual mode", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
+      view |> element("button", "Manual Entry") |> render_click()
+      assert has_element?(view, "#manual-number-input")
+    end
 
-      render_hook(view, "number_generated", %{
+    test "checks manual number availability (available)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/steg-number")
+      view |> element("button", "Manual Entry") |> render_click()
+
+      render_hook(view, "check_manual_number", %{
         "number" => "+447700900000",
-        "display" => "+44 7700 900 000"
+        "room_hash" => "0000000000000000000000000000000000000000000000000000000000000000"
       })
 
-      hash = :crypto.hash(:sha256, "unused-steg-number")
-      fresh_hash = Base.encode16(hash, case: :lower)
-      render_hook(view, "check_availability", %{"room_hash" => fresh_hash})
-
-      html = render(view)
-      assert html =~ "Number Available"
+      assert render(view) =~ "New Identity Detected"
     end
 
-    test "shows taken message for existing active room", %{conn: conn} do
-      # Create an active room
-      hash = :crypto.hash(:sha256, "taken-steg-number")
-      existing_hash = Base.encode16(hash, case: :lower)
-      Stelgano.Rooms.find_or_create_room(existing_hash)
+    test "checks manual number availability (taken)", %{conn: conn} do
+      room_hash = String.duplicate("a", 64)
 
-      {:ok, view, _html} = live(conn, ~p"/steg-number")
-
-      render_hook(view, "number_generated", %{
-        "number" => "+447700900111",
-        "display" => "+44 7700 900 111"
+      Repo.insert!(%Room{
+        room_hash: room_hash,
+        tier: "free",
+        ttl_expires_at: DateTime.truncate(DateTime.utc_now(), :second)
       })
 
-      render_hook(view, "check_availability", %{"room_hash" => existing_hash})
+      {:ok, view, _html} = live(conn, ~p"/steg-number")
+      view |> element("button", "Manual Entry") |> render_click()
 
-      html = render(view)
-      assert html =~ "Active Room Detected"
+      render_hook(view, "check_manual_number", %{
+        "number" => "+447700900111",
+        "room_hash" => room_hash
+      })
+
+      assert render(view) =~ "Existing Channel Linked"
     end
   end
 
-  describe "copied event" do
-    test "shows Copied confirmation for 2 seconds", %{conn: conn} do
+  describe "copied confirmation" do
+    test "shows feedback after copy click", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
 
       render_hook(view, "number_generated", %{
@@ -103,10 +104,8 @@ defmodule StelganoWeb.StegNumberLiveTest do
         "display" => "+44 7700 900 789"
       })
 
-      view |> element("#copy-btn") |> render_click()
-
-      html = render(view)
-      assert html =~ "Copied to Clipboard"
+      view |> element("#copy-generated-btn") |> render_click()
+      assert render(view) =~ "Copied"
     end
   end
 end

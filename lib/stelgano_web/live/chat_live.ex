@@ -81,6 +81,8 @@ defmodule StelganoWeb.ChatLive do
       |> assign(:currency, Monetization.currency())
       |> assign(:_pending_phone, prefilled_phone)
       |> assign(:_pending_pin, "")
+      |> assign(:editing, false)
+      |> assign(:edit_value, "")
       |> assign_constants()
 
     {:ok, socket, layout: false}
@@ -324,8 +326,9 @@ defmodule StelganoWeb.ChatLive do
     msg = socket.assigns.message
 
     if msg,
-      do: {:noreply, assign(socket, :message, %{msg | edited: true})},
-      else: {:noreply, socket}
+      do:
+        {:noreply, socket |> assign(:message, %{msg | edited: true}) |> assign(:editing, false)},
+      else: {:noreply, assign(socket, :editing, false)}
   end
 
   @impl Phoenix.LiveView
@@ -349,7 +352,9 @@ defmodule StelganoWeb.ChatLive do
   @impl Phoenix.LiveView
   def handle_event("decrypt_error", _p, socket), do: {:noreply, socket}
   @impl Phoenix.LiveView
-  def handle_event("read_receipt_js", _p, socket), do: {:noreply, socket}
+  def handle_event("read_receipt_js", %{"message_id" => mid}, socket) do
+    {:noreply, push_event(socket, "read_receipt_js", %{message_id: mid})}
+  end
 
   @impl Phoenix.LiveView
   def handle_event("send_message", _params, socket) do
@@ -357,7 +362,66 @@ defmodule StelganoWeb.ChatLive do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("start_edit", _params, socket) do
+    msg = socket.assigns.message
+
+    if msg && msg.is_mine && !msg.read_at do
+      {:noreply,
+       socket
+       |> assign(:editing, true)
+       |> assign(:edit_value, msg.plaintext)
+       |> assign(:char_count, String.length(msg.plaintext))
+       |> push_event("set_textarea_value", %{value: msg.plaintext})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("cancel_edit", _params, socket) do
+    {:noreply, assign(socket, :editing, false)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("save_edit", _params, socket) do
+    msg = socket.assigns.message
+
+    if msg && socket.assigns.editing do
+      {:noreply,
+       push_event(socket, "edit_message_js", %{
+         message_id: msg.id,
+         plaintext: socket.assigns.edit_value
+       })}
+    else
+      {:noreply, assign(socket, :editing, false)}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("delete_mine", _params, socket) do
+    msg = socket.assigns.message
+
+    if msg && msg.is_mine && !msg.read_at do
+      {:noreply, push_event(socket, "delete_message_js", %{message_id: msg.id})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("delete_success", _params, socket) do
+    {:noreply, assign(socket, :message, nil)}
+  end
+
+  @impl Phoenix.LiveView
   def handle_event("input_change", %{"value" => value}, socket) do
+    socket =
+      if socket.assigns.editing do
+        assign(socket, :edit_value, value)
+      else
+        socket
+      end
+
     {:noreply, assign(socket, :char_count, String.length(value || ""))}
   end
 
@@ -892,46 +956,31 @@ defmodule StelganoWeb.ChatLive do
             </div>
           </div>
         <% end %>
-
-        <%!-- Async Indicator --%>
-        <%= if @typing_visible do %>
-          <div class="flex items-center gap-4 text-primary ml-2 animate-in py-4">
-            <div class="flex gap-1.5">
-              <div class="size-2 bg-primary/80 rounded-full animate-bounce"></div>
-              <div class="size-2 bg-primary/80 rounded-full animate-bounce [animation-delay:0.2s]">
-              </div>
-              <div class="size-2 bg-primary/80 rounded-full animate-bounce [animation-delay:0.4s]">
-              </div>
-            </div>
-            <span class="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
-              The other node is typing...
-            </span>
-          </div>
-        <% end %>
       </div>
 
       <%!-- User Interaction Zone --%>
       <div class="p-8 pb-10">
-        <%= if can_type?(assigns) do %>
-          <.render_input_area
-            char_count={@char_count}
-            max_chars={@max_chars}
-            counter_warn_at={@counter_warn_at}
-            counter_danger_at={@counter_danger_at}
-          />
-        <% else %>
-          <div class="glass-card flex items-center justify-center gap-4 py-6 border-white/5 select-none opacity-60 backdrop-grayscale">
-            <div class="flex gap-2 items-center">
-              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce"></div>
-              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.2s]">
-              </div>
-              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.4s]">
-              </div>
-            </div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-[0.3em] animate-pulse">
-              Waiting for reply...
-            </span>
-          </div>
+        <%= cond do %>
+          <% @editing -> %>
+            <.render_input_area
+              char_count={@char_count}
+              max_chars={@max_chars}
+              counter_warn_at={@counter_warn_at}
+              counter_danger_at={@counter_danger_at}
+              editing={true}
+              value={@edit_value}
+            />
+          <% can_type?(assigns) -> %>
+            <.render_input_area
+              char_count={@char_count}
+              max_chars={@max_chars}
+              counter_warn_at={@counter_warn_at}
+              counter_danger_at={@counter_danger_at}
+              editing={false}
+              value=""
+            />
+          <% true -> %>
+            <.render_waiting_area message={@message} typing={@typing_visible} />
         <% end %>
       </div>
 
@@ -1044,25 +1093,39 @@ defmodule StelganoWeb.ChatLive do
   attr :max_chars, :integer, required: true
   attr :counter_warn_at, :integer, required: true
   attr :counter_danger_at, :integer, required: true
+  attr :editing, :boolean, default: false
+  attr :value, :string, default: ""
 
   defp render_input_area(assigns) do
     ~H"""
     <div class="relative group">
       <%!-- Glow focus effect --%>
-      <div class="absolute -inset-1 bg-linear-to-r from-primary/20 via-emerald-400/20 to-primary/20 rounded-[2.5rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700">
+      <div class={[
+        "absolute -inset-1 rounded-[2.5rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700",
+        if(@editing,
+          do: "bg-linear-to-r from-amber-500/20 via-orange-400/20 to-amber-500/20",
+          else: "bg-linear-to-r from-primary/20 via-emerald-400/20 to-primary/20"
+        )
+      ]}>
       </div>
 
-      <div class="relative flex items-end gap-3 p-3 sm:p-5 rounded-4xl bg-slate-900 border-2 border-white/10 group-focus-within:border-primary/50 group-focus-within:bg-slate-950 transition-all duration-300 shadow-2xl z-50">
+      <div class={[
+        "relative flex items-end gap-3 p-3 sm:p-5 rounded-4xl bg-slate-900 border-2 transition-all duration-300 shadow-2xl z-50",
+        if(@editing,
+          do: "border-amber-500/30 group-focus-within:border-amber-500/50",
+          else: "border-white/10 group-focus-within:border-primary/50 group-focus-within:bg-slate-950"
+        )
+      ]}>
         <textarea
           id="chat-textarea"
-          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 py-4 px-2 resize-none max-h-60 min-h-[3.5rem] scrollbar-hide text-lg leading-relaxed font-medium"
-          placeholder="Construct secure message…"
+          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 focus:outline-none py-4 px-2 resize-none max-h-60 min-h-[3.5rem] scrollbar-hide text-lg leading-relaxed font-medium"
+          placeholder={if @editing, do: "Revise message...", else: "Construct secure message…"}
           rows="1"
           maxlength={@max_chars}
           phx-hook="AutoResize"
           phx-keyup="input_change"
           phx-update="ignore"
-        ></textarea>
+        >{@value}</textarea>
 
         <div class="flex items-center gap-4 pr-1 pb-1">
           <%= if @char_count >= @counter_warn_at do %>
@@ -1076,18 +1139,120 @@ defmodule StelganoWeb.ChatLive do
             </div>
           <% end %>
 
-          <button
-            id="btn-send"
-            class="size-16 rounded-[1.75rem] bg-primary text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,163,0.3)] hover:scale-110 active:scale-95 transition-all group disabled:grayscale disabled:opacity-50"
-            phx-click="send_message"
-            aria-label="Encrypt & Broadcast"
-          >
-            <.icon
-              name="send"
-              class="size-8 -rotate-12 group-hover:rotate-0 transition-transform"
-            />
-          </button>
+          <%= if @editing do %>
+            <button
+              phx-click="cancel_edit"
+              class="size-16 rounded-[1.75rem] bg-white/5 text-slate-400 flex items-center justify-center hover:bg-white/10 transition-all border border-white/10"
+              aria-label="Cancel Edit"
+            >
+              <.icon name="x" class="size-6" />
+            </button>
+            <button
+              id="btn-save"
+              class="size-16 rounded-[1.75rem] bg-amber-500 text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.3)] hover:scale-110 active:scale-95 transition-all group"
+              phx-click="save_edit"
+              aria-label="Update Message"
+            >
+              <.icon name="check" class="size-8 transition-transform text-slate-950" />
+            </button>
+          <% else %>
+            <button
+              id="btn-send"
+              class="size-16 rounded-[1.75rem] bg-primary text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,163,0.3)] hover:scale-110 active:scale-95 transition-all group disabled:grayscale disabled:opacity-50"
+              phx-click="send_message"
+              aria-label="Encrypt & Broadcast"
+            >
+              <.icon
+                name="send"
+                class="size-8 -rotate-12 group-hover:rotate-0 transition-transform text-slate-950"
+              />
+            </button>
+          <% end %>
         </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # Waiting area
+  # ---------------------------------------------------------------------------
+
+  attr :message, :map, required: true
+  attr :typing, :boolean, default: false
+
+  defp render_waiting_area(assigns) do
+    ~H"""
+    <div class={[
+      "glass-card p-6 flex flex-col sm:flex-row items-center justify-between gap-6 transition-all duration-700 animate-in relative overflow-hidden group",
+      if(@typing,
+        do: "border-primary/40 shadow-[0_0_40px_-5px_var(--color-primary-glow)]",
+        else: "border-white/5"
+      )
+    ]}>
+      <%!-- Sublte Background Animation --%>
+      <div class="absolute inset-0 bg-linear-to-r from-primary/0 via-primary/5 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-2000 ease-in-out pointer-events-none">
+      </div>
+
+      <div class="flex items-center gap-6 z-10">
+        <div class="relative flex items-center justify-center size-12">
+          <div class={[
+            "absolute inset-0 rounded-xl blur-lg animate-pulse transition-colors duration-500",
+            if(@typing, do: "bg-primary/40", else: "bg-primary/20")
+          ]}>
+          </div>
+          <div class="relative flex gap-1.5 items-center">
+            <div class={[
+              "size-2 rounded-full animate-bounce transition-colors duration-500",
+              if(@typing, do: "bg-primary", else: "bg-primary/60")
+            ]}>
+            </div>
+            <div class={[
+              "size-2 rounded-full animate-bounce [animation-delay:0.2s] transition-colors duration-500",
+              if(@typing, do: "bg-primary", else: "bg-primary/60")
+            ]}>
+            </div>
+            <div class={[
+              "size-2 rounded-full animate-bounce [animation-delay:0.4s] transition-colors duration-500",
+              if(@typing, do: "bg-primary", else: "bg-primary/60")
+            ]}>
+            </div>
+          </div>
+        </div>
+        <div class="space-y-1">
+          <p class={[
+            "text-xs font-black uppercase tracking-[0.3em] transition-all duration-500",
+            if(@typing,
+              do: "text-primary scale-105 origin-left",
+              else: "text-slate-400 group-hover:text-primary"
+            )
+          ]}>
+            {if @typing, do: "Node is typing...", else: "Waiting for Reply"}
+          </p>
+          <p class="text-[10px] text-slate-500 font-medium uppercase tracking-widest transition-opacity duration-500">
+            {if @typing,
+              do: "Processing incoming sequence...",
+              else: "Identity artifacts are locked until response"}
+          </p>
+        </div>
+      </div>
+
+      <div
+        :if={@message && @message.is_mine && is_nil(@message.read_at)}
+        class="flex items-center gap-3 z-10"
+      >
+        <button
+          phx-click="start_edit"
+          class="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-all border border-white/5 flex items-center gap-2"
+        >
+          <.icon name="edit_3" class="size-3" /> Edit Message
+        </button>
+        <button
+          phx-click="delete_mine"
+          class="px-5 py-2.5 rounded-xl bg-danger/10 hover:bg-danger/20 text-danger text-[10px] font-bold uppercase tracking-widest transition-all border border-danger/20 flex items-center gap-2"
+        >
+          <.icon name="trash_2" class="size-3" /> Delete
+        </button>
       </div>
     </div>
     """
@@ -1221,7 +1386,6 @@ defmodule StelganoWeb.ChatLive do
 
   defp can_type?(%{state: :chat, message: nil}), do: true
   defp can_type?(%{state: :chat, message: %{is_mine: false}}), do: true
-  defp can_type?(%{state: :chat, message: %{is_mine: true, read_at: nil}}), do: true
   defp can_type?(%{state: :chat, message: %{is_mine: true}}), do: false
   defp can_type?(_assigns), do: false
 end
