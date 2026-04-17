@@ -29,8 +29,6 @@ defmodule Stelgano.Monetization.Providers.Paystack do
 
   require Logger
 
-  @paystack_api "https://api.paystack.co"
-
   @impl Stelgano.Monetization.PaymentProvider
   def initialize(token_hash, amount_cents, currency) do
     callback_url = paystack_config(:callback_url)
@@ -43,15 +41,14 @@ defmodule Stelgano.Monetization.Providers.Paystack do
       channels: ["card", "bank", "ussd", "mobile_money"]
     }
 
-    case Req.post("#{@paystack_api}/transaction/initialize",
-           json: body,
-           headers: auth_headers()
-         ) do
+    req = build_req()
+
+    case Req.post(req, url: "/transaction/initialize", json: body) do
       {:ok, %{status: 200, body: %{"status" => true, "data" => %{"authorization_url" => url}}}} ->
         {:ok, url}
 
-      {:ok, %{body: body}} ->
-        Logger.error("Paystack initialize failed: #{inspect(body)}")
+      {:ok, %{body: resp_body}} ->
+        Logger.error("Paystack initialize failed: #{inspect(resp_body)}")
         {:error, :provider_error}
 
       {:error, reason} ->
@@ -76,20 +73,7 @@ defmodule Stelgano.Monetization.Providers.Paystack do
       |> Base.encode16(case: :lower)
 
     if Plug.Crypto.secure_compare(signature, expected) do
-      case Jason.decode(raw_body) do
-        {:ok, %{"event" => "charge.success", "data" => %{"reference" => ref}}} ->
-          # Double-verify with Paystack API
-          case verify_transaction(ref) do
-            :ok -> {:ok, ref}
-            {:error, _reason} = err -> err
-          end
-
-        {:ok, _other_event} ->
-          {:error, :ignored_event}
-
-        {:error, _decode_error} ->
-          {:error, :invalid_json}
-      end
+      handle_verified_webhook(raw_body)
     else
       {:error, :invalid_signature}
     end
@@ -101,14 +85,14 @@ defmodule Stelgano.Monetization.Providers.Paystack do
   """
   @spec verify_transaction(String.t()) :: :ok | {:error, term()}
   def verify_transaction(reference) do
-    case Req.get("#{@paystack_api}/transaction/verify/#{reference}",
-           headers: auth_headers()
-         ) do
+    req = build_req()
+
+    case Req.get(req, url: "/transaction/verify/#{reference}") do
       {:ok, %{status: 200, body: %{"status" => true, "data" => %{"status" => "success"}}}} ->
         :ok
 
-      {:ok, %{body: body}} ->
-        Logger.warning("Paystack verification failed for #{reference}: #{inspect(body)}")
+      {:ok, %{body: resp_body}} ->
+        Logger.warning("Paystack verification failed for #{reference}: #{inspect(resp_body)}")
         {:error, :verification_failed}
 
       {:error, reason} ->
@@ -121,8 +105,35 @@ defmodule Stelgano.Monetization.Providers.Paystack do
   # Private helpers
   # ---------------------------------------------------------------------------
 
-  defp auth_headers do
-    [{"authorization", "Bearer #{paystack_config(:secret_key)}"}]
+  defp handle_verified_webhook(raw_body) do
+    case Jason.decode(raw_body) do
+      {:ok, %{"event" => "charge.success", "data" => %{"reference" => ref}}} ->
+        case verify_transaction(ref) do
+          :ok -> {:ok, ref}
+          {:error, _reason} = err -> err
+        end
+
+      {:ok, _other_event} ->
+        {:error, :ignored_event}
+
+      {:error, _decode_error} ->
+        {:error, :invalid_json}
+    end
+  end
+
+  defp build_req do
+    req =
+      Req.new(
+        base_url: "https://api.paystack.co",
+        headers: [{"authorization", "Bearer #{paystack_config(:secret_key)}"}],
+        retry: :transient
+      )
+
+    if Application.get_env(:stelgano, :req_test_enabled, false) do
+      Req.merge(req, plug: {Req.Test, __MODULE__}, retry: false)
+    else
+      req
+    end
   end
 
   defp paystack_config(key) do

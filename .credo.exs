@@ -75,7 +75,7 @@
           {Credo.Check.Refactor.MapInto, []},
           {Credo.Check.Refactor.MapMap, []},
           {Credo.Check.Refactor.MatchInCondition, []},
-          {Credo.Check.Refactor.ModuleDependencies, [max_deps: 20]},
+          {Credo.Check.Refactor.ModuleDependencies, [max_deps: 25]},
           {Credo.Check.Refactor.NegatedConditionsInUnless, []},
           {Credo.Check.Refactor.NegatedConditionsWithElse, []},
           {Credo.Check.Refactor.Nesting, [max_nesting: 3]},

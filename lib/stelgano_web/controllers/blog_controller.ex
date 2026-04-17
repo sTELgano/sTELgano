@@ -114,7 +114,12 @@ defmodule StelganoWeb.BlogController do
         |> render(:"404")
 
       post ->
-        render(conn, String.to_existing_atom(String.replace(slug, "-", "_")),
+        template =
+          slug
+          |> String.replace("-", "_")
+          |> String.to_existing_atom()
+
+        render(conn, template,
           page_title: "#{post.title} — sTELgano",
           post: post
         )

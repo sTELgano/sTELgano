@@ -9,7 +9,8 @@ defmodule Stelgano.Monetization.ExtensionTokenTest do
   alias Stelgano.Monetization.ExtensionToken
 
   defp hex64(seed) do
-    :crypto.hash(:sha256, "token-schema-#{seed}")
+    "token-schema-#{seed}"
+    |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
   end
 
@@ -18,7 +19,8 @@ defmodule Stelgano.Monetization.ExtensionTokenTest do
       token_hash: hex64(seed),
       amount_cents: 200,
       currency: "USD",
-      expires_at: DateTime.add(DateTime.utc_now(), 86_400, :second) |> DateTime.truncate(:second)
+      expires_at:
+        DateTime.utc_now() |> DateTime.add(86_400, :second) |> DateTime.truncate(:second)
     }
   end
 
@@ -79,8 +81,10 @@ defmodule Stelgano.Monetization.ExtensionTokenTest do
 
   describe "paid_changeset/2" do
     test "sets status to paid and paid_at" do
+      attrs = valid_attrs(10)
+
       {:ok, token} =
-        valid_attrs(10)
+        attrs
         |> ExtensionToken.create_changeset()
         |> Repo.insert()
 
@@ -96,8 +100,10 @@ defmodule Stelgano.Monetization.ExtensionTokenTest do
 
   describe "redeemed_changeset/1" do
     test "sets status to redeemed and redeemed_at" do
+      attrs = valid_attrs(20)
+
       {:ok, token} =
-        valid_attrs(20)
+        attrs
         |> ExtensionToken.create_changeset()
         |> Repo.insert()
 

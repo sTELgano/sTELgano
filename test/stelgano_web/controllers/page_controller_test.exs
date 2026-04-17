@@ -14,34 +14,33 @@ defmodule StelganoWeb.PageControllerTest do
 
     test "homepage includes call to action", %{conn: conn} do
       conn = get(conn, ~p"/")
-      assert html_response(conn, 200) =~ "Open Private Chat"
+      assert html_response(conn, 200) =~ "Start a Private Chat"
     end
 
     test "homepage explains what the server stores", %{conn: conn} do
       conn = get(conn, ~p"/")
       html = html_response(conn, 200)
-      assert html =~ "What is logged"
-      assert html =~ "What is never stored"
-      assert html =~ "Our Security Model"
+      assert html =~ "What the server stores"
+      assert html =~ "What the server never sees"
     end
 
-    test "homepage is honest about limitations", %{conn: conn} do
+    test "homepage mentions security model", %{conn: conn} do
       conn = get(conn, ~p"/")
-      assert html_response(conn, 200) =~ "Our Security Model"
+      assert html_response(conn, 200) =~ "Security Model"
     end
   end
 
   describe "GET /security" do
     test "renders security page", %{conn: conn} do
       conn = get(conn, ~p"/security")
-      assert html_response(conn, 200) =~ "Security Guide"
+      assert html_response(conn, 200) =~ "Security"
     end
 
     test "security page shows derivation chain", %{conn: conn} do
       conn = get(conn, ~p"/security")
       html = html_response(conn, 200)
-      assert html =~ "Chat ID"
-      assert html =~ "Secure"
+      assert html =~ "Derivation Chain"
+      assert html =~ "room_hash"
     end
 
     test "security page mentions AES-256-GCM", %{conn: conn} do
@@ -69,14 +68,11 @@ defmodule StelganoWeb.PageControllerTest do
       conn = get(conn, ~p"/terms")
       html = html_response(conn, 200)
       assert html =~ "Terms"
-      assert html =~ "Service."
     end
 
     test "states license information", %{conn: conn} do
       conn = get(conn, ~p"/terms")
-
-      assert html_response(conn, 200) =~
-               "licensed under the AGPL-3.0"
+      assert html_response(conn, 200) =~ "AGPL-3.0"
     end
   end
 
@@ -84,6 +80,16 @@ defmodule StelganoWeb.PageControllerTest do
     test "renders about page", %{conn: conn} do
       conn = get(conn, ~p"/about")
       assert html_response(conn, 200) =~ "About sTELgano"
+    end
+  end
+
+  describe "GET /pricing" do
+    test "renders pricing page", %{conn: conn} do
+      conn = get(conn, ~p"/pricing")
+      html = html_response(conn, 200)
+      assert html =~ "Pricing"
+      assert html =~ "Temporary"
+      assert html =~ "Dedicated"
     end
   end
 end

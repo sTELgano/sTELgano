@@ -17,7 +17,8 @@ defmodule Stelgano.MonetizationTest do
   alias Stelgano.Rooms.Room
 
   defp hex64(seed) do
-    :crypto.hash(:sha256, "monetization-test-#{seed}")
+    "monetization-test-#{seed}"
+    |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
   end
 
@@ -35,11 +36,15 @@ defmodule Stelgano.MonetizationTest do
   end
 
   defp generate_secret do
-    :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+    32
+    |> :crypto.strong_rand_bytes()
+    |> Base.encode16(case: :lower)
   end
 
   defp hash_secret(secret) do
-    :crypto.hash(:sha256, secret) |> Base.encode16(case: :lower)
+    secret
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
   end
 
   # ---------------------------------------------------------------------------
@@ -52,7 +57,8 @@ defmodule Stelgano.MonetizationTest do
     end
 
     test "free_ttl_days/0 returns configured value" do
-      assert is_integer(Monetization.free_ttl_days()) or Monetization.free_ttl_days() == :unlimited
+      assert is_integer(Monetization.free_ttl_days()) or
+               Monetization.free_ttl_days() == :unlimited
     end
 
     test "paid_ttl_days/0 returns configured value" do
@@ -125,7 +131,8 @@ defmodule Stelgano.MonetizationTest do
     end
 
     test "returns not_found for unknown token" do
-      assert {:error, :not_found} = Monetization.mark_paid(hex64("nonexistent"))
+      unknown = hex64("nonexistent")
+      assert {:error, :not_found} = Monetization.mark_paid(unknown)
     end
 
     test "stores provider_ref" do
