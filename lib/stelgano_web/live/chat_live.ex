@@ -431,7 +431,11 @@ defmodule StelganoWeb.ChatLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div id="chat-root" phx-hook="AnonChat" class="h-dvh w-screen overflow-hidden bg-slate-950 text-white">
+    <div
+      id="chat-root"
+      phx-hook="AnonChat"
+      class="h-dvh w-screen overflow-hidden bg-slate-950 text-white"
+    >
       <Layouts.flash_group flash={@flash} id="chat-flash" />
       {render_state(assigns)}
     </div>
@@ -802,8 +806,10 @@ defmodule StelganoWeb.ChatLive do
           <div class="glass-card flex items-center justify-center gap-4 py-6 border-white/5 select-none opacity-60 backdrop-grayscale">
             <div class="flex gap-2 items-center">
               <div class="size-1.5 rounded-full bg-primary/40 animate-bounce"></div>
-              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.2s]"></div>
-              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.4s]"></div>
+              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.2s]">
+              </div>
+              <div class="size-1.5 rounded-full bg-primary/40 animate-bounce [animation-delay:0.4s]">
+              </div>
             </div>
             <span class="text-xs font-bold text-slate-400 uppercase tracking-[0.3em] animate-pulse">
               Waiting for reply...

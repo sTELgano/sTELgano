@@ -30,7 +30,8 @@
         </div>
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
           <p>
-            Your messages are <span class="text-white">encrypted on your device</span> before they ever leave your browser.
+            Your messages are <span class="text-white">encrypted on your device</span>
+            before they ever leave your browser.
             The server never sees your phone number, your PIN, or the content of your messages. It only receives
             opaque hashes and ciphertext that are meaningless without your credentials.
           </p>
@@ -73,11 +74,26 @@
             a series of one-way cryptographic functions. Here is what happens when you enter your credentials:
           </p>
           <ol class="list-decimal list-inside space-y-2 text-slate-300">
-            <li>Your phone number is <span class="text-white">normalised</span> to E.164 format &mdash; spaces, dashes, and formatting are stripped.</li>
-            <li>A <span class="text-white">room hash</span> is computed so the server can look up your room without knowing your number.</li>
-            <li>An <span class="text-white">access hash</span> is computed from your number and PIN &mdash; this proves you know the PIN without revealing it.</li>
-            <li>An <span class="text-white">encryption key</span> is derived using 600,000 rounds of PBKDF2 &mdash; this key never leaves your browser.</li>
-            <li>A <span class="text-white">sender hash</span> is computed so the server can tell which participant sent a message, without knowing who they are.</li>
+            <li>
+              Your phone number is <span class="text-white">normalised</span>
+              to E.164 format &mdash; spaces, dashes, and formatting are stripped.
+            </li>
+            <li>
+              A <span class="text-white">room hash</span>
+              is computed so the server can look up your room without knowing your number.
+            </li>
+            <li>
+              An <span class="text-white">access hash</span>
+              is computed from your number and PIN &mdash; this proves you know the PIN without revealing it.
+            </li>
+            <li>
+              An <span class="text-white">encryption key</span>
+              is derived using 600,000 rounds of PBKDF2 &mdash; this key never leaves your browser.
+            </li>
+            <li>
+              A <span class="text-white">sender hash</span>
+              is computed so the server can tell which participant sent a message, without knowing who they are.
+            </li>
           </ol>
         </div>
       </div>
@@ -208,7 +224,8 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
             </h4>
           </div>
           <p class="text-sm text-slate-400 font-medium leading-relaxed">
-            We are honest about our limits. sTELgano does <span class="text-white">not</span> protect against:
+            We are honest about our limits. sTELgano does <span class="text-white">not</span>
+            protect against:
           </p>
           <ul class="space-y-4">
             <li
@@ -267,7 +284,8 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
               </p>
             </blockquote>
             <p class="text-lg text-slate-300 font-medium leading-relaxed max-w-3xl">
-              The answer: <span class="text-white">a blank entry screen with two fields. Nothing else.</span>
+              The answer:
+              <span class="text-white">a blank entry screen with two fields. Nothing else.</span>
               No message previews, no contact list, no notification badges, no chat history.
               There is nothing to find because nothing is stored.
             </p>
@@ -353,7 +371,8 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
                   {item, state, color} <- [
                     {"Phone Numbers", "Never stored — only hashed derivatives", "primary"},
                     {"PINs", "Never stored — only hashed derivatives", "primary"},
-                    {"Plaintext Messages", "Never reach the server — encrypted client-side", "primary"},
+                    {"Plaintext Messages", "Never reach the server — encrypted client-side",
+                     "primary"},
                     {"Encryption Keys", "Never leave the browser — derived locally", "primary"},
                     {"Room Identifiers", "SHA-256 hash only (irreversible)", "slate"},
                     {"Access Credentials", "SHA-256 hash only (irreversible)", "slate"},
@@ -421,7 +440,10 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
         >
           <.icon name="file_text" class="size-4 group-hover/link:text-primary transition-colors" />
           <span class="font-mono text-xs tracking-wider">/.well-known/security.txt</span>
-          <.icon name="arrow_up_right" class="size-4 text-slate-500 group-hover/link:text-primary transition-colors" />
+          <.icon
+            name="arrow_up_right"
+            class="size-4 text-slate-500 group-hover/link:text-primary transition-colors"
+          />
         </.link>
       </div>
     </div>

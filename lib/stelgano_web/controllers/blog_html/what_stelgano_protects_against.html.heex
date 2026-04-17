@@ -164,10 +164,14 @@
             <li
               :for={
                 {scenario, recommendation} <- [
-                  {"Government surveillance", "Use Tor, Tails, or a hardened operating system designed for high-threat environments."},
-                  {"Legal pressure or subpoena risk", "Consult a lawyer. Technology alone cannot protect you from legal compulsion."},
-                  {"Compromised device", "Re-image the device from a trusted source before using any secure communication tool."},
-                  {"Life-or-death stakes", "Use multiple layers of protection. No single tool is sufficient. Seek expert operational security guidance."}
+                  {"Government surveillance",
+                   "Use Tor, Tails, or a hardened operating system designed for high-threat environments."},
+                  {"Legal pressure or subpoena risk",
+                   "Consult a lawyer. Technology alone cannot protect you from legal compulsion."},
+                  {"Compromised device",
+                   "Re-image the device from a trusted source before using any secure communication tool."},
+                  {"Life-or-death stakes",
+                   "Use multiple layers of protection. No single tool is sufficient. Seek expert operational security guidance."}
                 ]
               }
               class="flex items-start gap-4"
@@ -175,7 +179,7 @@
               <.icon name="arrow_right" class="size-4 text-primary shrink-0 mt-1" />
               <div>
                 <span class="text-white font-bold text-sm">{scenario}:</span>
-                <span class="text-slate-400 text-sm font-medium"> {recommendation}</span>
+                <span class="text-slate-400 text-sm font-medium">{recommendation}</span>
               </div>
             </li>
           </ul>

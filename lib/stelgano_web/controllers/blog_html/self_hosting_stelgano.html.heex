@@ -37,8 +37,7 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              The ultimate trust boundary. When you run your own sTELgano instance, you control
-              <span class="text-white">the server, the database, the network, and the logs</span>. You do
+              The ultimate trust boundary. When you run your own sTELgano instance, you control <span class="text-white">the server, the database, the network, and the logs</span>. You do
               not have to trust anyone &mdash; not even us.
             </p>
             <p>
@@ -125,9 +124,15 @@
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b border-white/10">
-                  <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">Variable</th>
-                  <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">Required</th>
-                  <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">Purpose</th>
+                  <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">
+                    Variable
+                  </th>
+                  <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">
+                    Required
+                  </th>
+                  <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">
+                    Purpose
+                  </th>
                 </tr>
               </thead>
               <tbody class="text-slate-400">
@@ -159,7 +164,10 @@
             <p>
               Generate a secret key base with:
             </p>
-            <pre phx-no-curly-interpolation class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>mix phx.gen.secret</code></pre>
+            <pre
+              phx-no-curly-interpolation
+              class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"
+            ><code>mix phx.gen.secret</code></pre>
           </div>
         </div>
       </section>
@@ -179,11 +187,7 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              You can override the default cryptographic salts via environment variables:
-              <span class="font-mono text-xs text-primary">ROOM_SALT</span>,
-              <span class="font-mono text-xs text-primary">ACCESS_SALT</span>,
-              <span class="font-mono text-xs text-primary">SENDER_SALT</span>, and
-              <span class="font-mono text-xs text-primary">ENC_SALT</span>.
+              You can override the default cryptographic salts via environment variables: <span class="font-mono text-xs text-primary">ROOM_SALT</span>, <span class="font-mono text-xs text-primary">ACCESS_SALT</span>, <span class="font-mono text-xs text-primary">SENDER_SALT</span>, and <span class="font-mono text-xs text-primary">ENC_SALT</span>.
             </p>
             <p class="text-red-400 font-semibold">
               WARNING: Changing salts after users have created rooms will make all existing rooms
@@ -216,7 +220,10 @@
               PostgreSQL with <span class="text-white">binary UUIDs</span>. All table IDs are generated as
               binary UUIDs, and all timestamps use UTC. The setup is straightforward:
             </p>
-            <pre phx-no-curly-interpolation class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>mix ecto.setup</code></pre>
+            <pre
+              phx-no-curly-interpolation
+              class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"
+            ><code>mix ecto.setup</code></pre>
             <p>
               This single command creates the database, runs all migrations, and seeds initial data.
               Oban job tables are created alongside the application tables &mdash; no separate migration
@@ -242,7 +249,8 @@
             </div>
             <h3 class="text-white font-display font-bold text-lg">Bare Metal</h3>
             <p class="text-slate-400 text-sm leading-relaxed">
-              Build a release with <span class="font-mono text-xs text-primary">mix release</span> and
+              Build a release with <span class="font-mono text-xs text-primary">mix release</span>
+              and
               run it directly. Simplest deployment, full control.
             </p>
           </div>
@@ -298,19 +306,30 @@
             <ul class="space-y-2">
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-primary shrink-0 mt-0.5" />
-                <span><span class="text-white">HSTS</span> &mdash; enforces HTTPS for all connections</span>
+                <span>
+                  <span class="text-white">HSTS</span> &mdash; enforces HTTPS for all connections
+                </span>
               </li>
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-primary shrink-0 mt-0.5" />
-                <span><span class="text-white">CSP</span> &mdash; strict Content Security Policy blocking inline scripts and external resources</span>
+                <span>
+                  <span class="text-white">CSP</span>
+                  &mdash; strict Content Security Policy blocking inline scripts and external resources
+                </span>
               </li>
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-primary shrink-0 mt-0.5" />
-                <span><span class="text-white">Cache-Control: no-store</span> &mdash; prevents caching of sensitive pages</span>
+                <span>
+                  <span class="text-white">Cache-Control: no-store</span>
+                  &mdash; prevents caching of sensitive pages
+                </span>
               </li>
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-primary shrink-0 mt-0.5" />
-                <span><span class="text-white">Rate limiting</span> &mdash; IP-based throttling via PlugAttack</span>
+                <span>
+                  <span class="text-white">Rate limiting</span>
+                  &mdash; IP-based throttling via PlugAttack
+                </span>
               </li>
             </ul>
             <p>
@@ -336,9 +355,11 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              The admin dashboard at <span class="font-mono text-xs text-primary">/admin</span> provides
+              The admin dashboard at <span class="font-mono text-xs text-primary">/admin</span>
+              provides
               aggregate metrics about your instance. It is protected by
-              <span class="text-white">HTTP Basic Auth</span> &mdash; set your credentials via environment
+              <span class="text-white">HTTP Basic Auth</span>
+              &mdash; set your credentials via environment
               variables.
             </p>
             <p>
@@ -370,7 +391,9 @@
             <ul class="space-y-2">
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-primary shrink-0 mt-0.5" />
-                <span>Messages are hard-deleted immediately when a reply arrives (N=1 invariant)</span>
+                <span>
+                  Messages are hard-deleted immediately when a reply arrives (N=1 invariant)
+                </span>
               </li>
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-primary shrink-0 mt-0.5" />
@@ -402,12 +425,16 @@
             <p>
               Upgrading is straightforward:
             </p>
-            <pre phx-no-curly-interpolation class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>git pull origin main
+            <pre
+              phx-no-curly-interpolation
+              class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"
+            ><code>git pull origin main
 mix deps.get
 mix ecto.migrate
 mix phx.server</code></pre>
             <p>
-              The protocol is designed for <span class="text-white">backward compatibility</span> within the
+              The protocol is designed for <span class="text-white">backward compatibility</span>
+              within the
               same major version. Migrations are additive &mdash; they add columns and tables but do not
               remove or rename existing ones. Your data is safe across upgrades.
             </p>
@@ -419,7 +446,10 @@ mix phx.server</code></pre>
     <%!-- Footer --%>
     <div class="space-y-8 animate-in stagger-5">
       <div class="flex items-center justify-between pt-8 border-t border-white/5">
-        <.link navigate={~p"/blog"} class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <.link
+          navigate={~p"/blog"}
+          class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm"
+        >
           <.icon name="arrow_left" class="size-4 group-hover:-translate-x-1 transition-transform" />
           Back to Blog
         </.link>
@@ -429,7 +459,10 @@ mix phx.server</code></pre>
         <p class="text-slate-500 text-sm font-medium">
           Ready to run your own instance?
         </p>
-        <.link navigate={~p"/steg-number"} class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        <.link
+          navigate={~p"/steg-number"}
+          class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group"
+        >
           Try the Hosted Version First
           <.icon name="arrow_right" class="size-5 group-hover:translate-x-1 transition-transform" />
         </.link>

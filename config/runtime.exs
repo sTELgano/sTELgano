@@ -141,6 +141,50 @@ if config_env() == :prod do
 end
 
 # ---------------------------------------------------------------------------
+# Monetization — Paystack credentials (production)
+# ---------------------------------------------------------------------------
+if config_env() == :prod do
+  monetization_enabled =
+    System.get_env("MONETIZATION_ENABLED", "false") in ~w(true 1 yes)
+
+  if monetization_enabled do
+    paystack_secret =
+      System.get_env("PAYSTACK_SECRET_KEY") ||
+        raise """
+        environment variable PAYSTACK_SECRET_KEY is missing.
+        Required when MONETIZATION_ENABLED=true.
+        """
+
+    paystack_public =
+      System.get_env("PAYSTACK_PUBLIC_KEY") ||
+        raise """
+        environment variable PAYSTACK_PUBLIC_KEY is missing.
+        Required when MONETIZATION_ENABLED=true.
+        """
+
+    callback_url =
+      System.get_env("PAYSTACK_CALLBACK_URL") ||
+        raise """
+        environment variable PAYSTACK_CALLBACK_URL is missing.
+        Example: https://stelgano.com/payment/callback
+        """
+
+    config :stelgano, Stelgano.Monetization,
+      enabled: true,
+      provider: Stelgano.Monetization.Providers.Paystack,
+      free_ttl_days: String.to_integer(System.get_env("FREE_TTL_DAYS", "7")),
+      paid_ttl_days: String.to_integer(System.get_env("PAID_TTL_DAYS", "365")),
+      price_cents: String.to_integer(System.get_env("PRICE_CENTS", "200")),
+      currency: System.get_env("PAYMENT_CURRENCY", "USD")
+
+    config :stelgano, Stelgano.Monetization.Providers.Paystack,
+      secret_key: paystack_secret,
+      public_key: paystack_public,
+      callback_url: callback_url
+  end
+end
+
+# ---------------------------------------------------------------------------
 # Oban — production queue configuration
 # ---------------------------------------------------------------------------
 if config_env() == :prod do
@@ -150,7 +194,8 @@ if config_env() == :prod do
       {Oban.Plugins.Pruner, max_age: 7 * 24 * 60 * 60},
       {Oban.Plugins.Cron,
        crontab: [
-         {"0 * * * *", Stelgano.Jobs.ExpireTtlRooms}
+         {"0 * * * *", Stelgano.Jobs.ExpireTtlRooms},
+         {"0 3 * * *", Stelgano.Jobs.ExpireUnredeemedTokens}
        ]}
     ],
     queues: [maintenance: 2]

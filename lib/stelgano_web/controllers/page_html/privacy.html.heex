@@ -28,7 +28,9 @@
                 <.icon name="zap" class="size-6 text-primary" />
               </div>
               <div>
-                <span class="text-[10px] font-black uppercase tracking-[0.3em] text-primary">TL;DR</span>
+                <span class="text-[10px] font-black uppercase tracking-[0.3em] text-primary">
+                  TL;DR
+                </span>
                 <h3 class="text-2xl font-extrabold text-white font-display tracking-tight">
                   The Short Version
                 </h3>
@@ -160,13 +162,16 @@
           </h4>
           <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
             <p>
-              <span class="text-white">One session cookie</span> is used exclusively for CSRF protection.
+              <span class="text-white">One session cookie</span>
+              is used exclusively for CSRF protection.
               It contains no identifying information and expires when you close your browser.
             </p>
             <p>
-              <span class="text-white">SessionStorage</span> holds 5 keys during an active session: your
+              <span class="text-white">SessionStorage</span>
+              holds 5 keys during an active session: your
               phone, room ID, room hash, sender hash, and access hash. All 5 keys are
-              <span class="text-primary">automatically cleared</span> on logout, panic (/x), or room expiry.
+              <span class="text-primary">automatically cleared</span>
+              on logout, panic (/x), or room expiry.
             </p>
             <p>
               No tracking cookies. No localStorage persistence. No fingerprinting tokens.
@@ -188,13 +193,15 @@
           </h4>
           <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
             <p>
-              <span class="text-white">Zero third-party analytics.</span> No Google Analytics, no Mixpanel,
+              <span class="text-white">Zero third-party analytics.</span>
+              No Google Analytics, no Mixpanel,
               no Plausible, no trackers, no pixels, no external scripts of any kind.
             </p>
             <p>
               Server-side aggregate metrics (total rooms created, total messages sent) are collected
               for operational monitoring only. These metrics have
-              <span class="text-primary">no individual correlation</span> &mdash; they cannot be traced
+              <span class="text-primary">no individual correlation</span>
+              &mdash; they cannot be traced
               back to any user or session.
             </p>
             <p>
@@ -220,9 +227,9 @@
           </h4>
           <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
             <p>
-              IP addresses are used <span class="text-white">exclusively for rate limiting</span> to prevent
-              abuse and denial-of-service attacks. They are stored in an in-memory cache (ETS) and
-              <span class="text-primary">automatically expire within 48 hours</span>.
+              IP addresses are used <span class="text-white">exclusively for rate limiting</span>
+              to prevent
+              abuse and denial-of-service attacks. They are stored in an in-memory cache (ETS) and <span class="text-primary">automatically expire within 48 hours</span>.
             </p>
             <p>
               IP addresses are never correlated with rooms, messages, or user activity.
@@ -245,14 +252,16 @@
           </h4>
           <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
             <p>
-              <span class="text-white">Google Fonts CDN</span> is used for loading the Outfit, Inter, and
+              <span class="text-white">Google Fonts CDN</span>
+              is used for loading the Outfit, Inter, and
               JetBrains Mono typefaces. Font requests go to
-              <span class="font-mono text-xs text-slate-300">fonts.googleapis.com</span> and
-              <span class="font-mono text-xs text-slate-300">fonts.gstatic.com</span>, which are
+              <span class="font-mono text-xs text-slate-300">fonts.googleapis.com</span>
+              and <span class="font-mono text-xs text-slate-300">fonts.gstatic.com</span>, which are
               explicitly allowed in our CSP headers.
             </p>
             <p>
-              <span class="text-primary">No other third-party services are used.</span> No CDNs for JavaScript,
+              <span class="text-primary">No other third-party services are used.</span>
+              No CDNs for JavaScript,
               no external APIs, no cloud-hosted analytics, no advertising networks.
             </p>
           </div>
@@ -328,12 +337,12 @@
           </h4>
           <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
             <p>
-              sTELgano is <span class="text-white">compliant by design</span> with GDPR, CCPA, and similar
+              sTELgano is <span class="text-white">compliant by design</span>
+              with GDPR, CCPA, and similar
               data protection regulations.
             </p>
             <p>
-              There is no personal data to request, export, or delete because
-              <span class="text-primary">we cannot identify you</span>. No accounts exist. No user profiles
+              There is no personal data to request, export, or delete because <span class="text-primary">we cannot identify you</span>. No accounts exist. No user profiles
               exist. The data we store (hashes and ciphertext) cannot be linked to any individual.
             </p>
             <p>

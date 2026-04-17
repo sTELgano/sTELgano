@@ -26,6 +26,7 @@ defmodule Stelgano.Rooms.Room do
           id: Ecto.UUID.t() | nil,
           room_hash: String.t() | nil,
           is_active: boolean(),
+          tier: String.t(),
           ttl_expires_at: DateTime.t() | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil
@@ -37,6 +38,7 @@ defmodule Stelgano.Rooms.Room do
   schema "rooms" do
     field :room_hash, :string
     field :is_active, :boolean, default: true
+    field :tier, :string, default: "free"
     field :ttl_expires_at, :utc_datetime
 
     has_many :messages, Stelgano.Rooms.Message
@@ -53,8 +55,9 @@ defmodule Stelgano.Rooms.Room do
   @spec create_changeset(map()) :: Ecto.Changeset.t()
   def create_changeset(attrs) do
     %__MODULE__{}
-    |> cast(attrs, [:room_hash, :ttl_expires_at])
+    |> cast(attrs, [:room_hash, :ttl_expires_at, :tier])
     |> validate_required([:room_hash])
+    |> validate_inclusion(:tier, ~w(free paid))
     |> validate_length(:room_hash, is: 64)
     |> validate_format(:room_hash, ~r/\A[0-9a-f]{64}\z/,
       message: "must be a lowercase hex SHA-256 digest"

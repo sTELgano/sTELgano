@@ -20,6 +20,7 @@ defmodule Stelgano.Repo.Migrations.RemoveDeletedAtFromMessages do
     execute("DELETE FROM messages WHERE deleted_at IS NOT NULL")
 
     drop_if_exists index(:messages, [:deleted_at])
+
     alter table(:messages) do
       remove :deleted_at
     end

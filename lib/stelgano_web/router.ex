@@ -97,8 +97,21 @@ defmodule StelganoWeb.Router do
     live "/chat", ChatLive
     live "/steg-number", StegNumberLive
 
+    # Payment callback — redirect landing after provider checkout
+    get "/payment/callback", PaymentCallbackController, :show
+
     # Panic route — instant session clear, no confirmation, GET only
     get "/x", PanicController, :clear
+  end
+
+  # ---------------------------------------------------------------------------
+  # Payment webhook (API — no CSRF, raw body for signature verification)
+  # ---------------------------------------------------------------------------
+
+  scope "/api", StelganoWeb do
+    pipe_through :api
+
+    post "/webhooks/paystack", PaystackWebhookController, :handle
   end
 
   # ---------------------------------------------------------------------------

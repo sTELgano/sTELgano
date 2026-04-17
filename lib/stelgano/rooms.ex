@@ -19,6 +19,7 @@ defmodule Stelgano.Rooms do
 
   import Ecto.Query, warn: false
 
+  alias Stelgano.Monetization
   alias Stelgano.Repo
   alias Stelgano.Rooms.Message
   alias Stelgano.Rooms.Room
@@ -40,7 +41,7 @@ defmodule Stelgano.Rooms do
         {:ok, room}
 
       nil ->
-        %{room_hash: room_hash}
+        %{room_hash: room_hash, ttl_expires_at: Monetization.default_ttl()}
         |> Room.create_changeset()
         |> Repo.insert()
     end

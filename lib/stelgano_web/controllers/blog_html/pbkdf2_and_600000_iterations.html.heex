@@ -42,7 +42,10 @@
               per second. At that speed, a 4-digit PIN is cracked in microseconds.
             </p>
             <p>
-              <span class="text-primary font-semibold">Fast hashing is the enemy of PIN security.</span> The
+              <span class="text-primary font-semibold">
+                Fast hashing is the enemy of PIN security.
+              </span>
+              The
               solution is not a more complex algorithm &mdash; it is a deliberately slower one.
             </p>
           </div>
@@ -64,13 +67,15 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              <span class="text-white font-mono">PBKDF2</span> stands for Password-Based Key Derivation
+              <span class="text-white font-mono">PBKDF2</span>
+              stands for Password-Based Key Derivation
               Function 2. It deliberately makes key derivation slow by repeating a hash operation many times.
               Each &ldquo;iteration&rdquo; adds computational cost.
             </p>
             <p>
               The input is your phone number. The output is a 256-bit AES encryption key. Between input and
-              output, the algorithm runs <span class="text-primary font-semibold font-mono">HMAC-SHA256</span>
+              output, the algorithm runs
+              <span class="text-primary font-semibold font-mono">HMAC-SHA256</span>
               six hundred thousand times in sequence. Each iteration depends on the previous one &mdash; it
               cannot be parallelized.
             </p>
@@ -93,7 +98,8 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              <span class="text-white">OWASP&rsquo;s 2023 recommendation</span> for PBKDF2-HMAC-SHA256 is
+              <span class="text-white">OWASP&rsquo;s 2023 recommendation</span>
+              for PBKDF2-HMAC-SHA256 is
               600,000 iterations. This represents the current best practice for balancing security against
               user experience.
             </p>
@@ -121,7 +127,8 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              Deriving the encryption key takes approximately <span class="text-white font-semibold">2 seconds</span>
+              Deriving the encryption key takes approximately
+              <span class="text-white font-semibold">2 seconds</span>
               on a modern device. That is 2 seconds every time you enter the chat. It is noticeable &mdash; and
               it is intentional.
             </p>
@@ -145,21 +152,27 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div class="glass-card p-8 space-y-4 text-center group hover:border-primary/30 transition-all duration-500">
             <p class="text-3xl font-extrabold text-white font-display">4-digit</p>
-            <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">10,000 combinations</p>
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">
+              10,000 combinations
+            </p>
             <div class="h-px bg-white/5"></div>
             <p class="text-primary font-mono font-bold text-lg">~5.5 hours</p>
           </div>
 
           <div class="glass-card p-8 space-y-4 text-center group hover:border-primary/30 transition-all duration-500">
             <p class="text-3xl font-extrabold text-white font-display">6-digit</p>
-            <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">1,000,000 combinations</p>
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">
+              1,000,000 combinations
+            </p>
             <div class="h-px bg-white/5"></div>
             <p class="text-primary font-mono font-bold text-lg">~23 days</p>
           </div>
 
           <div class="glass-card p-8 space-y-4 text-center group hover:border-primary/30 transition-all duration-500">
             <p class="text-3xl font-extrabold text-white font-display">8-digit</p>
-            <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">100,000,000 combinations</p>
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">
+              100,000,000 combinations
+            </p>
             <div class="h-px bg-white/5"></div>
             <p class="text-primary font-mono font-bold text-lg">~6.3 years</p>
           </div>
@@ -188,7 +201,8 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              Our rate limiter <span class="text-white">locks the room after 10 failed access attempts</span>
+              Our rate limiter
+              <span class="text-white">locks the room after 10 failed access attempts</span>
               for 30 minutes. Combined with PBKDF2&rsquo;s computational cost, brute force becomes impractical
               even for well-resourced attackers.
             </p>
@@ -215,7 +229,8 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              PBKDF2 is <span class="text-white">natively supported by the Web Crypto API</span> in all
+              PBKDF2 is <span class="text-white">natively supported by the Web Crypto API</span>
+              in all
               modern browsers. bcrypt and Argon2 would require external JavaScript libraries, increasing
               the attack surface and adding dependencies we cannot fully control.
             </p>
@@ -243,8 +258,7 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              Yes, you wait 2 seconds to enter the chat. That 2 seconds is the cost of making your PIN
-              <span class="text-primary font-semibold">unfeasible to brute force</span>.
+              Yes, you wait 2 seconds to enter the chat. That 2 seconds is the cost of making your PIN <span class="text-primary font-semibold">unfeasible to brute force</span>.
             </p>
             <p>
               Every time you see that loading indicator, your browser is doing the work that would take an
@@ -259,7 +273,10 @@
     <%!-- Footer --%>
     <div class="space-y-8 animate-in stagger-5">
       <div class="flex items-center justify-between pt-8 border-t border-white/5">
-        <.link navigate={~p"/blog"} class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <.link
+          navigate={~p"/blog"}
+          class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm"
+        >
           <.icon name="arrow_left" class="size-4 group-hover:-translate-x-1 transition-transform" />
           Back to Blog
         </.link>
@@ -269,7 +286,10 @@
         <p class="text-slate-500 text-sm font-medium">
           See 600,000 iterations in action.
         </p>
-        <.link navigate={~p"/steg-number"} class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        <.link
+          navigate={~p"/steg-number"}
+          class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group"
+        >
           Start a Private Chat
           <.icon name="arrow_right" class="size-5 group-hover:translate-x-1 transition-transform" />
         </.link>

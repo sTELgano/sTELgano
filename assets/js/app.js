@@ -14,6 +14,7 @@ import {
   AnonChat,
   AutoResize,
   IntersectionReader,
+  PaymentInitiator,
   PhoneGenerator,
 } from "./hooks/chat.js"
 
@@ -27,6 +28,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
     AnonChat,
     AutoResize,
     IntersectionReader,
+    PaymentInitiator,
     PhoneGenerator,
   },
 })

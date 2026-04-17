@@ -55,7 +55,8 @@
             sTELgano uses the Web Crypto API to perform all encryption and decryption in your browser. The server never sees plaintext. It never sees your encryption key. It never sees your phone number or PIN.
           </p>
           <p class="text-slate-300 leading-relaxed font-medium">
-            The server is a <span class="text-white font-bold">blind relay.</span> It stores ciphertext and forwards it to the other party. It cannot read what it stores. It cannot decrypt what it relays. Even under subpoena, the data it holds is cryptographically useless.
+            The server is a <span class="text-white font-bold">blind relay.</span>
+            It stores ciphertext and forwards it to the other party. It cannot read what it stores. It cannot decrypt what it relays. Even under subpoena, the data it holds is cryptographically useless.
           </p>
         </.premium_card>
       </section>
@@ -124,7 +125,8 @@
               <span class="text-[10px] font-mono font-bold text-primary">600,000</span>
             </div>
             <div class="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/5">
-              <div class="h-full bg-linear-to-r from-primary to-emerald-400 animate-progress w-full"></div>
+              <div class="h-full bg-linear-to-r from-primary to-emerald-400 animate-progress w-full">
+              </div>
             </div>
             <p class="text-[10px] text-slate-500 font-medium">
               Each attempt to guess a key requires 600,000 hash operations. At scale, brute-force becomes computationally infeasible.
@@ -151,7 +153,8 @@
             This is a design decision that often surprises people. If the PIN were part of the encryption key, each user would derive a different key&mdash;because they have different PINs. They wouldn't be able to decrypt each other's messages.
           </p>
           <p class="text-slate-300 leading-relaxed font-medium">
-            Both parties need the <span class="text-white font-bold">same encryption key</span> to communicate. Since they share the same steg number but have different PINs, the PIN must be excluded from key derivation.
+            Both parties need the <span class="text-white font-bold">same encryption key</span>
+            to communicate. Since they share the same steg number but have different PINs, the PIN must be excluded from key derivation.
           </p>
           <p class="text-slate-400 leading-relaxed font-medium">
             Instead, the PIN is used for <span class="text-white font-bold">access control</span>. It's hashed into the access_hash, which proves you have the right to join the room. Think of it as the lock on the door&mdash;the encryption key is what's inside the vault.
@@ -172,12 +175,18 @@
           <div
             :for={
               {step, label, desc} <- [
-                {"01", "Plaintext", "You type a message in the chat input. It exists only in browser memory."},
-                {"02", "Web Crypto API", "The browser's built-in AES-256-GCM encrypt function is called with your derived key and a random 96-bit IV."},
-                {"03", "Ciphertext + IV", "The encrypted output and the IV are base64-encoded. The plaintext is discarded from memory."},
-                {"04", "WebSocket Transit", "The base64-encoded ciphertext and IV are sent over the WebSocket connection (already TLS-encrypted in transit)."},
-                {"05", "Server Storage", "The server stores the ciphertext and IV. It cannot decrypt them. It doesn't have the key."},
-                {"06", "Recipient Decryption", "The recipient's browser receives the ciphertext, decrypts it with the same derived key, and displays the plaintext."}
+                {"01", "Plaintext",
+                 "You type a message in the chat input. It exists only in browser memory."},
+                {"02", "Web Crypto API",
+                 "The browser's built-in AES-256-GCM encrypt function is called with your derived key and a random 96-bit IV."},
+                {"03", "Ciphertext + IV",
+                 "The encrypted output and the IV are base64-encoded. The plaintext is discarded from memory."},
+                {"04", "WebSocket Transit",
+                 "The base64-encoded ciphertext and IV are sent over the WebSocket connection (already TLS-encrypted in transit)."},
+                {"05", "Server Storage",
+                 "The server stores the ciphertext and IV. It cannot decrypt them. It doesn't have the key."},
+                {"06", "Recipient Decryption",
+                 "The recipient's browser receives the ciphertext, decrypts it with the same derived key, and displays the plaintext."}
               ]
             }
             class="glass-card p-6 flex items-start gap-5 group hover:border-primary/30 transition-all duration-500"

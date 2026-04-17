@@ -42,9 +42,12 @@
             <div
               :for={
                 {title, desc} <- [
-                  {"Invisible Ink", "Messages written with lemon juice or milk, invisible until heated. Used since ancient Greece through both World Wars."},
-                  {"Microdots", "Photographs shrunk to the size of a period in a sentence. Used extensively in Cold War espionage."},
-                  {"LSB Encoding", "Altering the least significant bits of image pixels to embed hidden data. A digital evolution of the same principle."}
+                  {"Invisible Ink",
+                   "Messages written with lemon juice or milk, invisible until heated. Used since ancient Greece through both World Wars."},
+                  {"Microdots",
+                   "Photographs shrunk to the size of a period in a sentence. Used extensively in Cold War espionage."},
+                  {"LSB Encoding",
+                   "Altering the least significant bits of image pixels to embed hidden data. A digital evolution of the same principle."}
                 ]
               }
               class="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-2"
@@ -105,7 +108,8 @@
             Contact-layer steganography takes a fundamentally different approach. Instead of hiding data inside a file, we hide the communication channel inside a phone contact.
           </p>
           <p class="text-slate-300 leading-relaxed font-medium">
-            The carrier isn't a file&mdash;it's a database everyone already has: <span class="text-white font-bold">your phone's contact list.</span>
+            The carrier isn't a file&mdash;it's a database everyone already has:
+            <span class="text-white font-bold">your phone's contact list.</span>
           </p>
           <p class="text-slate-400 leading-relaxed font-medium">
             A randomly generated phone number, saved as a contact, serves as the derivation seed for an encrypted channel. The steg number IS the carrier. It hides in plain sight among hundreds of other contacts, and it's indistinguishable from any of them.
@@ -131,10 +135,14 @@
             <div
               :for={
                 {hash, input, purpose} <- [
-                  {"room_hash", "SHA-256(phone + ROOM_SALT)", "Unique room identity. The server uses this to route messages without knowing the phone number."},
-                  {"access_hash", "SHA-256(phone + PIN + ACCESS_SALT)", "Access control. Proves you have the right PIN without revealing it."},
-                  {"enc_key", "PBKDF2(phone, room_id + ENC_SALT, 600K)", "Encryption key. Derived with 600,000 iterations. Never leaves the browser."},
-                  {"sender_hash", "SHA-256(phone + access_hash + room_hash + SENDER_SALT)", "Sender identity. Different for each user because their PINs (and thus access_hashes) differ."}
+                  {"room_hash", "SHA-256(phone + ROOM_SALT)",
+                   "Unique room identity. The server uses this to route messages without knowing the phone number."},
+                  {"access_hash", "SHA-256(phone + PIN + ACCESS_SALT)",
+                   "Access control. Proves you have the right PIN without revealing it."},
+                  {"enc_key", "PBKDF2(phone, room_id + ENC_SALT, 600K)",
+                   "Encryption key. Derived with 600,000 iterations. Never leaves the browser."},
+                  {"sender_hash", "SHA-256(phone + access_hash + room_hash + SENDER_SALT)",
+                   "Sender identity. Different for each user because their PINs (and thus access_hashes) differ."}
                 ]
               }
               class="p-5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2"
@@ -164,12 +172,18 @@
           <div
             :for={
               {icon, title, desc} <- [
-                {"globe", "Universal", "Every phone has a contact list. Every person understands phone numbers. No technical barrier to entry."},
-                {"eye_off", "Unsuspicious", "A phone number in a contact list raises zero questions. It's the most ordinary data on any device."},
-                {"users", "Easy to Exchange", "Two people can exchange numbers in person in seconds. No QR codes, no key exchange ceremonies."},
-                {"database", "Pre-existing Storage", "The contact list is a database everyone already maintains. No new app storage to explain."},
-                {"hash", "Sufficient Entropy", "E.164 phone numbers provide enough entropy for cryptographic key derivation when combined with salts."},
-                {"smartphone", "Cross-Platform", "Works identically on iOS, Android, and any device with a browser and a contact list."}
+                {"globe", "Universal",
+                 "Every phone has a contact list. Every person understands phone numbers. No technical barrier to entry."},
+                {"eye_off", "Unsuspicious",
+                 "A phone number in a contact list raises zero questions. It's the most ordinary data on any device."},
+                {"users", "Easy to Exchange",
+                 "Two people can exchange numbers in person in seconds. No QR codes, no key exchange ceremonies."},
+                {"database", "Pre-existing Storage",
+                 "The contact list is a database everyone already maintains. No new app storage to explain."},
+                {"hash", "Sufficient Entropy",
+                 "E.164 phone numbers provide enough entropy for cryptographic key derivation when combined with salts."},
+                {"smartphone", "Cross-Platform",
+                 "Works identically on iOS, Android, and any device with a browser and a contact list."}
               ]
             }
             class="glass-card p-6 space-y-3 group hover:border-primary/30 transition-all duration-500"
@@ -197,7 +211,10 @@
             <div class="absolute top-0 right-0 p-4 opacity-5">
               <.icon name="cpu" class="size-32 text-white" />
             </div>
-            <pre class="text-xs sm:text-sm overflow-x-auto leading-loose font-mono whitespace-pre text-slate-300 relative z-10" phx-no-curly-interpolation>
+            <pre
+              class="text-xs sm:text-sm overflow-x-auto leading-loose font-mono whitespace-pre text-slate-300 relative z-10"
+              phx-no-curly-interpolation
+            >
 <span class="text-primary italic opacity-60">// Step 1: Normalise the phone number</span>
 phone = normalise("+1 (555) 012-3456")
         → "+15550123456"
@@ -221,7 +238,8 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
         </.premium_card>
 
         <p class="text-slate-400 leading-relaxed font-medium px-2">
-          Note that the PIN is <span class="text-white font-bold">not</span> part of the encryption key. Both users need the same key to communicate, but they have different PINs. The PIN is used exclusively for access control via the access_hash. The access_hash IS part of the sender_hash, ensuring two users with the same phone number but different PINs produce different sender identities.
+          Note that the PIN is <span class="text-white font-bold">not</span>
+          part of the encryption key. Both users need the same key to communicate, but they have different PINs. The PIN is used exclusively for access control via the access_hash. The access_hash IS part of the sender_hash, ensuring two users with the same phone number but different PINs produce different sender identities.
         </p>
       </section>
 
@@ -239,11 +257,16 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
             <li
               :for={
                 {label, desc} <- [
-                  {"No app to install", "Works in any browser. Nothing to download, nothing to appear in your app list."},
-                  {"No account to create", "No email, no username, no profile. You generate a number and go."},
-                  {"No metadata trail", "The server sees hashes and ciphertext. It cannot correlate rooms with identities."},
-                  {"The hiding place already exists", "Your contact list is already on your phone. No new data store to explain."},
-                  {"Plausible deniability", "Even if someone finds the sTELgano URL, the blank entry screen reveals nothing."}
+                  {"No app to install",
+                   "Works in any browser. Nothing to download, nothing to appear in your app list."},
+                  {"No account to create",
+                   "No email, no username, no profile. You generate a number and go."},
+                  {"No metadata trail",
+                   "The server sees hashes and ciphertext. It cannot correlate rooms with identities."},
+                  {"The hiding place already exists",
+                   "Your contact list is already on your phone. No new data store to explain."},
+                  {"Plausible deniability",
+                   "Even if someone finds the sTELgano URL, the blank entry screen reveals nothing."}
                 ]
               }
               class="flex items-start gap-4"
@@ -251,7 +274,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
               <.icon name="check_circle" class="size-5 text-primary shrink-0 mt-0.5" />
               <div>
                 <span class="text-white font-bold text-sm">{label}.</span>
-                <span class="text-slate-400 text-sm font-medium"> {desc}</span>
+                <span class="text-slate-400 text-sm font-medium">{desc}</span>
               </div>
             </li>
           </ul>

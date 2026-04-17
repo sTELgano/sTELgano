@@ -29,10 +29,22 @@ config :stelgano, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        # Expire rooms whose TTL has passed — every hour
-       {"0 * * * *", Stelgano.Jobs.ExpireTtlRooms}
+       {"0 * * * *", Stelgano.Jobs.ExpireTtlRooms},
+       # Expire unredeemed extension tokens — daily at 03:00 UTC
+       {"0 3 * * *", Stelgano.Jobs.ExpireUnredeemedTokens}
      ]}
   ],
   queues: [maintenance: 2]
+
+# Monetization — disabled by default for self-hosters.
+# Set `enabled: true` and configure a provider to enable paid tiers.
+# See `Stelgano.Monetization` module docs for full configuration reference.
+config :stelgano, Stelgano.Monetization,
+  enabled: false,
+  free_ttl_days: 7,
+  paid_ttl_days: 365,
+  price_cents: 200,
+  currency: "USD"
 
 config :esbuild,
   version: "0.25.4",
