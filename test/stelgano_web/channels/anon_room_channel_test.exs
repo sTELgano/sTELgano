@@ -331,4 +331,18 @@ defmodule StelganoWeb.AnonRoomChannelTest do
       refute Rooms.room_exists?(rh)
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # redeem_extension (monetization)
+  # ---------------------------------------------------------------------------
+
+  describe "redeem_extension" do
+    test "returns monetization_disabled when monetization is off" do
+      rh = hex64(200 + 2000)
+      socket = connect_and_join(rh, hex64(201 + 2000), hex64(202 + 2000))
+
+      ref = push(socket, "redeem_extension", %{"extension_secret" => "some-secret"})
+      assert_reply ref, :error, %{reason: "monetization_disabled"}
+    end
+  end
 end
