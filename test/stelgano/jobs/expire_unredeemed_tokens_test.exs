@@ -5,20 +5,20 @@ defmodule Stelgano.Jobs.ExpireUnredeemedTokensTest do
   @moduledoc """
   Tests for the ExpireUnredeemedTokens Oban job.
 
-  Since the job checks `Monetization.enabled?()` at runtime and test
-  config has monetization disabled, we test the underlying
-  `Monetization.expire_stale_tokens/0` directly and verify the job
-  completes without error.
+  Tests both the disabled path (job skips) and the enabled path
+  (job calls expire_stale_tokens). Uses Application config overrides
+  to toggle monetization for specific tests.
   """
 
-  use Stelgano.DataCase, async: true
+  use Stelgano.DataCase, async: false
 
   alias Stelgano.Jobs.ExpireUnredeemedTokens
   alias Stelgano.Monetization
   alias Stelgano.Monetization.ExtensionToken
 
   defp hex64(seed) do
-    :crypto.hash(:sha256, "expire-tokens-#{seed}")
+    "expire-tokens-#{seed}"
+    |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
   end
 
@@ -50,25 +50,72 @@ defmodule Stelgano.Jobs.ExpireUnredeemedTokensTest do
     end
   end
 
-  describe "perform/1" do
-    test "job completes successfully even when monetization is disabled" do
+  describe "perform/1 (monetization disabled)" do
+    test "completes successfully without expiring tokens" do
+      token = create_token("disabled-1", expires_in: -86_400)
+
       assert :ok = ExpireUnredeemedTokens.perform(%Oban.Job{args: %{}})
+
+      # Token should NOT be expired because monetization is disabled
+      updated = Repo.get!(ExtensionToken, token.id)
+      assert updated.status == "pending"
     end
   end
 
-  describe "expire_stale_tokens/0 (underlying function)" do
-    test "expires stale pending tokens" do
-      token = create_token("stale-1", expires_in: -86_400)
+  describe "perform/1 (monetization enabled)" do
+    setup do
+      original = Application.get_env(:stelgano, Stelgano.Monetization)
 
-      count = Monetization.expire_stale_tokens()
-      assert count >= 1
+      Application.put_env(:stelgano, Stelgano.Monetization,
+        enabled: true,
+        free_ttl_days: 7,
+        paid_ttl_days: 365,
+        price_cents: 200,
+        currency: "USD"
+      )
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:stelgano, Stelgano.Monetization, original)
+        else
+          Application.delete_env(:stelgano, Stelgano.Monetization)
+        end
+      end)
+
+      :ok
+    end
+
+    test "expires stale pending tokens" do
+      token = create_token("enabled-1", expires_in: -86_400)
+
+      assert :ok = ExpireUnredeemedTokens.perform(%Oban.Job{args: %{}})
 
       updated = Repo.get!(ExtensionToken, token.id)
       assert updated.status == "expired"
     end
 
     test "expires stale paid tokens" do
-      token = create_token("stale-2", status: "paid", expires_in: -86_400)
+      token = create_token("enabled-2", status: "paid", expires_in: -86_400)
+
+      assert :ok = ExpireUnredeemedTokens.perform(%Oban.Job{args: %{}})
+
+      updated = Repo.get!(ExtensionToken, token.id)
+      assert updated.status == "expired"
+    end
+
+    test "does not expire tokens with future deadline" do
+      token = create_token("enabled-3", expires_in: 86_400)
+
+      assert :ok = ExpireUnredeemedTokens.perform(%Oban.Job{args: %{}})
+
+      updated = Repo.get!(ExtensionToken, token.id)
+      assert updated.status == "pending"
+    end
+  end
+
+  describe "expire_stale_tokens/0 (direct)" do
+    test "expires stale pending tokens" do
+      token = create_token("direct-1", expires_in: -86_400)
 
       count = Monetization.expire_stale_tokens()
       assert count >= 1
@@ -78,7 +125,7 @@ defmodule Stelgano.Jobs.ExpireUnredeemedTokensTest do
     end
 
     test "does not expire tokens with future deadline" do
-      token = create_token("future-1", expires_in: 86_400)
+      token = create_token("direct-2", expires_in: 86_400)
 
       Monetization.expire_stale_tokens()
 

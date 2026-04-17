@@ -103,7 +103,7 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div
           :for={
-            {step, i} <-
+            {{title, desc}, i} <-
               Enum.with_index([
                 {"Generate a Steg Number",
                  "Use our generator to create a random phone number for any country. Save it in your partner's phone as a normal contact. They save one in yours. That's your secret handshake."},
@@ -122,9 +122,9 @@
           <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-2xl mb-8 shadow-inner ring-1 ring-primary/20">
             {i + 1}
           </div>
-          <h4 class="text-xl font-bold text-white mb-4 font-display">{elem(step, 0)}</h4>
+          <h4 class="text-xl font-bold text-white mb-4 font-display">{title}</h4>
           <p class="text-slate-400 leading-relaxed font-medium">
-            {elem(step, 1)}
+            {desc}
           </p>
         </div>
       </div>
@@ -169,8 +169,8 @@
             >
               <div class="size-1.5 rounded-full bg-primary/40 mt-2 shrink-0"></div>
               <div>
-                <span class="font-bold text-white">{elem(item, 0)}</span>
-                <span class="text-slate-400 font-medium"> &mdash;    {elem(item, 1)}</span>
+                <span class="font-bold text-white">{item}</span>
+                <span class="text-slate-400 font-medium"> &mdash;      {detail}</span>
               </div>
             </li>
           </ul>
@@ -200,8 +200,8 @@
             >
               <div class="size-1.5 rounded-full bg-danger/40 mt-2 shrink-0"></div>
               <div>
-                <span class="font-bold text-white">{elem(item, 0)}</span>
-                <span class="text-slate-400 font-medium"> &mdash;    {elem(item, 1)}</span>
+                <span class="font-bold text-white">{item}</span>
+                <span class="text-slate-400 font-medium"> &mdash;      {detail}</span>
               </div>
             </li>
           </ul>

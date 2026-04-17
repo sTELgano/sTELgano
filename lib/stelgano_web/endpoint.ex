@@ -61,11 +61,11 @@ defmodule StelganoWeb.Endpoint do
     plug Phoenix.LiveReloader
     plug Phoenix.CodeReloader
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :stelgano
-  end
 
-  plug Phoenix.LiveDashboard.RequestLogger,
-    param_key: "request_logger",
-    cookie_key: "request_logger"
+    plug Phoenix.LiveDashboard.RequestLogger,
+      param_key: "request_logger",
+      cookie_key: "request_logger"
+  end
 
   # IP-based rate limiting — must come before the router
   plug StelganoWeb.RateLimiter
@@ -76,8 +76,17 @@ defmodule StelganoWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
-    body_reader: {StelganoWeb.Plugs.RawBodyReader, :read_body, []},
+    body_reader: {__MODULE__, :cache_raw_body, []},
     json_decoder: Phoenix.json_library()
+
+  @doc false
+  @spec cache_raw_body(Plug.Conn.t(), keyword()) :: {:ok, binary(), Plug.Conn.t()}
+  def cache_raw_body(%Plug.Conn{request_path: "/api/webhooks/" <> _rest} = conn, opts) do
+    {:ok, body, conn_read} = Plug.Conn.read_body(conn, opts)
+    {:ok, body, Plug.Conn.assign(conn_read, :raw_body, body)}
+  end
+
+  def cache_raw_body(conn, opts), do: Plug.Conn.read_body(conn, opts)
 
   plug Plug.MethodOverride
   plug Plug.Head

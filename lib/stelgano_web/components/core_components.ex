@@ -518,6 +518,7 @@ defmodule StelganoWeb.CoreComponents do
   attr :class, :any, default: "size-4"
   attr :rest, :global
 
+  @spec icon(map()) :: Phoenix.LiveView.Rendered.t()
   def icon(%{name: name} = assigns) do
     icon_name =
       name
@@ -539,7 +540,7 @@ defmodule StelganoWeb.CoreComponents do
 
     apply(Lucideicons, icon_name, [attrs])
   rescue
-    _ ->
+    _error ->
       ~H"""
       <span class={[@name, @class]} />
       """
