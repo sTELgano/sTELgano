@@ -9,7 +9,7 @@ defmodule StelganoWeb.AnonRoomChannelTest do
   and server broadcast behaviour. Uses `Phoenix.ChannelTest` helpers.
   """
 
-  use StelganoWeb.ChannelCase, async: true
+  use StelganoWeb.ChannelCase, async: false
 
   alias Stelgano.Rooms
   alias StelganoWeb.AnonSocket

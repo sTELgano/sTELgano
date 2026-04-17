@@ -10,7 +10,7 @@ defmodule Stelgano.MonetizationTest do
   that extension_tokens has no room_id column.
   """
 
-  use Stelgano.DataCase, async: true
+  use Stelgano.DataCase, async: false
 
   alias Stelgano.Monetization
   alias Stelgano.Monetization.ExtensionToken
