@@ -64,6 +64,32 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 - **Service worker** — privacy-first caching (network-only for sensitive routes)
 - **Rate limiting** — IP-based via PlugAttack
 - **Security headers** — CSP, HSTS, CORP/COEP/COOP, no external scripts
+- **Configurable monetization** — optional paid tier for extended steg number TTL, pluggable payment providers (Paystack ships built-in, bring your own Stripe/Flutterwave/etc.)
+- **Privacy-preserving payments** — blind token protocol ensures the server cannot link a payment to a specific room
+
+---
+
+## Monetization (optional)
+
+Monetization is fully optional and disabled by default. Self-hosters can run sTELgano without monetization — all rooms get unlimited TTL.
+
+When enabled, steg numbers have a configurable free TTL (default 7 days). Users can purchase a dedicated number for 1 year via the steg number generator page. The payment flow uses a **blind token** design: the `extension_tokens` table has no `room_id` column, so the server cannot link a payment to a specific room.
+
+Payment providers are pluggable via a behaviour (`Stelgano.Monetization.PaymentProvider`). Paystack ships built-in; implement the behaviour for Stripe, Flutterwave, M-Pesa, or any other gateway.
+
+```elixir
+# Self-hosted, no monetization (default)
+config :stelgano, Stelgano.Monetization, enabled: false
+
+# Production with Paystack
+config :stelgano, Stelgano.Monetization,
+  enabled: true,
+  provider: Stelgano.Monetization.Providers.Paystack,
+  free_ttl_days: 7,
+  paid_ttl_days: 365,
+  price_cents: 200,
+  currency: "USD"
+```
 
 ---
 
@@ -84,8 +110,12 @@ mix phx.server   # → http://localhost:4000
 | `DATABASE_URL` | PostgreSQL connection string |
 | `PHX_HOST` | Production hostname |
 | `ADMIN_PASSWORD` | Admin dashboard password |
+| `MONETIZATION_ENABLED` | Set to `true` to enable paid tiers |
+| `PAYSTACK_SECRET_KEY` | Paystack secret key (required if monetization enabled) |
+| `PAYSTACK_PUBLIC_KEY` | Paystack public key (required if monetization enabled) |
+| `PAYSTACK_CALLBACK_URL` | Post-payment redirect URL (e.g. `https://stelgano.com/payment/callback`) |
 
-Optional salt overrides for self-hosters: `ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`.
+Optional: `ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT` (salt overrides), `FREE_TTL_DAYS`, `PAID_TTL_DAYS`, `PRICE_CENTS`, `PAYMENT_CURRENCY`.
 
 ---
 
@@ -114,6 +144,8 @@ mix sobelow --config   # Phoenix security scanning
 | `/blog` | Blog index |
 | `/security`, `/privacy`, `/terms`, `/about` | Static pages |
 | `/admin` | Admin dashboard (HTTP Basic Auth) |
+| `/payment/callback` | Post-payment redirect (monetization) |
+| `/api/webhooks/paystack` | Paystack webhook endpoint |
 | `/x` | Panic route (instant session clear) |
 
 ---

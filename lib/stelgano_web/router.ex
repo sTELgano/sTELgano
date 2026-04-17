@@ -86,6 +86,7 @@ defmodule StelganoWeb.Router do
     get "/terms", PageController, :terms
     get "/about", PageController, :about
     get "/spec", PageController, :spec
+    get "/pricing", PageController, :pricing
 
     get "/blog", BlogController, :index
     get "/blog/:slug", BlogController, :show

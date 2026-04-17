@@ -36,6 +36,20 @@ defmodule StelganoWeb.PageController do
     render(conn, :spec, page_title: "Spec — sTELgano")
   end
 
+  @spec pricing(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  def pricing(conn, _params) do
+    monetization = Stelgano.Monetization
+
+    render(conn, :pricing,
+      page_title: "Pricing — sTELgano",
+      monetization_enabled: monetization.enabled?(),
+      free_ttl_days: monetization.free_ttl_days(),
+      paid_ttl_days: monetization.paid_ttl_days(),
+      price_cents: monetization.price_cents(),
+      currency: monetization.currency()
+    )
+  end
+
   @doc """
   Serves the .well-known/security.txt file as a text response.
   Also served as a static file from priv/static/.well-known/security.txt

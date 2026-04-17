@@ -20,6 +20,8 @@ defmodule StelganoWeb.StegNumberLive do
 
   use StelganoWeb, :live_view
 
+  import StelganoWeb.Helpers.PriceFormatter, only: [format_price: 2]
+
   alias Stelgano.Monetization
 
   @impl Phoenix.LiveView
@@ -152,25 +154,6 @@ defmodule StelganoWeb.StegNumberLive do
   @impl Phoenix.LiveView
   def handle_info(:clear_copied, socket) do
     {:noreply, assign(socket, :copied, false)}
-  end
-
-  defp format_price(cents, currency) do
-    major = div(cents, 100)
-    minor = rem(cents, 100)
-
-    symbol =
-      case currency do
-        "USD" -> "$"
-        "EUR" -> "€"
-        "GBP" -> "£"
-        "KES" -> "KSh "
-        "NGN" -> "₦"
-        "GHS" -> "GH₵"
-        "ZAR" -> "R"
-        _other -> "#{currency} "
-      end
-
-    "#{symbol}#{major}.#{String.pad_leading(Integer.to_string(minor), 2, "0")}"
   end
 
   @impl Phoenix.LiveView

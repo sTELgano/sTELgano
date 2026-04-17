@@ -39,6 +39,25 @@ breaking protocol change increments the major version and requires a migration.
 - CI/CD via GitHub Actions (quality gates + deploy)
 - CONTRIBUTING.md, SECURITY.md, COMMERCIAL.md, CODE_OF_CONDUCT.md, AGENTS.md, CLAUDE.md
 
+- Configurable monetization system with blind token payment protocol
+- `Stelgano.Monetization` module — config, token lifecycle, and privacy-preserving redemption
+- `Stelgano.Monetization.PaymentProvider` behaviour — pluggable payment gateway interface
+- Paystack payment provider adapter (`Stelgano.Monetization.Providers.Paystack`)
+- `extension_tokens` table — **no room_id column** (privacy by structural design)
+- Room `tier` field (`free`/`paid`) with conditional TTL on room creation
+- `redeem_extension` channel event for blind token redemption after payment
+- Payment callback page at `/payment/callback`
+- Paystack webhook controller at `/api/webhooks/paystack` with HMAC-SHA512 signature verification
+- `ExpireUnredeemedTokens` Oban job — daily cleanup of stale payment tokens
+- Payment initiation UI on `/steg-number` page (conditional on monetization enabled)
+- Client-side `generateExtensionToken()` in `anon.js` for random secret + SHA-256 hash generation
+- Auto-redemption in `chat.js` — redeems extension token on channel join if present in sessionStorage
+- `PaymentInitiator` JS hook for steg number page
+- TTL expiry warning bar in chat UI (2-day warning, 12-hour critical)
+- New channel detection — prompts plan selection when user enters a number that creates a new room
+- Re-enabled manual phone entry in chat for returning to existing channels
+- Raw body reader plug for webhook signature verification
+
 ### Changed
 - Replaced Heroicons with Lucide Icons (`lucide_icons` Elixir package)
 - Removed theme toggle — dark-only design (glassmorphism is inherently dark-first)
