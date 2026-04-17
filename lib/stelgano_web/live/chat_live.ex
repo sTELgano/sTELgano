@@ -51,15 +51,13 @@ defmodule StelganoWeb.ChatLive do
   end
 
   @impl Phoenix.LiveView
-  def mount(params, _session, socket) do
-    prefilled_phone = Map.get(params, "phone", "")
-
+  def mount(_params, _session, socket) do
     socket =
       socket
       |> assign(:page_title, "sTELgano")
       |> assign(:state, :entry)
       |> assign(:phone_visible, false)
-      |> assign(:phone_locked, prefilled_phone != "")
+      |> assign(:phone_locked, false)
       |> assign(:error, nil)
       |> assign(:attempts_remaining, nil)
       |> assign(:room_id, nil)
@@ -79,7 +77,7 @@ defmodule StelganoWeb.ChatLive do
       |> assign(:paid_ttl_days, Monetization.paid_ttl_days())
       |> assign(:price_cents, Monetization.price_cents())
       |> assign(:currency, Monetization.currency())
-      |> assign(:_pending_phone, prefilled_phone)
+      |> assign(:_pending_phone, "")
       |> assign(:_pending_pin, "")
       |> assign(:editing, false)
       |> assign(:edit_value, "")
@@ -107,6 +105,22 @@ defmodule StelganoWeb.ChatLive do
   def handle_event("entry_change", %{"phone" => phone, "pin" => pin}, socket) do
     {:noreply, socket |> assign(:_pending_phone, phone) |> assign(:_pending_pin, pin)}
   end
+
+  # Phone handoff from /steg-number via sessionStorage (keeps phone out of the URL).
+  @impl Phoenix.LiveView
+  def handle_event("prefill_phone", %{"phone" => phone}, socket)
+      when is_binary(phone) and phone != "" do
+    if socket.assigns.state == :entry and socket.assigns._pending_phone == "" do
+      {:noreply,
+       socket
+       |> assign(:_pending_phone, phone)
+       |> assign(:phone_locked, true)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("prefill_phone", _params, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
   def handle_event("toggle_phone_visibility", _params, socket) do

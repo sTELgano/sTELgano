@@ -66,7 +66,7 @@ PIN is NOT part of enc_key (both users need the same key but have different PINs
 
 `phone-number-generator-js` npm package — steg number generator (E.164 format, 227 countries supported via `CountryNames` enum). Installed in `assets/package.json`. Replaces the former custom `phone-gen.js`.
 
-[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks: `AnonChat` (main orchestrator), `AutoResize` (textarea), `IntersectionReader` (read receipts), `PaymentInitiator` (extension token generation + payment initiation), `PhoneGenerator` (country selector + number generation on `/steg-number` page).
+[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks: `AnonChat` (main orchestrator; also reads `stelegano_handoff_phone` on mount), `AutoResize` (textarea), `IntersectionReader` (read receipts), `PaymentInitiator` (extension token generation + payment initiation), `PhoneGenerator` (country selector + number generation on `/steg-number` page), `CountryPersistence` (remembers last-picked country in sessionStorage), `ChannelHandoff` (phone handoff from `/steg-number` → `/chat` without touching the URL).
 
 ### ChatLive state machine
 
@@ -76,7 +76,7 @@ PIN is NOT part of enc_key (both users need the same key but have different PINs
 :entry → :deriving → :new_channel (if monetization) → :connecting → :chat → :locked → :expired
 ```
 
-- `:entry` — form with phone + PIN fields. Phone is pre-populated and read-only when arriving from `/steg-number?phone=`, otherwise editable for returning to existing channels. Passcode test compliant.
+- `:entry` — form with phone + PIN fields. Phone is pre-populated and read-only when handed off from `/steg-number` (via the `stelegano_handoff_phone` sessionStorage key → `prefill_phone` hook event), otherwise editable for returning to existing channels. Passcode test compliant.
 - `:deriving` — three-dot loading while hashes are computed
 - `:new_channel` — plan selection screen (free/paid) shown when monetization is enabled and a new room was just created. Helps detect mistyped numbers.
 - `:connecting` — three-dot loading while PBKDF2 derives the encryption key
@@ -89,7 +89,7 @@ The `can_type?/1` helper enforces turn-based input: you can type when the room i
 ### LiveViews
 
 - `ChatLive` — chat UI; crypto + channel interaction happen in JS hooks, not server-side
-- `StegNumberLive` — steg number generator at `/steg-number` with country selector dropdown and "Open channel" flow (copies number to clipboard, navigates to `/chat?phone=<e164>`)
+- `StegNumberLive` — steg number generator at `/steg-number` with country selector dropdown and "Open channel" flow (copies number to clipboard, writes it to `sessionStorage.stelegano_handoff_phone`, then navigates to `/chat`). The phone **never** appears in the URL — see the `ChannelHandoff` hook.
 - `AdminDashboardLive` — aggregate metrics at `/admin` (HTTP Basic Auth via `AdminAuth` plug)
 
 ### Monetization layer: `Stelgano.Monetization`
@@ -130,7 +130,7 @@ Payment flow:
 - `/` — homepage; `/security`, `/privacy`, `/terms`, `/about` — static pages
 - `/spec` — sTELgano-std-1 protocol specification
 - `/blog` — blog index; `/blog/:slug` — individual blog posts
-- `/chat` — anonymous chat LiveView; accepts optional `?phone=<e164>` query param to pre-populate phone field
+- `/chat` — anonymous chat LiveView. No URL parameters accepted. Phone may be pre-populated only via the `stelegano_handoff_phone` sessionStorage key (set by `/steg-number` just before navigation, read & cleared once by the `AnonChat` hook on mount).
 - `/steg-number` — steg number generator
 - `/admin` — admin dashboard (behind `:admin_auth` pipeline)
 - `/payment/callback` — post-payment redirect from Paystack
@@ -196,5 +196,7 @@ Dark-first glassmorphism UI. All surfaces use `backdrop-filter: blur(16px)` with
 
 **Touch targets:** 56px minimum height on interactive elements (exceeds WCAG 44px). All motion respects `prefers-reduced-motion`. Mobile-first: 320px minimum width.
 
-**SessionStorage keys** (6 items, cleared on logout/panic/room-expiry):
-- `stelegano_phone`, `stelegano_room_id`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`, `stelegano_extension_secret`
+**SessionStorage keys** (cleared on logout/panic/room-expiry):
+- Session state (6 keys, persisted across lock/re-auth): `stelegano_phone`, `stelegano_room_id`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`, `stelegano_extension_secret`
+- Transient (read-once): `stelegano_handoff_phone` — set by `/steg-number` just before navigation, read & deleted by `AnonChat.mounted()` on `/chat`. Keeps the phone out of the URL, address bar, history, and server logs.
+- UX preference (persists across sessions): `stelgano_selected_country` — last-picked country on `/steg-number`.

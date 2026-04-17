@@ -233,7 +233,7 @@ Any design decision that would reveal more than this to an unauthorised person w
 3. The number is automatically copied to clipboard. A warning instructs them to **save it in their contacts before proceeding** — once they leave the page, the number cannot be recovered
 4. Each saves the steg number in the other person's real phonebook contact as an additional number — hidden in plain sight
 5. Each independently chooses their own personal PIN — never discussed, never shared, written nowhere
-6. They click "Open channel with this number" which navigates to `/chat?phone=<e164>` with the phone pre-populated — they only need to enter their PIN
+6. They click "Open channel with this number" which navigates to `/chat` with the phone pre-populated — they only need to enter their PIN. The number is handed off via a transient `sessionStorage` key (`stelegano_handoff_phone`), read once on `/chat` and cleared immediately. It is **never** placed in the URL, address bar, browser history, or server logs.
 
 ### 6.2 PIN strategy — user's choice
 
@@ -252,7 +252,7 @@ This is entirely the user's decision. The app does not enforce either strategy. 
 4. If a message is waiting → it is displayed. If none → blank chat screen.
 5. Chat, lock, logout, or close tab
 
-Alternatively, a returning user can go to `/steg-number`, regenerate/recall their number, and use the "Open channel" button to pre-populate the phone field.
+Alternatively, a returning user can go to `/steg-number`, regenerate/recall their number, and use the "Open channel" button to pre-populate the phone field. The phone travels via sessionStorage handoff — the URL stays a clean `/chat`.
 
 ### 6.4 What is shared out-of-band
 
@@ -276,7 +276,7 @@ Alternatively, a returning user can go to `/steg-number`, regenerate/recall thei
 - Generator is a standalone page at `/steg-number`
 - Number is automatically copied to clipboard on generation
 - After generation, a warning card instructs users to save the number in contacts before proceeding
-- "Open channel with this number" button navigates to `/chat?phone=<e164>` with the phone pre-populated
+- "Open channel with this number" button navigates to `/chat` with the phone pre-populated via a one-shot sessionStorage key (`stelegano_handoff_phone`). The URL carries no user data.
 
 ### 7.2 Custom number entry — removed
 
@@ -586,6 +586,8 @@ The lock screen protects an open chat from anyone who finds an open browser tab.
 | `room_hash` | `stelegano_room_hash` | `sessionStorage` | Tab close, logout, panic |
 | `sender_hash` | `stelegano_sender_hash` | `sessionStorage` | Tab close, logout, panic |
 | `access_hash` | `stelegano_access_hash` | `sessionStorage` | Tab close, logout, panic |
+| Payment extension secret | `stelegano_extension_secret` | `sessionStorage` | On redemption, logout, panic, tab close |
+| Phone handoff (transient, `/steg-number` → `/chat`) | `stelegano_handoff_phone` | `sessionStorage` | Read-once on `/chat` mount, then deleted (also cleared on tab close) |
 | `enc_key` (CryptoKey object) | — | JS memory only | Tab close, lock screen clear |
 | PIN | — | **Never stored** | — |
 
@@ -747,7 +749,7 @@ The sTELgano-std-1 protocol specification page. Published at `/spec` (not `/stan
 
 ### 14.9 `/steg-number`
 
-Standalone steg number generator page. Features a country selector dropdown (19 curated countries: Kenya, US, UK, Germany, France, Canada, Japan, Australia, India, Brazil, South Africa, Nigeria, Egypt, Morocco, Ethiopia, Ghana, Tanzania, Uganda, Rwanda) and a generate button. The generated number is shown in E.164 format, automatically copied to clipboard, and accompanied by a warning to save the number in contacts before proceeding. An "Open channel with this number" button navigates directly to `/chat?phone=<e164>` with the phone field pre-populated. Includes the "hidden in plain sight" setup guide.
+Standalone steg number generator page. Features a country selector dropdown (19 curated countries: Kenya, US, UK, Germany, France, Canada, Japan, Australia, India, Brazil, South Africa, Nigeria, Egypt, Morocco, Ethiopia, Ghana, Tanzania, Uganda, Rwanda) and a generate button. The generated number is shown in E.164 format, automatically copied to clipboard, and accompanied by a warning to save the number in contacts before proceeding. An "Open channel with this number" button writes the number to a one-shot `sessionStorage` key and navigates to `/chat` with the phone field pre-populated. The URL carries no user data — nothing leaks to the address bar, browser history, or server logs. Includes the "hidden in plain sight" setup guide.
 
 ---
 

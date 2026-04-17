@@ -94,6 +94,15 @@ export const IntersectionReader = {
 
 export const AnonChat = {
   mounted() {
+    // Phone handoff from /steg-number via sessionStorage (keeps phone out of URL).
+    try {
+      const handoff = sessionStorage.getItem("stelegano_handoff_phone");
+      if (handoff) {
+        sessionStorage.removeItem("stelegano_handoff_phone");
+        this.pushEvent("prefill_phone", { phone: handoff });
+      }
+    } catch (_) {}
+
     this.boundHandleServerEvent = this.handleServerEvent.bind(this);
 
     // Server → Client event listeners
@@ -622,6 +631,28 @@ export const CountryPersistence = {
       }
     });
   }
+};
+
+// ---------------------------------------------------------------------------
+// ChannelHandoff hook (steg-number page — "Enter Chat Workspace" button)
+//
+// Writes the phone number to sessionStorage under a transient key and then
+// navigates to /chat. Avoids placing the phone in the URL / address bar /
+// history / server logs. The /chat AnonChat hook reads and clears the key.
+// ---------------------------------------------------------------------------
+
+export const ChannelHandoff = {
+  mounted() {
+    this.el.addEventListener("click", (e) => {
+      const phone = this.el.dataset.phone;
+      if (!phone) return;
+      e.preventDefault();
+      try {
+        sessionStorage.setItem("stelegano_handoff_phone", phone);
+      } catch (_) {}
+      window.location.href = "/chat";
+    });
+  },
 };
 
 // ---------------------------------------------------------------------------
