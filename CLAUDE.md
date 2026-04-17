@@ -38,7 +38,7 @@ mix ecto.gen.migration migration_name  # generate migration with correct timesta
 Single context module ([rooms.ex](lib/stelgano/rooms.ex)) owns all business logic. Server-blindness: no function accepts plaintext phone numbers or PINs — only opaque hashes.
 
 Schemas in [lib/stelgano/rooms/](lib/stelgano/rooms/):
-- `Room` — identified by `room_hash` (SHA-256 hex), has `is_active` flag and optional `ttl_expires_at`
+- `Room` — identified by `room_hash` (SHA-256 hex), has `is_active` flag, `tier` ("free"/"paid"), and optional `ttl_expires_at`
 - `RoomAccess` — `(room_hash, access_hash)` pairs with failed-attempt lockout (10 attempts → 30min lock)
 - `Message` — opaque `ciphertext` + `iv` (binary), `sender_hash`; hard-deleted immediately on reply (N=1)
 
@@ -48,7 +48,7 @@ Chat uses a raw Phoenix Channel ([anon_room_channel.ex](lib/stelgano_web/channel
 
 - Topic: `anon_room:{room_hash}` (64-char lowercase hex)
 - Join requires `(room_hash, access_hash, sender_hash)` — all validated as 64-char hex
-- Events: `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`
+- Events: `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, `redeem_extension`
 - Max ciphertext: 8,192 bytes (base64-encoded)
 
 ### Client-side crypto
@@ -66,18 +66,19 @@ PIN is NOT part of enc_key (both users need the same key but have different PINs
 
 `phone-number-generator-js` npm package — steg number generator (E.164 format, 227 countries supported via `CountryNames` enum). Installed in `assets/package.json`. Replaces the former custom `phone-gen.js`.
 
-[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks: `AnonChat` (main orchestrator), `AutoResize` (textarea), `IntersectionReader` (read receipts), `PhoneGenerator` (country selector + number generation on `/steg-number` page).
+[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks: `AnonChat` (main orchestrator), `AutoResize` (textarea), `IntersectionReader` (read receipts), `PaymentInitiator` (extension token generation + payment initiation), `PhoneGenerator` (country selector + number generation on `/steg-number` page).
 
 ### ChatLive state machine
 
 `ChatLive` uses a single `@state` atom to track the current screen:
 
 ```
-:entry → :deriving → :connecting → :chat → :locked → :expired
+:entry → :deriving → :new_channel (if monetization) → :connecting → :chat → :locked → :expired
 ```
 
-- `:entry` — blank form with PIN field (phone pre-populated and read-only when arriving from `/steg-number?phone=`, otherwise editable). Passcode test compliant.
+- `:entry` — form with phone + PIN fields. Phone is pre-populated and read-only when arriving from `/steg-number?phone=`, otherwise editable for returning to existing channels. Passcode test compliant.
 - `:deriving` — three-dot loading while hashes are computed
+- `:new_channel` — plan selection screen (free/paid) shown when monetization is enabled and a new room was just created. Helps detect mistyped numbers.
 - `:connecting` — three-dot loading while PBKDF2 derives the encryption key
 - `:chat` — active chat with message area, input, and header controls
 - `:locked` — PIN re-entry screen (re-derives key without re-joining channel)
@@ -91,9 +92,29 @@ The `can_type?/1` helper enforces turn-based input: you can type when the room i
 - `StegNumberLive` — steg number generator at `/steg-number` with country selector dropdown and "Open channel" flow (copies number to clipboard, navigates to `/chat?phone=<e164>`)
 - `AdminDashboardLive` — aggregate metrics at `/admin` (HTTP Basic Auth via `AdminAuth` plug)
 
+### Monetization layer: `Stelgano.Monetization`
+
+Fully optional (disabled by default). When enabled, steg numbers have a free TTL (default 7 days). Users can purchase a dedicated number (default 1 year, $2.00) via a blind token protocol.
+
+**Privacy guarantee:** The `extension_tokens` table has **no `room_id` column**. The server cannot link a payment to a specific room. Correlation exists only ephemerally in memory during the channel `redeem_extension` event.
+
+Key modules:
+- `Stelgano.Monetization` — config accessors, token lifecycle, redemption logic
+- `Stelgano.Monetization.ExtensionToken` — Ecto schema for payment tokens (pending → paid → redeemed)
+- `Stelgano.Monetization.PaymentProvider` — behaviour for payment gateway adapters
+- `Stelgano.Monetization.Providers.Paystack` — Paystack adapter (hosted checkout + webhook verification)
+
+Payment flow:
+1. Client generates random `extension_secret`, computes `token_hash = SHA-256(secret)`
+2. Server stores `token_hash` in `extension_tokens` (no room link), redirects to Paystack
+3. Paystack webhook marks token as `paid`
+4. Client sends `extension_secret` via channel `redeem_extension` event
+5. Server hashes it, finds matching paid token, extends room TTL — token table still has no room_id
+
 ### Background jobs (Oban)
 
 - `ExpireTtlRooms` — expires rooms past their TTL and hard-deletes all their messages (hourly)
+- `ExpireUnredeemedTokens` — expires stale payment tokens (daily at 03:00 UTC)
 - Queue: `:maintenance` with 2 workers
 
 ### Security plugs
@@ -113,6 +134,8 @@ The `can_type?/1` helper enforces turn-based input: you can type when the room i
 - `/chat` — anonymous chat LiveView; accepts optional `?phone=<e164>` query param to pre-populate phone field
 - `/steg-number` — steg number generator
 - `/admin` — admin dashboard (behind `:admin_auth` pipeline)
+- `/payment/callback` — post-payment redirect from Paystack
+- `/api/webhooks/paystack` — Paystack webhook endpoint (HMAC-SHA512 verified)
 - `/.well-known/security.txt` — security disclosure info
 - `/dev/dashboard`, `/dev/mailbox` — dev-only tools (not compiled in prod)
 
@@ -140,6 +163,14 @@ PostgreSQL with binary UUIDs. Migrations in [priv/repo/migrations/](priv/repo/mi
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `PHX_HOST` | Yes | Production hostname |
 | `POOL_SIZE` | No | DB connection pool size |
+| `MONETIZATION_ENABLED` | No | Set to `true` to enable paid tiers |
+| `PAYSTACK_SECRET_KEY` | If monetization | Paystack secret key |
+| `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key |
+| `PAYSTACK_CALLBACK_URL` | If monetization | Post-payment redirect URL |
+| `FREE_TTL_DAYS` | No | Free tier TTL (default: 7) |
+| `PAID_TTL_DAYS` | No | Paid tier TTL (default: 365) |
+| `PRICE_CENTS` | No | Price in smallest currency unit (default: 200) |
+| `PAYMENT_CURRENCY` | No | ISO 4217 currency code (default: USD) |
 
 Salts (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`) are public constants in client JS; optionally overridable via env vars for self-hosters. Rotating salts is a breaking change.
 
@@ -166,5 +197,5 @@ Dark-first glassmorphism UI. All surfaces use `backdrop-filter: blur(16px)` with
 
 **Touch targets:** 56px minimum height on interactive elements (exceeds WCAG 44px). All motion respects `prefers-reduced-motion`. Mobile-first: 320px minimum width.
 
-**SessionStorage keys** (5 items, cleared on logout/panic/room-expiry):
-- `stelegano_phone`, `stelegano_room_id`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`
+**SessionStorage keys** (6 items, cleared on logout/panic/room-expiry):
+- `stelegano_phone`, `stelegano_room_id`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`, `stelegano_extension_secret`

@@ -12,6 +12,8 @@ defmodule StelganoWeb.Layouts do
 
   use StelganoWeb, :html
 
+  alias Stelgano.Monetization
+
   embed_templates "layouts/*"
 
   @doc """
@@ -49,6 +51,14 @@ defmodule StelganoWeb.Layouts do
             >
               Blog
             </.link>
+            <%= if Monetization.enabled?() do %>
+              <.link
+                navigate={~p"/pricing"}
+                class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all"
+              >
+                Pricing
+              </.link>
+            <% end %>
           </div>
           <div class="hidden sm:block h-4 w-px bg-white/10 mx-2"></div>
           <%= if assigns[:view_module] not in [StelganoWeb.ChatLive, StelganoWeb.StegNumberLive] do %>

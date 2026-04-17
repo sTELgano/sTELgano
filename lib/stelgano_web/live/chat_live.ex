@@ -34,6 +34,10 @@ defmodule StelganoWeb.ChatLive do
 
   use StelganoWeb, :live_view
 
+  import StelganoWeb.Helpers.PriceFormatter, only: [format_price: 2]
+
+  alias Stelgano.Monetization
+
   @max_chars 4_000
   @counter_warn_at 3_500
   @counter_danger_at 3_900
@@ -69,9 +73,14 @@ defmodule StelganoWeb.ChatLive do
       |> assign(:lock_error, nil)
       |> assign(:confirm_expire, false)
       |> assign(:ttl_expires_at, nil)
+      |> assign(:is_new_channel, false)
+      |> assign(:monetization_enabled, Monetization.enabled?())
+      |> assign(:free_ttl_days, Monetization.free_ttl_days())
+      |> assign(:paid_ttl_days, Monetization.paid_ttl_days())
+      |> assign(:price_cents, Monetization.price_cents())
+      |> assign(:currency, Monetization.currency())
       |> assign(:_pending_phone, prefilled_phone)
       |> assign(:_pending_pin, "")
-      |> assign(:confirm_expire, false)
       |> assign_constants()
 
     {:ok, socket, layout: false}
@@ -107,24 +116,45 @@ defmodule StelganoWeb.ChatLive do
     %{"room_hash" => room_hash, "access_hash" => access_hash, "sender_hash" => sender_hash} =
       params
 
+    # Check if room exists before join to detect new channel creation
+    room_existed = Stelgano.Rooms.room_exists?(room_hash)
+
     case Stelgano.Rooms.join_room(room_hash, access_hash) do
       {:ok, room} ->
-        socket =
-          socket
-          |> assign(:state, :connecting)
-          |> assign(:room_id, room.id)
-          |> assign(:room_hash, room_hash)
-          |> assign(:sender_hash, sender_hash)
-          |> assign(:error, nil)
-          |> assign(:attempts_remaining, nil)
+        is_new = not room_existed
 
-        {:noreply,
-         push_event(socket, "channel_join_now", %{
-           room_id: room.id,
-           sender_hash: sender_hash,
-           room_hash: room_hash,
-           phone: socket.assigns._pending_phone
-         })}
+        # If this is a new channel and monetization is enabled, show plan prompt
+        if is_new and Monetization.enabled?() do
+          socket =
+            socket
+            |> assign(:state, :new_channel)
+            |> assign(:room_id, room.id)
+            |> assign(:room_hash, room_hash)
+            |> assign(:sender_hash, sender_hash)
+            |> assign(:is_new_channel, true)
+            |> assign(:error, nil)
+            |> assign(:attempts_remaining, nil)
+
+          {:noreply, socket}
+        else
+          socket =
+            socket
+            |> assign(:state, :connecting)
+            |> assign(:room_id, room.id)
+            |> assign(:room_hash, room_hash)
+            |> assign(:sender_hash, sender_hash)
+            |> assign(:is_new_channel, is_new)
+            |> assign(:error, nil)
+            |> assign(:attempts_remaining, nil)
+
+          {:noreply,
+           push_event(socket, "channel_join_now", %{
+             room_id: room.id,
+             sender_hash: sender_hash,
+             room_hash: room_hash,
+             phone: socket.assigns._pending_phone
+           })}
+        end
 
       {:error, :locked, remaining} ->
         socket =
@@ -152,6 +182,32 @@ defmodule StelganoWeb.ChatLive do
 
         {:noreply, socket}
     end
+  end
+
+  # User chose free tier or skipped — continue to chat
+  @impl Phoenix.LiveView
+  def handle_event("continue_free", _params, socket) do
+    socket = assign(socket, :state, :connecting)
+
+    {:noreply,
+     push_event(socket, "channel_join_now", %{
+       room_id: socket.assigns.room_id,
+       sender_hash: socket.assigns.sender_hash,
+       room_hash: socket.assigns.room_hash,
+       phone: socket.assigns._pending_phone
+     })}
+  end
+
+  # User wants to extend — redirect to steg-number page with payment flow
+  @impl Phoenix.LiveView
+  def handle_event("choose_paid", _params, socket) do
+    {:noreply, redirect(socket, to: ~p"/steg-number")}
+  end
+
+  # Handle TTL extension from channel redemption
+  @impl Phoenix.LiveView
+  def handle_event("ttl_extended", %{"ttl_expires_at" => ttl}, socket) do
+    {:noreply, assign(socket, :ttl_expires_at, ttl)}
   end
 
   @impl Phoenix.LiveView
@@ -444,6 +500,7 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_state(%{state: :entry} = assigns), do: render_entry(assigns)
   defp render_state(%{state: :deriving} = assigns), do: render_deriving(assigns)
+  defp render_state(%{state: :new_channel} = assigns), do: render_new_channel(assigns)
   defp render_state(%{state: :connecting} = assigns), do: render_connecting(assigns)
   defp render_state(%{state: :chat} = assigns), do: render_chat(assigns)
   defp render_state(%{state: :locked} = assigns), do: render_locked(assigns)
@@ -488,131 +545,92 @@ defmodule StelganoWeb.ChatLive do
               </div>
             <% end %>
 
-            <%= cond do %>
-              <% @_pending_phone == "" -> %>
-                <div class="text-center py-12 space-y-10 animate-in">
-                  <div class="size-24 mx-auto relative group">
-                    <div class="absolute inset-0 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-all">
-                    </div>
-                    <div class="relative size-24 rounded-4xl bg-slate-900 border border-white/10 flex items-center justify-center">
-                      <.icon name="ban" class="size-12 text-slate-500" />
-                    </div>
-                  </div>
-
-                  <div class="space-y-4">
-                    <h3 class="text-4xl font-extrabold text-white font-display">Start a Chat.</h3>
-                    <p class="text-slate-500 font-medium leading-relaxed max-w-sm mx-auto">
-                      A chat session requires a secret number to start a secure connection.
-                    </p>
-                  </div>
-
-                  <div class="pt-6">
+            <form
+              id="entry-form"
+              phx-submit="entry_submit"
+              phx-change="entry_change"
+              class="space-y-10"
+            >
+              <%!-- Phone Field --%>
+              <div class="space-y-4">
+                <div class="flex items-center justify-between px-1">
+                  <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                    Secret Number
+                  </label>
+                  <%= if @phone_locked do %>
+                    <span class="text-[10px] font-mono text-primary font-bold">LOCKED</span>
+                  <% else %>
                     <.link
                       navigate={~p"/steg-number"}
-                      class="btn-primary inline-flex items-center gap-4 px-10 py-5 text-lg shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)] transition-all"
+                      class="text-[10px] font-bold uppercase tracking-[0.2em] text-primary hover:text-white transition-colors"
                     >
-                      Create Number <.icon name="sparkles" class="size-6" />
+                      Generate New
                     </.link>
-                  </div>
+                  <% end %>
                 </div>
-              <% @phone_locked -> %>
-                <form
-                  id="entry-form"
-                  phx-submit="entry_submit"
-                  phx-change="entry_change"
-                  class="space-y-10"
-                >
-                  <%!-- Phone Vector --%>
-                  <div class="space-y-4">
-                    <div class="flex items-center justify-between px-1">
-                      <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
-                        Secret Number
-                      </label>
-                      <span class="text-[10px] font-mono text-primary font-bold">LOCKED</span>
-                    </div>
-                    <div class="relative group">
-                      <input
-                        id="entry-phone"
-                        name="phone"
-                        type={if @phone_visible, do: "text", else: "password"}
-                        class="glass-input w-full pr-14 font-mono text-xl font-bold tracking-widest bg-slate-950/40"
-                        value={@_pending_phone}
-                        readonly
-                      />
-                      <button
-                        type="button"
-                        id="phone-toggle-btn"
-                        phx-click="toggle_phone_visibility"
-                        class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all"
-                        tabindex="-1"
-                      >
-                        <.icon
-                          name={if @phone_visible, do: "eye_off", else: "eye"}
-                          class="size-6"
-                        />
-                      </button>
-                    </div>
-                  </div>
-
-                  <%!-- PIN Input --%>
-                  <div class="space-y-4">
-                    <div class="flex items-center justify-between px-1">
-                      <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
-                        Private PIN
-                      </label>
-                      <span class="text-[10px] font-mono text-slate-500 font-bold">
-                        SECURED LOCALLY
-                      </span>
-                    </div>
-                    <.input
-                      id="entry-pin"
-                      name="pin"
-                      type="password"
-                      inputmode="numeric"
-                      pattern="[0-9]*"
-                      placeholder="••••"
-                      autocomplete="current-password"
-                      autofocus
-                      class="text-center text-3xl sm:text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10"
-                    />
-                  </div>
-
+                <div class="relative group">
+                  <input
+                    id="entry-phone"
+                    name="phone"
+                    type={if @phone_visible, do: "text", else: "password"}
+                    class="glass-input w-full pr-14 font-mono text-xl font-bold tracking-widest bg-slate-950/40"
+                    value={@_pending_phone}
+                    readonly={@phone_locked}
+                    placeholder="Enter number"
+                    inputmode="tel"
+                    autocomplete="off"
+                    autofocus={not @phone_locked}
+                  />
                   <button
-                    id="entry-submit"
-                    type="submit"
-                    class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+                    type="button"
+                    id="phone-toggle-btn"
+                    phx-click="toggle_phone_visibility"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                    tabindex="-1"
                   >
-                    Open Chat
                     <.icon
-                      name="zap"
-                      class="size-6 group-hover:scale-125 transition-transform"
+                      name={if @phone_visible, do: "eye_off", else: "eye"}
+                      class="size-6"
                     />
                   </button>
-                </form>
-              <% true -> %>
-                <%!-- Fallback for manual entry if needed, but current app flow favors prefilled params --%>
-                <div class="text-center py-6 space-y-8">
-                  <div class="relative size-32 mx-auto">
-                    <div class="absolute inset-0 rounded-full border-4 border-primary/10 border-t-primary animate-spin">
-                    </div>
-                    <div class="absolute inset-4 rounded-full border-2 border-primary/5 border-b-primary animate-spin-slow">
-                    </div>
-                    <div class="absolute inset-0 flex items-center justify-center">
-                      <.icon
-                        name="fingerprint"
-                        class="size-12 text-primary drop-shadow-[0_0_10px_rgba(0,255,163,0.5)]"
-                      />
-                    </div>
-                  </div>
-
-                  <div class="space-y-3">
-                    <h3 class="text-2xl font-bold text-white font-display">Authorizing</h3>
-                    <p class="text-slate-400 font-medium">
-                      Verifying your PIN...
-                    </p>
-                  </div>
                 </div>
-            <% end %>
+              </div>
+
+              <%!-- PIN Input --%>
+              <div class="space-y-4">
+                <div class="flex items-center justify-between px-1">
+                  <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                    Private PIN
+                  </label>
+                  <span class="text-[10px] font-mono text-slate-500 font-bold">
+                    SECURED LOCALLY
+                  </span>
+                </div>
+                <.input
+                  id="entry-pin"
+                  name="pin"
+                  type="password"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="••••"
+                  autocomplete="current-password"
+                  autofocus={@phone_locked}
+                  class="text-center text-3xl sm:text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10"
+                />
+              </div>
+
+              <button
+                id="entry-submit"
+                type="submit"
+                class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+              >
+                Open Chat
+                <.icon
+                  name="zap"
+                  class="size-6 group-hover:scale-125 transition-transform"
+                />
+              </button>
+            </form>
           </div>
         </.premium_card>
       </div>
@@ -661,6 +679,75 @@ defmodule StelganoWeb.ChatLive do
           <div class="size-1.5 rounded-full bg-primary animate-ping [animation-delay:0.3s]"></div>
           <div class="size-1.5 rounded-full bg-primary animate-ping [animation-delay:0.6s]"></div>
         </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ---------------------------------------------------------------------------
+  # :new_channel — plan selection for new channels (monetization enabled)
+  # ---------------------------------------------------------------------------
+
+  defp render_new_channel(assigns) do
+    ~H"""
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 animate-in">
+      <div class="w-full max-w-lg space-y-10">
+        <div class="text-center space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(0,255,163,0.1)]">
+            <.icon name="sparkles" class="size-3" /> New Channel Detected
+          </div>
+          <h2 class="text-3xl sm:text-4xl font-extrabold text-white font-display tracking-tight">
+            This is a new channel.
+          </h2>
+          <p class="text-slate-400 font-medium leading-relaxed max-w-sm mx-auto">
+            Choose how long you want to keep this number active.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <%!-- Free tier --%>
+          <button
+            phx-click="continue_free"
+            class="glass-card p-8 text-left space-y-4 group hover:border-primary/30 transition-all duration-300 cursor-pointer"
+          >
+            <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+              <.icon
+                name="clock"
+                class="size-6 text-slate-400 group-hover:text-primary transition-colors"
+              />
+            </div>
+            <div>
+              <h3 class="text-white font-bold text-lg font-display">Temporary</h3>
+              <p class="text-slate-500 text-sm font-medium mt-1">
+                {@free_ttl_days} days, then recycled
+              </p>
+            </div>
+            <div class="text-2xl font-extrabold text-white font-display">Free</div>
+          </button>
+
+          <%!-- Paid tier --%>
+          <button
+            phx-click="choose_paid"
+            class="glass-card p-8 text-left space-y-4 group hover:border-primary/30 transition-all duration-300 cursor-pointer border-primary/10 bg-primary/2"
+          >
+            <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+              <.icon name="shield_check" class="size-6 text-primary" />
+            </div>
+            <div>
+              <h3 class="text-white font-bold text-lg font-display">Dedicated</h3>
+              <p class="text-slate-500 text-sm font-medium mt-1">
+                {@paid_ttl_days} days, your number
+              </p>
+            </div>
+            <div class="text-2xl font-extrabold text-primary font-display">
+              {format_price(@price_cents, @currency)}<span class="text-sm text-slate-500">/year</span>
+            </div>
+          </button>
+        </div>
+
+        <p class="text-center text-slate-600 text-xs font-medium">
+          You can upgrade to a dedicated number at any time from the number generator page.
+        </p>
       </div>
     </div>
     """
@@ -746,6 +833,36 @@ defmodule StelganoWeb.ChatLive do
         >
         </div>
       </div>
+
+      <%!-- TTL Expiry Warning --%>
+      <%= if @ttl_expires_at && ttl_warning_level(@ttl_expires_at) do %>
+        <div class={[
+          "px-4 py-2 flex items-center justify-between text-xs font-bold uppercase tracking-widest border-b",
+          case ttl_warning_level(@ttl_expires_at) do
+            :critical -> "bg-danger/10 border-danger/20 text-danger"
+            :warning -> "bg-amber-500/10 border-amber-500/20 text-amber-400"
+            _other -> ""
+          end
+        ]}>
+          <span class="flex items-center gap-2">
+            <.icon name="alert_triangle" class="size-3" />
+            <%= case ttl_warning_level(@ttl_expires_at) do %>
+              <% :critical -> %>
+                Number expires in less than 12 hours
+              <% :warning -> %>
+                Number expires in less than 2 days
+            <% end %>
+          </span>
+          <%= if @monetization_enabled do %>
+            <.link
+              navigate={~p"/steg-number"}
+              class="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-[10px]"
+            >
+              Extend
+            </.link>
+          <% end %>
+        </div>
+      <% end %>
 
       <%!-- Workspace Message Area --%>
       <div
@@ -1081,6 +1198,26 @@ defmodule StelganoWeb.ChatLive do
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
+
+  defp ttl_warning_level(nil), do: nil
+
+  defp ttl_warning_level(ttl_string) when is_binary(ttl_string) do
+    case DateTime.from_iso8601(ttl_string) do
+      {:ok, ttl_dt, _offset} ->
+        seconds_remaining = DateTime.diff(ttl_dt, DateTime.utc_now(), :second)
+
+        cond do
+          seconds_remaining <= 12 * 3600 -> :critical
+          seconds_remaining <= 2 * 86_400 -> :warning
+          true -> nil
+        end
+
+      _error ->
+        nil
+    end
+  end
+
+  defp ttl_warning_level(_other), do: nil
 
   defp can_type?(%{state: :chat, message: nil}), do: true
   defp can_type?(%{state: :chat, message: %{is_mine: false}}), do: true

@@ -1374,9 +1374,9 @@ The following TTL selection UI is planned but not yet built:
 
 ---
 
-## 25. Business Model (not yet implemented)
+## 25. Business Model
 
-> **Implementation status:** The entire business model — Stripe integration, dedicated numbers, billing firewall, pricing page, and transparency reports — is planned but not yet built. The specification below is retained for future implementation.
+> **Implementation status:** Core monetization is implemented — configurable tier system, blind token payment protocol, Paystack integration, privacy-preserving payment flow. Transparency reports and renewal reminders are planned for future iteration.
 
 ### 25.1 Philosophy
 
@@ -1420,11 +1420,18 @@ A **Quarterly Transparency Report** is published on Open Collective covering: re
 
 ### 25.5 Payment implementation
 
-- Payment processor: **Stripe** — standard card payments only
+- Payment provider: **Pluggable** — configured via `Stelgano.Monetization.PaymentProvider` behaviour. Paystack ships built-in; self-hosters can implement Stripe, Flutterwave, M-Pesa, or any other gateway.
+- Default provider: **Paystack** — hosted checkout (user enters email on Paystack's page, never on sTELgano's server)
 - Cryptocurrency: **not accepted** — adds KYC complexity, regulatory risk, and operational overhead that is disproportionate to a $2/year product
-- Billing firewall: the Stripe webhook returns only `{ttl_expires_at: timestamp, is_dedicated: true}` to the relay — no name, no email, no card metadata crosses into the sTELgano application database
-- No Stripe customer ID is stored in the rooms table — only the Stripe subscription ID for renewal checking
-- Stripe customer record contains email (for renewal reminders) — this is disclosed in the privacy policy
+- **Blind token protocol:** Privacy-preserving by structural design. The `extension_tokens` table has **no `room_id` or `room_hash` column**. The server cannot link a payment to a specific room.
+  1. Client generates random `extension_secret`, computes `token_hash = SHA-256(secret)`
+  2. Server stores `token_hash` in `extension_tokens` (no room link), redirects to Paystack hosted checkout
+  3. Paystack processes payment, sends webhook; server marks token as `paid`
+  4. Client sends `extension_secret` via channel `redeem_extension` event after joining room
+  5. Server hashes the secret, finds matching paid token, extends room TTL — token row never stores room_id
+- **Monetization is fully configurable:** `config :stelgano, Stelgano.Monetization, enabled: false` (default) means unlimited TTL, no payment routes, no Paystack JS. Self-hosters can run sTELgano without any monetization.
+- **New channel detection:** When a user enters a number that creates a new room, the system shows a plan selection screen (free/paid). This also helps detect mistyped numbers — if they get a "new channel" prompt for a number they expect to exist, they know to re-enter.
+- **TTL expiry warnings:** Chat UI shows warnings at 2 days (amber) and 12 hours (red) before room expiry, with an "Extend" link to the steg number page.
 
 ### 25.6 The honesty hook
 
