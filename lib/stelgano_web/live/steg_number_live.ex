@@ -25,6 +25,7 @@ defmodule StelganoWeb.StegNumberLive do
   alias Stelgano.Monetization
   alias Stelgano.Repo
   alias Stelgano.Rooms.Room
+  alias StelganoWeb.Data.Countries
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -48,7 +49,7 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:selected_iso, nil)
       |> assign(:search_query, "")
       |> assign(:show_countries, false)
-      |> assign(:all_countries, StelganoWeb.Data.Countries.list())
+      |> assign(:all_countries, Countries.list())
       # Will be populated on select/search
       |> assign(:countries, [])
       |> assign(:selected_tier, nil)
@@ -170,8 +171,7 @@ defmodule StelganoWeb.StegNumberLive do
           else: nil
 
       {:noreply,
-       socket
-       |> assign(
+       assign(socket,
          manual_number: number,
          manual_error: error,
          availability: :idle,
@@ -184,23 +184,20 @@ defmodule StelganoWeb.StegNumberLive do
   def handle_event("check_manual_number", %{"number" => number, "room_hash" => room_hash}, socket) do
     room = Repo.get_by(Room, room_hash: room_hash, is_active: true)
 
-    socket =
+    {availability, room_details} =
       if room do
-        socket
-        |> assign(:availability, :taken)
-        |> assign(:room_details, %{
-          tier: room.tier,
-          ttl_expires_at: room.ttl_expires_at
-        })
+        {:taken, %{tier: room.tier, ttl_expires_at: room.ttl_expires_at}}
       else
-        socket
-        |> assign(:availability, :available)
-        |> assign(:room_details, nil)
+        {:available, nil}
       end
-      |> assign(:manual_number, number)
-      |> assign(:manual_error, nil)
 
-    {:noreply, socket}
+    {:noreply,
+     assign(socket,
+       manual_number: number,
+       manual_error: nil,
+       availability: availability,
+       room_details: room_details
+     )}
   end
 
   @impl Phoenix.LiveView
@@ -223,11 +220,11 @@ defmodule StelganoWeb.StegNumberLive do
   @impl Phoenix.LiveView
   def handle_event("restore_country", %{"country" => country}, socket) do
     # Validate country against available list
-    found = Enum.find(socket.assigns.all_countries, fn {_, v, _} -> v == country end)
+    found = Enum.find(socket.assigns.all_countries, fn {_name, v, _iso} -> v == country end)
 
     socket =
       if found do
-        {_, name, iso} = found
+        {_display, name, iso} = found
 
         socket
         |> assign(selected_country: name, selected_iso: iso)
@@ -269,7 +266,7 @@ defmodule StelganoWeb.StegNumberLive do
   end
 
   defp normalize(num) when is_binary(num), do: String.replace(num, ~r/[^0-9]/, "")
-  defp normalize(_), do: ""
+  defp normalize(_other), do: ""
 
   @impl Phoenix.LiveView
   def render(assigns) do

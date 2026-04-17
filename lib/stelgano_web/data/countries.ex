@@ -204,6 +204,7 @@ defmodule StelganoWeb.Data.Countries do
   @doc """
   Returns a list of all countries formatted for the searchable selector.
   """
+  @spec list() :: [{String.t(), String.t(), String.t()}]
   def list do
     Enum.map(@countries, fn {name, code} ->
       # generator_val is name with spaces as underscores
