@@ -41,6 +41,7 @@ defmodule StelganoWeb.AnonRoomChannel do
 
   use StelganoWeb, :channel
 
+  alias Stelgano.Monetization
   alias Stelgano.Rooms
 
   require Logger
@@ -219,6 +220,30 @@ defmodule StelganoWeb.AnonRoomChannel do
         )
 
         {:reply, {:error, %{reason: "expire_failed"}}, socket}
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # handle_in — redeem_extension (monetization)
+  # ---------------------------------------------------------------------------
+
+  @impl Phoenix.Channel
+  def handle_in("redeem_extension", %{"extension_secret" => secret}, socket)
+      when is_binary(secret) do
+    if Monetization.enabled?() do
+      case Monetization.redeem_token(secret, socket.assigns.room_id) do
+        {:ok, new_ttl} ->
+          broadcast!(socket, "ttl_extended", %{
+            ttl_expires_at: DateTime.to_iso8601(new_ttl)
+          })
+
+          {:reply, {:ok, %{ttl_expires_at: DateTime.to_iso8601(new_ttl)}}, socket}
+
+        {:error, :invalid_token} ->
+          {:reply, {:error, %{reason: "invalid_token"}}, socket}
+      end
+    else
+      {:reply, {:error, %{reason: "monetization_disabled"}}, socket}
     end
   end
 

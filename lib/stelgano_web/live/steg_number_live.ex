@@ -20,6 +20,8 @@ defmodule StelganoWeb.StegNumberLive do
 
   use StelganoWeb, :live_view
 
+  alias Stelgano.Monetization
+
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     socket =
@@ -29,14 +31,34 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:copied, false)
       |> assign(:availability, :idle)
       |> assign(:generating, false)
+      |> assign(:payment_loading, false)
+      |> assign(:monetization_enabled, Monetization.enabled?())
+      |> assign(:price_cents, Monetization.price_cents())
+      |> assign(:currency, Monetization.currency())
+      |> assign(:free_ttl_days, Monetization.free_ttl_days())
+      |> assign(:paid_ttl_days, Monetization.paid_ttl_days())
       |> assign(:selected_country, "Kenya")
       |> assign(:show_countries, false)
       |> assign(:countries, [
-        {"Kenya", "Kenya"}, {"United States", "United_States"}, {"United Kingdom", "United_Kingdom"},
-        {"Germany", "Germany"}, {"France", "France"}, {"Canada", "Canada"}, {"Japan", "Japan"},
-        {"Australia", "Australia"}, {"India", "India"}, {"Brazil", "Brazil"}, {"South Africa", "South_Africa"},
-        {"Nigeria", "Nigeria"}, {"Egypt", "Egypt"}, {"Morocco", "Morocco"}, {"Ethiopia", "Ethiopia"},
-        {"Ghana", "Ghana"}, {"Tanzania", "Tanzania"}, {"Uganda", "Uganda"}, {"Rwanda", "Rwanda"}
+        {"Kenya", "Kenya"},
+        {"United States", "United_States"},
+        {"United Kingdom", "United_Kingdom"},
+        {"Germany", "Germany"},
+        {"France", "France"},
+        {"Canada", "Canada"},
+        {"Japan", "Japan"},
+        {"Australia", "Australia"},
+        {"India", "India"},
+        {"Brazil", "Brazil"},
+        {"South Africa", "South_Africa"},
+        {"Nigeria", "Nigeria"},
+        {"Egypt", "Egypt"},
+        {"Morocco", "Morocco"},
+        {"Ethiopia", "Ethiopia"},
+        {"Ghana", "Ghana"},
+        {"Tanzania", "Tanzania"},
+        {"Uganda", "Uganda"},
+        {"Rwanda", "Rwanda"}
       ])
 
     {:ok, socket}
@@ -95,8 +117,60 @@ defmodule StelganoWeb.StegNumberLive do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("initiate_payment", %{"token_hash" => token_hash}, socket) do
+    if Monetization.enabled?() do
+      handle_payment_initiation(socket, token_hash)
+    else
+      {:noreply, put_flash(socket, :error, "Payments are not enabled")}
+    end
+  end
+
+  defp handle_payment_initiation(socket, token_hash) do
+    socket = assign(socket, :payment_loading, true)
+
+    case Monetization.create_token(token_hash) do
+      {:ok, _token} ->
+        case Monetization.initialize_payment(token_hash) do
+          {:ok, checkout_url} ->
+            {:noreply, redirect(socket, external: checkout_url)}
+
+          {:error, _reason} ->
+            {:noreply,
+             socket
+             |> assign(:payment_loading, false)
+             |> put_flash(:error, "Payment initialization failed. Please try again.")}
+        end
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> assign(:payment_loading, false)
+         |> put_flash(:error, "Could not create payment token. Please try again.")}
+    end
+  end
+
+  @impl Phoenix.LiveView
   def handle_info(:clear_copied, socket) do
     {:noreply, assign(socket, :copied, false)}
+  end
+
+  defp format_price(cents, currency) do
+    major = div(cents, 100)
+    minor = rem(cents, 100)
+
+    symbol =
+      case currency do
+        "USD" -> "$"
+        "EUR" -> "€"
+        "GBP" -> "£"
+        "KES" -> "KSh "
+        "NGN" -> "₦"
+        "GHS" -> "GH₵"
+        "ZAR" -> "R"
+        _other -> "#{currency} "
+      end
+
+    "#{symbol}#{major}.#{String.pad_leading(Integer.to_string(minor), 2, "0")}"
   end
 
   @impl Phoenix.LiveView
@@ -111,8 +185,8 @@ defmodule StelganoWeb.StegNumberLive do
           </div>
 
           <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter text-white font-display mb-8">
-          Secret Number <span class="text-gradient">Generator</span>
-        </h1>
+            Secret Number <span class="text-gradient">Generator</span>
+          </h1>
 
           <p class="text-slate-400 text-lg sm:text-2xl font-medium leading-tight max-w-2xl mx-auto animate-in stagger-3">
             Generate a secret number to create your private channel. Use it to establish an invisible link with your partner.
@@ -129,80 +203,82 @@ defmodule StelganoWeb.StegNumberLive do
             >
               <div class="p-8 sm:p-10 space-y-10">
                 <%!-- Identity Selector --%>
-                  <div class="space-y-4">
-                    <div class="flex items-center justify-between px-1">
-                      <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
-                        Select Country
-                      </label>
-                    </div>
-                    <div class="relative group">
-                      <div class="absolute inset-0 bg-primary/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity">
-                      </div>
-                      
-                      <%!-- Custom Premium Dropdown --%>
-                      <div class="relative z-20">
-                        <h4 class="text-white font-bold mb-4 flex items-center gap-2">
-                          <.icon name="badge_check" class="size-5 text-primary" />
-                          Secure your number
-                        </h4>
-                        <button
-                          type="button"
-                          phx-click="toggle_countries"
-                          class="glass-input w-full flex items-center justify-between gap-4 text-left group/btn"
-                        >
-                          <span class="flex items-center gap-3">
-                            <.icon name="globe" class="size-5 text-primary/60" />
-                            <span class="font-bold text-white">
-                              {Enum.find_value(@countries, "Select Matrix", fn {name, val} ->
-                                if val == @selected_country, do: name
-                              end)}
-                            </span>
-                          </span>
-                          <.icon
-                            name="chevron_down"
-                            class={[
-                              "size-5 text-slate-500 transition-transform duration-300",
-                              @show_countries && "rotate-180 text-primary"
-                            ]}
-                          />
-                        </button>
-
-
-                        <%= if @show_countries do %>
-                          <div
-                            class="absolute top-full left-0 right-0 mt-3 p-2 glass-card-premium z-50 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 animate-in"
-                            phx-click-away="close_countries"
-                          >
-                            <div class="grid grid-cols-1 gap-1">
-                              <button
-                                :for={{name, val} <- @countries}
-                                type="button"
-                                phx-click="update_country"
-                                phx-value-country={val}
-                                class={[
-                                  "w-full px-4 py-3 rounded-xl text-left text-sm font-bold transition-all flex items-center justify-between group/item",
-                                  if(@selected_country == val,
-                                    do: "bg-primary text-slate-950 shadow-[0_0_15px_rgba(0,255,163,0.3)]",
-                                    else: "text-slate-400 hover:bg-white/5 hover:text-white"
-                                  )
-                                ]}
-                              >
-                                <span class="flex items-center gap-3">
-                                  <.icon name="map_pin" class="size-4 opacity-40 group-hover/item:opacity-100 transition-opacity" />
-                                  {name}
-                                </span>
-                                <%= if @selected_country == val do %>
-                                  <.icon name="check_circle" class="size-4" />
-                                <% end %>
-                              </button>
-                            </div>
-                          </div>
-                        <% end %>
-                      </div>
-
-                      <input type="hidden" name="country" id="country-select" value={@selected_country} />
-                    </div>
+                <div class="space-y-4">
+                  <div class="flex items-center justify-between px-1">
+                    <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                      Select Country
+                    </label>
                   </div>
+                  <div class="relative group">
+                    <div class="absolute inset-0 bg-primary/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                    </div>
+
+                    <%!-- Custom Premium Dropdown --%>
+                    <div class="relative z-20">
+                      <h4 class="text-white font-bold mb-4 flex items-center gap-2">
+                        <.icon name="badge_check" class="size-5 text-primary" /> Secure your number
+                      </h4>
+                      <button
+                        type="button"
+                        phx-click="toggle_countries"
+                        class="glass-input w-full flex items-center justify-between gap-4 text-left group/btn"
+                      >
+                        <span class="flex items-center gap-3">
+                          <.icon name="globe" class="size-5 text-primary/60" />
+                          <span class="font-bold text-white">
+                            {Enum.find_value(@countries, "Select Matrix", fn {name, val} ->
+                              if val == @selected_country, do: name
+                            end)}
+                          </span>
+                        </span>
+                        <.icon
+                          name="chevron_down"
+                          class={[
+                            "size-5 text-slate-500 transition-transform duration-300",
+                            @show_countries && "rotate-180 text-primary"
+                          ]}
+                        />
+                      </button>
+
+                      <%= if @show_countries do %>
+                        <div
+                          class="absolute top-full left-0 right-0 mt-3 p-2 glass-card-premium z-50 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 animate-in"
+                          phx-click-away="close_countries"
+                        >
+                          <div class="grid grid-cols-1 gap-1">
+                            <button
+                              :for={{name, val} <- @countries}
+                              type="button"
+                              phx-click="update_country"
+                              phx-value-country={val}
+                              class={[
+                                "w-full px-4 py-3 rounded-xl text-left text-sm font-bold transition-all flex items-center justify-between group/item",
+                                if(@selected_country == val,
+                                  do:
+                                    "bg-primary text-slate-950 shadow-[0_0_15px_rgba(0,255,163,0.3)]",
+                                  else: "text-slate-400 hover:bg-white/5 hover:text-white"
+                                )
+                              ]}
+                            >
+                              <span class="flex items-center gap-3">
+                                <.icon
+                                  name="map_pin"
+                                  class="size-4 opacity-40 group-hover/item:opacity-100 transition-opacity"
+                                />
+                                {name}
+                              </span>
+                              <%= if @selected_country == val do %>
+                                <.icon name="check_circle" class="size-4" />
+                              <% end %>
+                            </button>
+                          </div>
+                        </div>
+                      <% end %>
+                    </div>
+
+                    <input type="hidden" name="country" id="country-select" value={@selected_country} />
+                  </div>
+                </div>
 
                 <%!-- High-Impact Number Display --%>
                 <div class="relative py-12 px-8 rounded-3xl bg-slate-950/50 border border-white/5 shadow-inner overflow-hidden group">
@@ -259,8 +335,7 @@ defmodule StelganoWeb.StegNumberLive do
                             ]}
                           >
                             <%= if @copied do %>
-                              <.icon name="check_circle" class="size-4" />
-                              Copied to Clipboard
+                              <.icon name="check_circle" class="size-4" /> Copied to Clipboard
                             <% else %>
                               <.icon name="clipboard" class="size-4" /> Copy Number
                             <% end %>
@@ -364,6 +439,44 @@ defmodule StelganoWeb.StegNumberLive do
                 Enter Chat Workspace <.icon name="shield_check" class="size-5" />
               </.link>
             </div>
+
+            <%= if @monetization_enabled and @generated_number do %>
+              <div class="space-y-4 pt-6 border-t border-white/5">
+                <div class="space-y-3">
+                  <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 ml-1">
+                    Keep This Number
+                  </label>
+                  <p class="text-slate-400 text-sm leading-relaxed font-medium">
+                    Free numbers expire after {@free_ttl_days} days.
+                    Secure yours for {@paid_ttl_days} days.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  id="extend-btn"
+                  phx-hook="PaymentInitiator"
+                  data-number={@generated_number && @generated_number.e164}
+                  disabled={@payment_loading}
+                  class={[
+                    "w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-bold uppercase tracking-widest text-sm transition-all border",
+                    if(@payment_loading,
+                      do: "bg-white/5 text-slate-500 cursor-wait border-white/5",
+                      else:
+                        "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 hover:border-primary/30"
+                    )
+                  ]}
+                >
+                  <%= if @payment_loading do %>
+                    <div class="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin">
+                    </div>
+                    Processing...
+                  <% else %>
+                    <.icon name="shield_check" class="size-5" />
+                    Secure for 1 year &mdash; {format_price(@price_cents, @currency)}
+                  <% end %>
+                </button>
+              </div>
+            <% end %>
           </div>
         </div>
 
@@ -382,11 +495,14 @@ defmodule StelganoWeb.StegNumberLive do
               :for={
                 {step, title, desc, icon} <- [
                   {1, "Save the number",
-                   "Add this number to your partner's profile in your phone's contact list.", "user_plus"},
+                   "Add this number to your partner's profile in your phone's contact list.",
+                   "user_plus"},
                   {2, "Match Number",
-                   "Check that both you and your partner have the exact same number.", "arrow_left_right"},
+                   "Check that both you and your partner have the exact same number.",
+                   "arrow_left_right"},
                   {3, "Open Chat",
-                   "Use the saved number plus your private PIN to open the chat room.", "messages_square"}
+                   "Use the saved number plus your private PIN to open the chat room.",
+                   "messages_square"}
                 ]
               }
               class="glass-card p-8 group relative overflow-hidden transition-all hover:border-primary/30"

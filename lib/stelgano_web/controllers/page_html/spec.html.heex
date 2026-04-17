@@ -93,17 +93,14 @@
             <div
               :for={
                 {name, formula, desc} <- [
-                  {"room_hash",
-                   "SHA-256(normalize(phone) + \":\" + ROOM_SALT)",
+                  {"room_hash", "SHA-256(normalize(phone) + \":\" + ROOM_SALT)",
                    "Uniquely identifies the room. Derived solely from the phone number. Both parties compute the same hash from the shared steg number."},
-                  {"access_hash",
-                   "SHA-256(normalize(phone) + \":\" + PIN + \":\" + ACCESS_SALT)",
+                  {"access_hash", "SHA-256(normalize(phone) + \":\" + PIN + \":\" + ACCESS_SALT)",
                    "Proves the caller knows the correct PIN. Each party has a different access_hash because they each choose a different PIN."},
                   {"sender_hash",
                    "SHA-256(normalize(phone) + \":\" + access_hash + \":\" + room_hash + \":\" + SENDER_SALT)",
                    "Identifies the sender within a room. Because access_hash is an input, two users with the same phone but different PINs produce different sender identities."},
-                  {"enc_key",
-                   "PBKDF2(phone, room_id + ENC_SALT, 600000, SHA-256, 256-bit)",
+                  {"enc_key", "PBKDF2(phone, room_id + ENC_SALT, 600000, SHA-256, 256-bit)",
                    "The symmetric encryption key. PIN is NOT part of the derivation because both users need the same key but have different PINs."}
                 ]
               }
@@ -148,7 +145,9 @@
             }
             class="border-l-2 border-primary/20 pl-6 py-2 hover:border-primary transition-all"
           >
-            <h4 class="text-white font-extrabold text-sm uppercase tracking-wider font-display mb-2">{decision}</h4>
+            <h4 class="text-white font-extrabold text-sm uppercase tracking-wider font-display mb-2">
+              {decision}
+            </h4>
             <p class="text-sm text-slate-400 leading-relaxed font-medium">{reason}</p>
           </li>
         </ul>
@@ -210,7 +209,10 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
-            <.icon name="radio" class="size-6 text-slate-500 group-hover:text-primary transition-colors" />
+            <.icon
+              name="radio"
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
           </div>
           <div class="space-y-3">
             <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
@@ -227,7 +229,10 @@
 
         <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
-            <.icon name="list" class="size-6 text-slate-500 group-hover:text-primary transition-colors" />
+            <.icon
+              name="list"
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
           </div>
           <div class="space-y-3">
             <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
@@ -285,11 +290,16 @@
               <tr
                 :for={
                   {mechanism, behavior} <- [
-                    {"Room Creation", "First join with a valid room_hash creates the room automatically"},
-                    {"RoomAccess", "Server stores (room_hash, access_hash) pairs to validate PIN correctness"},
-                    {"Lockout", "10 failed access attempts trigger a 30-minute lock on that access_hash"},
-                    {"Room Expiry", "Optional TTL per room, enforced by an hourly background worker"},
-                    {"Max Occupancy", "Two access_hash entries per room (the two conversation parties)"}
+                    {"Room Creation",
+                     "First join with a valid room_hash creates the room automatically"},
+                    {"RoomAccess",
+                     "Server stores (room_hash, access_hash) pairs to validate PIN correctness"},
+                    {"Lockout",
+                     "10 failed access attempts trigger a 30-minute lock on that access_hash"},
+                    {"Room Expiry",
+                     "Optional TTL per room, enforced by an hourly background worker"},
+                    {"Max Occupancy",
+                     "Two access_hash entries per room (the two conversation parties)"}
                   ]
                 }
                 class="group hover:bg-white/3 transition-all"
@@ -322,23 +332,23 @@
             {title, desc, icon, badge} <- [
               {"Messages",
                "Hard-deleted immediately on reply (N=1 invariant). The previous message row is permanently removed from the database in the same transaction that inserts the new message. No deferred purge, no soft-delete window.",
-               "message_circle",
-               "Instant Delete"},
+               "message_circle", "Instant Delete"},
               {"Rooms",
                "Expire at their configured TTL. An hourly background worker checks for and deactivates expired rooms, hard-deleting all their messages in the same transaction.",
-               "door_open",
-               "Hourly Check"},
+               "door_open", "Hourly Check"},
               {"Sessions",
                "Stored in browser sessionStorage only (5 keys). Cleared automatically on logout, panic route (/x), or room expiry. Never sent to the server. Never persisted to disk.",
-               "monitor",
-               "Ephemeral"}
+               "monitor", "Ephemeral"}
             ]
           }
           class="glass-card p-8 space-y-6 group hover:border-primary/30 transition-all duration-500"
         >
           <div class="flex items-center justify-between">
             <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
-              <.icon name={icon} class="size-6 text-slate-500 group-hover:text-primary transition-colors" />
+              <.icon
+                name={icon}
+                class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+              />
             </div>
             <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
               {badge}
@@ -384,8 +394,7 @@
           href="https://github.com/stelgano/stelgano"
           class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-bold uppercase tracking-wider hover:bg-primary/20 transition-all"
         >
-          View on GitHub
-          <.icon name="arrow_up_right" class="size-4" />
+          View on GitHub <.icon name="arrow_up_right" class="size-4" />
         </.link>
       </div>
     </div>

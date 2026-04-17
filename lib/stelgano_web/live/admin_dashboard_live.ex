@@ -146,12 +146,12 @@ defmodule StelganoWeb.AdminDashboardLive do
             <div
               :for={
                 note <- [
-                "All values are counts derived from server data.",
-                "No private chat contents, keys, or IDs are shown.",
-                "Active rooms represent open chat sessions.",
-                "Messages today counts encrypted items sent in last 24h.",
-                "Stats are kept for 90 days then removed.",
-                "Dashboard updates automatically every 30 seconds."
+                  "All values are counts derived from server data.",
+                  "No private chat contents, keys, or IDs are shown.",
+                  "Active rooms represent open chat sessions.",
+                  "Messages today counts encrypted items sent in last 24h.",
+                  "Stats are kept for 90 days then removed.",
+                  "Dashboard updates automatically every 30 seconds."
                 ]
               }
               class="flex items-start gap-4 group/item"

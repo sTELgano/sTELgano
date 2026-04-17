@@ -268,6 +268,31 @@ function fromBase64(b64) {
 }
 
 // ---------------------------------------------------------------------------
+// Extension token (monetization)
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates a random extension secret and computes its SHA-256 hash.
+ *
+ * The secret is held client-side; the hash is sent to the server as
+ * the payment reference. After payment, the client redeems the secret
+ * via the channel to extend the room's TTL.
+ *
+ * The extension_tokens table has no room_id — the server cannot link
+ * a payment to a specific room.
+ *
+ * @returns {Promise<{ secret: string, tokenHash: string }>}
+ *   secret    — 64-char hex string (the preimage, kept by client)
+ *   tokenHash — 64-char hex string (SHA-256 of secret, sent to server)
+ */
+async function generateExtensionToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const secret = toHex(bytes.buffer);
+  const tokenHash = await sha256hex(secret);
+  return { secret, tokenHash };
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -281,4 +306,5 @@ export const AnonCrypto = {
   decrypt,
   toBase64,
   fromBase64,
+  generateExtensionToken,
 };

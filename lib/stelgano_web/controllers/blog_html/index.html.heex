@@ -48,7 +48,10 @@
             </span>
           </div>
           <div class="size-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
-            <.icon name="arrow_right" class="size-4 text-slate-500 group-hover:text-primary transition-colors" />
+            <.icon
+              name="arrow_right"
+              class="size-4 text-slate-500 group-hover:text-primary transition-colors"
+            />
           </div>
         </div>
       </.link>
@@ -59,7 +62,10 @@
       <p class="text-slate-500 text-sm font-medium">
         Want to see it in action?
       </p>
-      <.link navigate={~p"/steg-number"} class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+      <.link
+        navigate={~p"/steg-number"}
+        class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group"
+      >
         Start a Private Chat
         <.icon name="arrow_right" class="size-5 group-hover:translate-x-1 transition-transform" />
       </.link>

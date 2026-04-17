@@ -112,5 +112,4 @@ defmodule StelganoWeb.Layouts do
     </div>
     """
   end
-
 end

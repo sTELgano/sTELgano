@@ -172,7 +172,10 @@ export const AnonChat = {
 
     channel
       .join()
-      .receive("ok", (resp) => this._handleJoinOk(resp, sender_hash))
+      .receive("ok", (resp) => {
+        this._handleJoinOk(resp, sender_hash);
+        this._tryRedeemExtension();
+      })
       .receive("error", (err) => this.pushEvent("channel_join_error", err));
   },
 
@@ -381,6 +384,27 @@ export const AnonChat = {
   },
 
   // -------------------------------------------------------------------------
+  // Extension token redemption (monetization)
+  // -------------------------------------------------------------------------
+
+  _tryRedeemExtension() {
+    const secret = sessionGet("stelegano_extension_secret");
+    if (!secret || !channel) return;
+
+    channel
+      .push("redeem_extension", { extension_secret: secret })
+      .receive("ok", (resp) => {
+        // Token redeemed — clear it from storage and notify the server
+        try { sessionStorage.removeItem("stelegano_extension_secret"); } catch (_) {}
+        this.pushEvent("ttl_extended", { ttl_expires_at: resp.ttl_expires_at });
+      })
+      .receive("error", () => {
+        // Invalid or already-redeemed token — clean up silently
+        try { sessionStorage.removeItem("stelegano_extension_secret"); } catch (_) {}
+      });
+  },
+
+  // -------------------------------------------------------------------------
   // Session clear (used by panic, logout, and room_expired)
   // -------------------------------------------------------------------------
 
@@ -392,6 +416,7 @@ export const AnonChat = {
       sessionStorage.removeItem("stelegano_room_hash");
       sessionStorage.removeItem("stelegano_sender_hash");
       sessionStorage.removeItem("stelegano_access_hash");
+      sessionStorage.removeItem("stelegano_extension_secret");
     } catch (_) {}
     this.disconnectChannel();
   },
@@ -460,6 +485,26 @@ export const PhoneGenerator = {
           );
         }
       }
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// PaymentInitiator hook (steg-number page — extend button)
+// ---------------------------------------------------------------------------
+
+export const PaymentInitiator = {
+  mounted() {
+    this.el.addEventListener("click", async () => {
+      if (this.el.disabled) return;
+
+      const { secret, tokenHash } = await AnonCrypto.generateExtensionToken();
+
+      // Store the secret so it can be redeemed after payment
+      sessionSet("stelegano_extension_secret", secret);
+
+      // Send the hash to the server to initiate the payment flow
+      this.pushEvent("initiate_payment", { token_hash: tokenHash });
     });
   },
 };

@@ -57,7 +57,9 @@
             </div>
             <div>
               <h3 class="text-xl font-extrabold text-white font-display">The Core Invariant</h3>
-              <p class="text-slate-500 text-sm font-medium">At most one message exists per room at any time.</p>
+              <p class="text-slate-500 text-sm font-medium">
+                At most one message exists per room at any time.
+              </p>
             </div>
           </div>
           <p class="text-slate-300 leading-relaxed font-medium">
@@ -123,8 +125,12 @@
           <div class="space-y-4">
             <div class="p-5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
               <div class="flex items-center gap-3">
-                <span class="text-xs font-black text-primary font-mono uppercase tracking-wider">Immediate Hard Delete</span>
-                <span class="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">Same Transaction</span>
+                <span class="text-xs font-black text-primary font-mono uppercase tracking-wider">
+                  Immediate Hard Delete
+                </span>
+                <span class="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
+                  Same Transaction
+                </span>
               </div>
               <p class="text-sm text-slate-400 leading-relaxed font-medium">
                 When a reply is sent, the previous message row is permanently deleted from PostgreSQL in the same database transaction that inserts the new message. One atomic operation: the old row is removed and the new row is written. No ghost data, no lingering ciphertext, no background cleanup required.

@@ -37,13 +37,13 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              Before writing a single line of code, we outlined exactly what the platform needed:
-              <span class="text-white">real-time messaging</span>, persistent WebSocket connections,
+              Before writing a single line of code, we outlined exactly what the platform needed: <span class="text-white">real-time messaging</span>, persistent WebSocket connections,
               fault tolerance, minimal resource overhead, and the ability to handle many concurrent
               connections without traditional scaling pain.
             </p>
             <p>
-              The server also had to be <span class="text-white">deliberately ignorant</span> &mdash; it would
+              The server also had to be <span class="text-white">deliberately ignorant</span>
+              &mdash; it would
               never see plaintext, never store identifiable data, and never log anything useful to an attacker.
               This constrained our technology choices significantly.
             </p>
@@ -66,12 +66,15 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              Elixir runs on the <span class="text-white">BEAM VM</span> &mdash; the same runtime that powers
+              Elixir runs on the <span class="text-white">BEAM VM</span>
+              &mdash; the same runtime that powers
               Erlang, which was built at Ericsson for telecom systems. A chat application is quite literally
               what the BEAM was designed for.
             </p>
             <p>
-              The BEAM gives us <span class="text-primary font-semibold">lightweight processes</span> (not OS
+              The BEAM gives us
+              <span class="text-primary font-semibold">lightweight processes</span>
+              (not OS
               threads &mdash; each costs only a few kilobytes of memory), preemptive scheduling (no single
               connection can starve others), and &ldquo;let it crash&rdquo; fault tolerance (a bug in one
               connection does not take down the server).
@@ -99,7 +102,8 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              Phoenix provides <span class="text-white">first-class WebSocket support</span> through its
+              Phoenix provides <span class="text-white">first-class WebSocket support</span>
+              through its
               Channels abstraction. Each chat room is a topic, each connected user is a process. The
               runtime handles millions of connections natively &mdash; no Redis pubsub, no external
               message broker, no additional infrastructure.
@@ -151,8 +155,10 @@
 
         <div class="glass-card p-8 space-y-4">
           <p class="text-slate-400 font-medium leading-relaxed text-base">
-            Phoenix gives us the best ratio of <span class="text-white">developer productivity to runtime
-            performance</span> for real-time applications. The framework was purpose-built for exactly this
+            Phoenix gives us the best ratio of
+            <span class="text-white">developer productivity to runtime
+              performance</span>
+            for real-time applications. The framework was purpose-built for exactly this
             kind of workload.
           </p>
         </div>
@@ -224,7 +230,9 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              The entry form and admin dashboard use <span class="text-white">Phoenix LiveView</span> for
+              The entry form and admin dashboard use
+              <span class="text-white">Phoenix LiveView</span>
+              for
               server-rendered interactive UI. No JavaScript framework needed for the non-chat pages. The
               chat itself uses raw Phoenix Channels with plain JavaScript hooks for client-side crypto.
             </p>
@@ -247,7 +255,8 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              A <span class="text-white font-semibold">single Elixir node</span> handles the full application:
+              A <span class="text-white font-semibold">single Elixir node</span>
+              handles the full application:
               HTTP requests, WebSocket connections, background jobs, and database interactions. Simple to deploy,
               simple to maintain, simple to audit.
             </p>
@@ -264,7 +273,10 @@
     <%!-- Footer --%>
     <div class="space-y-8 animate-in stagger-5">
       <div class="flex items-center justify-between pt-8 border-t border-white/5">
-        <.link navigate={~p"/blog"} class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <.link
+          navigate={~p"/blog"}
+          class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm"
+        >
           <.icon name="arrow_left" class="size-4 group-hover:-translate-x-1 transition-transform" />
           Back to Blog
         </.link>
@@ -274,7 +286,10 @@
         <p class="text-slate-500 text-sm font-medium">
           See the Elixir-powered platform in action.
         </p>
-        <.link navigate={~p"/steg-number"} class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        <.link
+          navigate={~p"/steg-number"}
+          class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group"
+        >
           Start a Private Chat
           <.icon name="arrow_right" class="size-5 group-hover:translate-x-1 transition-transform" />
         </.link>

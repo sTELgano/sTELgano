@@ -91,7 +91,8 @@
           </div>
           <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
             <p>
-              The <span class="text-white">AGPL (Affero General Public License)</span> has a key provision
+              The <span class="text-white">AGPL (Affero General Public License)</span>
+              has a key provision
               that MIT and Apache licences lack: if you modify the code and run it as a network service,
               you must publish your modifications.
             </p>
@@ -175,7 +176,9 @@
             <ul class="space-y-3 text-slate-400 text-sm leading-relaxed">
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-red-400 shrink-0 mt-0.5" />
-                <span>Take the code, add a backdoor, and distribute it without publishing the backdoor</span>
+                <span>
+                  Take the code, add a backdoor, and distribute it without publishing the backdoor
+                </span>
               </li>
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-red-400 shrink-0 mt-0.5" />
@@ -212,8 +215,7 @@
               is visible in the source code.
             </p>
             <p>
-              The security of sTELgano does not depend on obscurity &mdash; it depends on
-              <span class="text-primary font-semibold">mathematics</span>. Even if an attacker reads every
+              The security of sTELgano does not depend on obscurity &mdash; it depends on <span class="text-primary font-semibold">mathematics</span>. Even if an attacker reads every
               line of our code, the encryption remains unbreakable without the correct credentials. That is
               the definition of a properly designed cryptographic system.
             </p>
@@ -225,7 +227,10 @@
     <%!-- Footer --%>
     <div class="space-y-8 animate-in stagger-5">
       <div class="flex items-center justify-between pt-8 border-t border-white/5">
-        <.link navigate={~p"/blog"} class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <.link
+          navigate={~p"/blog"}
+          class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm"
+        >
           <.icon name="arrow_left" class="size-4 group-hover:-translate-x-1 transition-transform" />
           Back to Blog
         </.link>
@@ -235,7 +240,10 @@
         <p class="text-slate-500 text-sm font-medium">
           Verify the code yourself. Then try it.
         </p>
-        <.link navigate={~p"/steg-number"} class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        <.link
+          navigate={~p"/steg-number"}
+          class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group"
+        >
           Start a Private Chat
           <.icon name="arrow_right" class="size-5 group-hover:translate-x-1 transition-transform" />
         </.link>

@@ -92,7 +92,9 @@
   <section class="px-6 py-32 bg-white/1 border-y border-white/5 relative">
     <div class="max-w-6xl mx-auto">
       <div class="text-center mb-20 animate-in">
-        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">How it Works</h2>
+        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
+          How it Works
+        </h2>
         <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display">
           Three steps. Under a minute.
         </h3>
@@ -133,7 +135,9 @@
   <section class="px-6 py-32 relative">
     <div class="max-w-4xl mx-auto">
       <div class="text-center mb-16 animate-in">
-        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">Security Model</h2>
+        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
+          Security Model
+        </h2>
         <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
           Transparent about what we store.
         </h3>
@@ -152,9 +156,12 @@
             <li
               :for={
                 {item, detail} <- [
-                  {"Room hash", "SHA-256 of the steg number. Cannot be reversed to the original number."},
-                  {"Access hash", "SHA-256 of number + PIN. Proves access rights without revealing the PIN."},
-                  {"Encrypted messages", "AES-256-GCM ciphertext. Unreadable without the client-side key."},
+                  {"Room hash",
+                   "SHA-256 of the steg number. Cannot be reversed to the original number."},
+                  {"Access hash",
+                   "SHA-256 of number + PIN. Proves access rights without revealing the PIN."},
+                  {"Encrypted messages",
+                   "AES-256-GCM ciphertext. Unreadable without the client-side key."},
                   {"TTL expiry timer", "Optional room self-destruct timestamp. Nothing else."}
                 ]
               }
@@ -163,7 +170,7 @@
               <div class="size-1.5 rounded-full bg-primary/40 mt-2 shrink-0"></div>
               <div>
                 <span class="font-bold text-white">{elem(item, 0)}</span>
-                <span class="text-slate-400 font-medium"> &mdash; {elem(item, 1)}</span>
+                <span class="text-slate-400 font-medium"> &mdash;    {elem(item, 1)}</span>
               </div>
             </li>
           </ul>
@@ -177,11 +184,16 @@
             <li
               :for={
                 {item, detail} <- [
-                  {"Phone numbers", "Only hashes. The server cannot determine the original steg number."},
-                  {"PINs", "Hashed client-side before transmission. Never stored or logged in any form."},
-                  {"Plaintext messages", "Encrypted in your browser before sending. Decrypted only on the recipient's device."},
-                  {"Encryption keys", "Derived via PBKDF2 in your browser. Never transmitted. Never stored."},
-                  {"IP addresses", "Stripped from logs within 48 hours. Never correlated with rooms."}
+                  {"Phone numbers",
+                   "Only hashes. The server cannot determine the original steg number."},
+                  {"PINs",
+                   "Hashed client-side before transmission. Never stored or logged in any form."},
+                  {"Plaintext messages",
+                   "Encrypted in your browser before sending. Decrypted only on the recipient's device."},
+                  {"Encryption keys",
+                   "Derived via PBKDF2 in your browser. Never transmitted. Never stored."},
+                  {"IP addresses",
+                   "Stripped from logs within 48 hours. Never correlated with rooms."}
                 ]
               }
               class="flex items-start gap-3 text-sm"
@@ -189,7 +201,7 @@
               <div class="size-1.5 rounded-full bg-danger/40 mt-2 shrink-0"></div>
               <div>
                 <span class="font-bold text-white">{elem(item, 0)}</span>
-                <span class="text-slate-400 font-medium"> &mdash; {elem(item, 1)}</span>
+                <span class="text-slate-400 font-medium"> &mdash;    {elem(item, 1)}</span>
               </div>
             </li>
           </ul>
@@ -238,7 +250,9 @@
   <section class="px-6 py-32 relative">
     <div class="max-w-4xl mx-auto">
       <div class="text-center mb-16 animate-in">
-        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">Under the Hood</h2>
+        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
+          Under the Hood
+        </h2>
         <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
           Serious cryptography. Simple interface.
         </h3>
@@ -287,7 +301,10 @@
         class="btn-secondary px-8 py-4 text-base shrink-0 group"
       >
         View on GitHub
-        <.icon name="arrow_up_right" class="size-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+        <.icon
+          name="arrow_up_right"
+          class="size-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+        />
       </.link>
     </div>
   </section>
