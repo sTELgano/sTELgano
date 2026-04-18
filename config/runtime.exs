@@ -34,15 +34,28 @@ if config_env() == :prod do
       For example: ecto://USER:PASS@HOST/DATABASE
       """
 
+  # Strip any ?sslmode=/&sslmode= directive from the URL so the `ssl:`
+  # option below is the single source of truth. Stacking both causes
+  # Postgrex to complain or silently drop one of them.
+  database_url =
+    database_url
+    |> String.replace(~r/\?sslmode=[^&]+/, "")
+    |> String.replace(~r/&sslmode=[^&]+/, "")
+
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
   config :stelgano, Stelgano.Repo,
-    # ssl: true,
     url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
     # pool_count: 4,
-    socket_options: maybe_ipv6
+    socket_options: maybe_ipv6,
+    # DigitalOcean managed Postgres requires SSL. Its cert is signed by
+    # DO's internal CA, so :verify_peer would need that CA bundle shipped
+    # inside the release; :verify_none keeps the connection fully encrypted
+    # but skips certificate-identity verification. Acceptable because both
+    # endpoints live inside DO's infrastructure.
+    ssl: [verify: :verify_none]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
