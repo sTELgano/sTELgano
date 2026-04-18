@@ -1,6 +1,8 @@
 # sTELgano
 
-**Hidden in the contact layer.**
+**The messaging app hidden in your contacts.**
+
+`sTELgano` — pronounced **stel-GAH-no**. A portmanteau of **stegano**graphy and **TEL**, the contact layer it hides inside.
 
 sTELgano is a privacy-focused anonymous messaging app and open protocol. It protects you from the people in your life — a partner who picks up your phone, a family member with device access. Not from governments. We say this clearly, because honesty is the product.
 
