@@ -65,16 +65,22 @@ defmodule StelganoWeb.PaystackWebhookController do
     end
   end
 
+  # Logs deliberately carry **no token_hash material** (not even a prefix):
+  # a server operator cross-referencing request_id + timestamp against
+  # DB updated_at already has enough to temporally correlate a payment
+  # to a room; adding token_hash prefixes is gratuitous leakage.
+  # Request-id metadata (automatic via Plug.RequestId) is enough to trace
+  # a specific request through the log without naming the token.
   defp process_payment(token_hash) do
     case Monetization.mark_paid(token_hash, token_hash) do
       {:ok, _token} ->
-        Logger.info("Payment verified for token #{String.slice(token_hash, 0..7)}…")
+        Logger.info("Paystack webhook: payment verified")
 
       {:error, :already_processed} ->
-        Logger.debug("Duplicate webhook for token #{String.slice(token_hash, 0..7)}…")
+        Logger.debug("Paystack webhook: duplicate (already processed)")
 
       {:error, :not_found} ->
-        Logger.warning("Webhook for unknown token #{String.slice(token_hash, 0..7)}…")
+        Logger.warning("Paystack webhook: unknown token")
     end
   end
 end
