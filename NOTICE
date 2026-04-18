@@ -102,10 +102,11 @@ Fraunces — SIL Open Font Licence 1.1
 IBM Plex Mono — SIL Open Font Licence 1.1
   https://fonts.google.com/specimen/IBM+Plex+Mono
 
-NOTE: These fonts are currently loaded via Google Fonts CDN. For complete
-privacy compliance and to eliminate the external request, self-host them in
-priv/static/fonts/ and reference via local @font-face rules in app.css.
-See compliance_and_recommendations.md §9 for instructions.
+NOTE: These font files are self-hosted in priv/static/fonts/ (sourced from
+the Fontsource npm packages — @fontsource/inter, @fontsource/outfit,
+@fontsource/jetbrains-mono). There are no runtime requests to Google Fonts
+or any other third-party CDN; CSP's font-src and style-src are locked to
+'self'.
 
 --------------------------------------------------------------------------------
 FULL LICENCE TEXTS

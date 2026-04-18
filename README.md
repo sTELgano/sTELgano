@@ -61,10 +61,13 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 - **Panic route** — `GET /x` instantly clears all session data
 - **Steg number generator** — 19 curated countries, E.164 format, clipboard copy
 - **Admin dashboard** — aggregate metrics at `/admin` (HTTP Basic Auth)
+- **Privacy-preserving telemetry** — lifetime per-country counters + daily global counters; no per-room country metadata, no third-party analytics
 - **Blog** — technical articles at `/blog`
 - **Protocol spec** — sTELgano-std-1 specification at `/spec`
-- **Service worker** — privacy-first caching (network-only for sensitive routes)
-- **Rate limiting** — IP-based via PlugAttack
+- **Pure web app** — no PWA, no service worker, no installable icon (see the passcode test rationale in the blog)
+- **Self-hosted fonts** — Inter / Outfit / JetBrains Mono ship from `priv/static/fonts/`; no Google Fonts CDN pings
+- **Nonce-based CSP** — `script-src` carries a per-request nonce rather than `'unsafe-inline'`
+- **Rate limiting** — IP-based via PlugAttack, tighter limit for `/admin`
 - **Security headers** — CSP, HSTS, CORP/COEP/COOP, no external scripts
 - **Configurable monetization** — optional paid tier for extended steg number TTL, pluggable payment providers (Paystack ships built-in, bring your own Stripe/Flutterwave/etc.)
 - **Privacy-preserving payments** — blind token protocol ensures the server cannot link a payment to a specific room

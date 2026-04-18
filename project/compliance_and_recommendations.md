@@ -144,23 +144,21 @@ All `<a href="https://...">` links need `rel="noopener noreferrer"` to prevent
 the target page learning that stelgano.com was the referrer. Currently missing
 on the GitHub links.
 
-**9. Subresource integrity (SRI) for the Google Fonts import**
-The CSS imports Google Fonts. Removing that import entirely (self-hosting fonts)
-is the cleanest option — it removes an external request and satisfies the
-stricter CSP model. Recommended:
-```bash
-# Download and self-host Figtree (variable font)
-# Place in priv/static/fonts/
-# Update app.css to use local @font-face
-```
-This also means removing the `fonts.googleapis.com` and `fonts.gstatic.com`
-CSP allowances, which tightens the policy meaningfully.
+**9. Self-host fonts (rather than Google Fonts CDN) — DONE**
+Status: resolved. WOFF2 files for Inter, Outfit, and JetBrains Mono live in
+`priv/static/fonts/` (sourced from the `@fontsource/*` npm packages) and are
+served from the same origin. The `@import url("https://fonts.googleapis.com/…")`
+was removed from `app.css`, and the CSP's `font-src` / `style-src` allowances
+for `fonts.googleapis.com` / `fonts.gstatic.com` were dropped accordingly.
+Regression test in `test/stelgano_web/plugs/security_headers_test.exs`.
 
-**10. Mobile browser address bar hiding**
-On mobile, the browser address bar shows the URL. Consider a PWA manifest
-(`priv/static/manifest.json`) that enables standalone mode — the URL bar
-disappears when opened from the home screen. This is an additional layer of
-passcode-test compliance for installed use.
+**10. PWA manifest (standalone mode) — REJECTED**
+Status: deliberately not done. Every PWA surface (install banner, app drawer,
+`chrome://apps`, iOS home-screen long-press menu) exposes the app's name,
+description, and category to anyone inspecting the device — a direct
+passcode-test failure. sTELgano is now an explicitly pure web app: no
+`manifest.json`, no service worker, no installable icon. Users who want to
+hide the URL bar can use their browser's existing full-screen mode.
 
 **11. Auto-format phone number input**
 On the entry screen, the steg number field currently accepts raw input.

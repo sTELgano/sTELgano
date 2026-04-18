@@ -207,9 +207,7 @@ defmodule Stelgano.Rooms do
 
       Repo.delete_all(from(m in Message, where: m.room_id == ^room_id))
 
-      Repo.delete_all(
-        from(a in RoomAccess, where: a.room_hash == ^room.room_hash)
-      )
+      Repo.delete_all(from(a in RoomAccess, where: a.room_hash == ^room.room_hash))
 
       room
       |> Room.expire_changeset()
@@ -272,7 +270,9 @@ defmodule Stelgano.Rooms do
           |> Ecto.Changeset.put_change(:room_id, room_id)
 
         case Repo.insert(changeset) do
-          {:ok, message} -> message
+          {:ok, message} ->
+            message
+
           {:error, %Ecto.Changeset{errors: errors}} ->
             if Keyword.has_key?(errors, :room_id) do
               Repo.rollback(:sender_blocked)
