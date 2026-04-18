@@ -67,6 +67,9 @@ defmodule Stelgano.Rooms.Message do
     |> validate_format(:sender_hash, ~r/\A[0-9a-f]{64}\z/)
     # IV must be exactly 12 bytes (96 bits) for AES-GCM
     |> validate_iv_length()
+    # DB-level N=1 enforcement: translate the unique-index race into a
+    # changeset error rather than an Ecto.ConstraintError exception.
+    |> unique_constraint(:room_id, name: :messages_room_id_index)
   end
 
   @doc """

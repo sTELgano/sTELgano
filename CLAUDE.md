@@ -40,7 +40,7 @@ Single context module ([rooms.ex](lib/stelgano/rooms.ex)) owns all business logi
 Schemas in [lib/stelgano/rooms/](lib/stelgano/rooms/):
 - `Room` — identified by `room_hash` (SHA-256 hex), has `is_active` flag, `tier` ("free"/"paid"), and optional `ttl_expires_at`
 - `RoomAccess` — `(room_hash, access_hash)` pairs with failed-attempt lockout (10 attempts → 30min lock). Hard-deleted when the room expires so the DB carries no long-term linkability of past attempts. See [rooms.ex](lib/stelgano/rooms.ex) `expire_room/1`.
-- `Message` — opaque `ciphertext` + `iv` (binary), `sender_hash`; hard-deleted immediately on reply (N=1)
+- `Message` — opaque `ciphertext` + `iv` (binary), `sender_hash`; hard-deleted immediately on reply (N=1). Enforced both at the application layer (delete-then-insert in `Rooms.send_message/4`) and at the DB layer (`UNIQUE` index on `messages.room_id`) — the second guard catches concurrent inserts from two different senders under READ COMMITTED.
 
 ### Real-time: Phoenix Channels (not LiveView sockets)
 
