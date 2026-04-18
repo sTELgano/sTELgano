@@ -11,6 +11,16 @@ defmodule StelganoWeb.AnonSocket do
   This socket is intentionally free of any Phoenix authentication scaffolding —
   the security model lives entirely in the channel's `join/3` callback and the
   Rooms context.
+
+  ## Origin check
+
+  The `ws` upgrade handshake is gated by `check_origin: true` on the socket
+  declaration in [endpoint.ex](../endpoint.ex). This prevents a third-party
+  site from opening a cross-origin WebSocket to `anon_socket` and speaking
+  `anon_room:` topics from a tab the user didn't intend. Even though joining
+  requires valid `(room_hash, access_hash)` pairs, eliminating the cross-origin
+  path is a defense-in-depth win (no resource amplification, no CORS-bypassing
+  probes, no XS-Leaks-style side channels).
   """
 
   use Phoenix.Socket

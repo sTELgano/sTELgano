@@ -36,10 +36,14 @@ defmodule StelganoWeb.Endpoint do
     secure: Application.compile_env(:stelgano, :env, :dev) == :prod
   ]
 
-  # Anonymous WebSocket — no session, no auth token
-  # Access control lives entirely in AnonRoomChannel.join/3
+  # Anonymous WebSocket — no session, no auth token.
+  # Access control lives entirely in AnonRoomChannel.join/3.
+  # check_origin is set explicitly here (overriding any endpoint-level
+  # :check_origin) so a cross-origin page can't hijack the ws upgrade
+  # handshake and speak anon_room: topics from a third-party tab, even
+  # if a future config change loosens the endpoint default.
   socket "/anon_socket", StelganoWeb.AnonSocket,
-    websocket: [connect_info: []],
+    websocket: [check_origin: true, connect_info: []],
     longpoll: false
 
   # LiveView socket — uses the browser session cookie
