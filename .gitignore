@@ -31,6 +31,12 @@ stelgano-*.tar
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json
 
+# `mix phx.digest` output — regenerated on every build.
+# Matches files with the 32-hex-char digest suffix (e.g. foo-abc123…def.ext)
+# and the gzipped companion files it emits for static compression.
+/priv/static/**/*-????????????????????????????????.*
+/priv/static/**/*.gz
+
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
