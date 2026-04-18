@@ -155,8 +155,17 @@ defmodule Stelgano.Rooms do
   end
 
   @doc """
-  Permanently expires a room: sets `is_active = false` and hard-deletes all
-  messages in a single atomic transaction. Access records are retained.
+  Permanently expires a room in a single atomic transaction:
+
+    * sets `is_active = false` on the room
+    * hard-deletes every `Message` for that room
+    * hard-deletes every `RoomAccess` row for that `room_hash`
+
+  `RoomAccess` rows carry `(room_hash, access_hash, failed_attempts,
+  locked_until, inserted_at)` tuples. Leaving them behind would preserve
+  long-term linkability — a DB dump taken months after expiry could still
+  answer "which PIN-hashes attempted this room" and "when". Hard-deleting
+  them keeps the server-blindness guarantee valid for expired rooms.
 
   Returns `{:ok, room}` on success, `{:error, reason}` on failure.
   """
@@ -166,6 +175,10 @@ defmodule Stelgano.Rooms do
       room = Repo.get!(Room, room_id)
 
       Repo.delete_all(from(m in Message, where: m.room_id == ^room_id))
+
+      Repo.delete_all(
+        from(a in RoomAccess, where: a.room_hash == ^room.room_hash)
+      )
 
       room
       |> Room.expire_changeset()

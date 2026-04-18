@@ -35,6 +35,10 @@ defmodule Stelgano.RoomsTest do
   # Small ciphertext blob
   defp ciphertext, do: :crypto.strong_rand_bytes(64)
 
+  defp access_count(rh) do
+    RoomAccess |> where([a], a.room_hash == ^rh) |> Repo.aggregate(:count)
+  end
+
   # ---------------------------------------------------------------------------
   # Room creation via find_or_create_room/1
   # ---------------------------------------------------------------------------
@@ -368,6 +372,35 @@ defmodule Stelgano.RoomsTest do
       {:ok, room} = Rooms.find_or_create_room(rh)
       Rooms.expire_room(room.id)
       refute Rooms.room_exists?(rh)
+    end
+
+    test "hard-deletes all RoomAccess rows for the expired room" do
+      rh = hex64(132)
+      {:ok, room} = Rooms.find_or_create_room(rh)
+
+      # Register two access records (two parties)
+      Rooms.join_room(rh, hex64(133))
+      Rooms.join_room(rh, hex64(134))
+
+      assert access_count(rh) == 2
+      assert {:ok, _expired} = Rooms.expire_room(room.id)
+      assert access_count(rh) == 0
+    end
+
+    test "does not touch RoomAccess rows for other rooms" do
+      rh_a = hex64(135)
+      rh_b = hex64(136)
+
+      {:ok, room_a} = Rooms.find_or_create_room(rh_a)
+      {:ok, _room_b} = Rooms.find_or_create_room(rh_b)
+
+      Rooms.join_room(rh_a, hex64(137))
+      Rooms.join_room(rh_b, hex64(138))
+
+      {:ok, _expired} = Rooms.expire_room(room_a.id)
+
+      assert access_count(rh_a) == 0
+      assert access_count(rh_b) == 1
     end
   end
 
