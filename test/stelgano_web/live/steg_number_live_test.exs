@@ -93,6 +93,33 @@ defmodule StelganoWeb.StegNumberLiveTest do
 
       assert render(view) =~ "Existing Channel Linked"
     end
+
+    test "rate-limits availability probes after 10 lookups per window", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/steg-number")
+      view |> element("button", "Manual Entry") |> render_click()
+
+      hash = fn i ->
+        "probe-#{i}" |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)
+      end
+
+      # 10 probes within the window succeed
+      for i <- 1..10 do
+        render_hook(view, "check_manual_number", %{
+          "number" => "+1555000#{String.pad_leading("#{i}", 4, "0")}",
+          "room_hash" => hash.(i)
+        })
+      end
+
+      # 11th probe is throttled — no DB hit, no availability revealed
+      render_hook(view, "check_manual_number", %{
+        "number" => "+15550009999",
+        "room_hash" => hash.(11)
+      })
+
+      html = render(view)
+      assert html =~ "Too many lookups"
+      refute html =~ "New Identity Detected"
+    end
   end
 
   describe "copied confirmation" do

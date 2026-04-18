@@ -55,9 +55,20 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:countries, [])
       |> assign(:selected_tier, nil)
       |> assign(:manual_error, nil)
+      # Per-LV-session ring buffer of availability-check timestamps (ms).
+      # Limits manual-entry probing to `@check_limit` per
+      # `@check_window_ms` — see `check_manual_number` handler.
+      |> assign(:check_timestamps, [])
 
     {:ok, socket}
   end
+
+  # Maximum `check_manual_number` events per `@check_window_ms` per LV session.
+  # Combined with the IP-wide rate limiter and the Rooms.join_room timing pad,
+  # this closes the manual-entry availability check as an enumeration oracle
+  # against `room_hash` existence.
+  @check_limit 10
+  @check_window_ms 60_000
 
   @impl Phoenix.LiveView
   def handle_event(
@@ -183,22 +194,40 @@ defmodule StelganoWeb.StegNumberLive do
 
   @impl Phoenix.LiveView
   def handle_event("check_manual_number", %{"number" => number, "room_hash" => room_hash}, socket) do
-    room = Repo.get_by(Room, room_hash: room_hash, is_active: true)
+    now = System.monotonic_time(:millisecond)
+    window_start = now - @check_window_ms
+    recent = Enum.filter(socket.assigns.check_timestamps, &(&1 >= window_start))
 
-    {availability, room_details} =
-      if room do
-        {:taken, %{tier: room.tier, ttl_expires_at: room.ttl_expires_at}}
-      else
-        {:available, nil}
-      end
+    if length(recent) >= @check_limit do
+      # Over the per-session budget — do not hit the DB and do not reveal
+      # whether this number is taken. Surface a throttle state to the UI.
+      {:noreply,
+       assign(socket,
+         manual_number: number,
+         manual_error: "Too many lookups. Wait a minute before trying another number.",
+         availability: :idle,
+         room_details: nil,
+         check_timestamps: recent
+       )}
+    else
+      room = Repo.get_by(Room, room_hash: room_hash, is_active: true)
 
-    {:noreply,
-     assign(socket,
-       manual_number: number,
-       manual_error: nil,
-       availability: availability,
-       room_details: room_details
-     )}
+      {availability, room_details} =
+        if room do
+          {:taken, %{tier: room.tier, ttl_expires_at: room.ttl_expires_at}}
+        else
+          {:available, nil}
+        end
+
+      {:noreply,
+       assign(socket,
+         manual_number: number,
+         manual_error: nil,
+         availability: availability,
+         room_details: room_details,
+         check_timestamps: [now | recent]
+       )}
+    end
   end
 
   @impl Phoenix.LiveView
