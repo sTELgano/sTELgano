@@ -101,7 +101,7 @@ config :stelgano, Stelgano.Monetization,
 ## Self-hosting
 
 ```bash
-git clone https://github.com/stelgano/stelgano
+git clone https://github.com/sTELgano/sTELgano
 cd stelgano
 mix setup        # deps + DB + migrations + assets
 mix phx.server   # → http://localhost:4000
@@ -111,6 +111,7 @@ mix phx.server   # → http://localhost:4000
 
 | Variable | Description |
 |----------|-------------|
+| `PHX_SERVER` | Set to `true` so the release binds the HTTP endpoint on boot |
 | `SECRET_KEY_BASE` | Phoenix session signing (`mix phx.gen.secret`) |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `PHX_HOST` | Production hostname |
@@ -120,7 +121,16 @@ mix phx.server   # → http://localhost:4000
 | `PAYSTACK_PUBLIC_KEY` | Paystack public key (required if monetization enabled) |
 | `PAYSTACK_CALLBACK_URL` | Post-payment redirect URL (e.g. `https://stelgano.com/payment/callback`) |
 
-Optional: `ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT` (salt overrides), `FREE_TTL_DAYS`, `PAID_TTL_DAYS`, `PRICE_CENTS`, `PAYMENT_CURRENCY`.
+Optional: `PORT` (default 4000), `POOL_SIZE` (default 10), `ADMIN_USERNAME` (default `admin`), salt overrides (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`), monetization tuning (`FREE_TTL_DAYS`, `PAID_TTL_DAYS`, `PRICE_CENTS`, `PAYMENT_CURRENCY`). See [.env.example](.env.example) for the full reference.
+
+### Deployment (droplet + systemd)
+
+The repo ships a reference deployment pipeline for a plain DigitalOcean droplet (or any SSH-reachable Linux host):
+
+- [.github/workflows/deploy.yml](.github/workflows/deploy.yml) — GitHub Actions workflow that builds a release with `mix release`, tarballs it, scp's the tarball to your server, runs `Stelgano.Release.migrate()`, and bounces the systemd unit.
+- [deploy/stelgano.service](deploy/stelgano.service) — systemd unit template. Copy to `/etc/systemd/system/stelgano.service` on the droplet; reads env from `/opt/stelgano/.env` (use [.env.example](.env.example) as the template).
+
+Required GitHub Actions secrets: `DO_HOST`, `DO_USERNAME`, `DO_SSH_KEY` (`DO_SSH_PORT` optional, defaults to 22). On the droplet, give the deploy user passwordless sudo for `systemctl {start,stop,is-active} stelgano` and `journalctl -u stelgano`. Front the app with nginx or Caddy on `:443` proxying to `127.0.0.1:4000`.
 
 ---
 

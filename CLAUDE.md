@@ -188,10 +188,16 @@ PostgreSQL with binary UUIDs. Migrations in [priv/repo/migrations/](priv/repo/mi
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
+| `PHX_SERVER` | Yes | Set to `true` so the release binds the HTTP endpoint on boot |
 | `SECRET_KEY_BASE` | Yes | Phoenix session signing |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `PHX_HOST` | Yes | Production hostname |
-| `POOL_SIZE` | No | DB connection pool size |
+| `PHX_HOST` | Yes | Production hostname used by `url:` config and `check_origin` |
+| `ADMIN_PASSWORD` | Yes | Admin dashboard password (HTTP Basic Auth for `/admin`) |
+| `ADMIN_USERNAME` | No | Admin dashboard username (default: `admin`) |
+| `PORT` | No | HTTP port the endpoint binds to (default: `4000`) |
+| `POOL_SIZE` | No | DB connection pool size (default: `10`) |
+| `ECTO_IPV6` | No | Set to `true`/`1` to connect to the DB over IPv6 |
+| `DNS_CLUSTER_QUERY` | No | `:dns_cluster` query for multi-node release deployments |
 | `MONETIZATION_ENABLED` | No | Set to `true` to enable paid tiers |
 | `PAYSTACK_SECRET_KEY` | If monetization | Paystack secret key |
 | `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key |
@@ -201,7 +207,22 @@ PostgreSQL with binary UUIDs. Migrations in [priv/repo/migrations/](priv/repo/mi
 | `PRICE_CENTS` | No | Price in smallest currency unit (default: 200) |
 | `PAYMENT_CURRENCY` | No | ISO 4217 currency code (default: USD) |
 
-Salts (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`) are public constants in client JS; optionally overridable via env vars for self-hosters. Rotating salts is a breaking change.
+Salts (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`) are public constants in client JS; rotating them is a breaking change (all existing rooms become inaccessible).
+
+See [.env.example](.env.example) for the authoritative reference (what `config/runtime.exs` actually reads, with examples).
+
+## Deployment
+
+The repo ships a reference pipeline targeting a plain DigitalOcean droplet (or any SSH-reachable Linux host):
+
+- [.github/workflows/deploy.yml](.github/workflows/deploy.yml) — builds a release with `mix release` in GitHub Actions, tarballs it, scp's to `$DO_HOST`, runs `Stelgano.Release.migrate()`, and bounces the systemd unit. Triggers on every push to `main` (or manual `workflow_dispatch`).
+- [deploy/stelgano.service](deploy/stelgano.service) — systemd unit template. Copy to `/etc/systemd/system/stelgano.service` on the droplet; reads env from `/opt/stelgano/.env`.
+- Required GitHub Actions secrets: `DO_HOST`, `DO_USERNAME`, `DO_SSH_KEY` (plus optional `DO_SSH_PORT`). The deploy user needs passwordless sudo for `systemctl {start,stop,is-active} stelgano` and `journalctl -u stelgano`.
+- Releases land at `/opt/stelgano/releases/<timestamp>`, with `/opt/stelgano/current` as the symlink the systemd unit targets. Last 3 releases are kept for rollback.
+- Migrations run as part of each deploy, not separately — the `Stelgano.Release.migrate/0` eval happens between extracting the new release and starting the unit.
+- Front with nginx or Caddy on `:443` proxying to `127.0.0.1:4000`; TLS via Let's Encrypt.
+
+A [Dockerfile](Dockerfile) is present for local testing and alternative deploy targets but isn't used by the reference pipeline.
 
 ## Testing
 
