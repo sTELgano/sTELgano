@@ -53,6 +53,17 @@ defmodule Stelgano.Rooms do
   On first join with a new `access_hash`, the access record is created and the
   join succeeds. On subsequent joins, the existing record is verified.
 
+  ## Timing-side-channel pad
+
+  Every call is padded to a floor of `config :stelgano, :join_time_floor_ms`
+  (default 40ms, disabled in tests via 0). Without this, an attacker could
+  time the reply and classify arbitrary `room_hash` values as "existed
+  already" (fast path — single SELECT) vs. "just created by the probe"
+  (slow path — SELECT then INSERT into `rooms` and `room_access`),
+  enumerating live rooms despite the opaque `:not_found` error. The floor
+  is comfortably larger than the inter-path delta (~10ms locally) so the
+  two branches become indistinguishable over any real network.
+
   ## Returns
 
   - `{:ok, room}` — success; `room.id` is used client-side for PBKDF2 derivation.
@@ -67,10 +78,30 @@ defmodule Stelgano.Rooms do
           | {:error, :not_found}
   def join_room(room_hash, access_hash)
       when is_binary(room_hash) and is_binary(access_hash) do
-    case find_or_create_room(room_hash) do
-      {:ok, room} -> handle_access(room, access_hash)
-      {:error, _changeset} -> {:error, :not_found}
+    with_time_floor(fn ->
+      case find_or_create_room(room_hash) do
+        {:ok, room} -> handle_access(room, access_hash)
+        {:error, _changeset} -> {:error, :not_found}
+      end
+    end)
+  end
+
+  # Runs `fun` and pads total elapsed time to at least `:join_time_floor_ms`
+  # (plus a small random jitter) before returning. Hides which of the
+  # internal branches was taken from an external timer.
+  @spec with_time_floor((-> result)) :: result when result: term()
+  defp with_time_floor(fun) do
+    floor_ms = Application.get_env(:stelgano, :join_time_floor_ms, 40)
+    started = System.monotonic_time(:millisecond)
+    result = fun.()
+
+    if floor_ms > 0 do
+      target = floor_ms + :rand.uniform(div(floor_ms, 4) + 1) - 1
+      elapsed = System.monotonic_time(:millisecond) - started
+      if elapsed < target, do: Process.sleep(target - elapsed)
     end
+
+    result
   end
 
   @spec handle_access(Room.t(), String.t()) ::
