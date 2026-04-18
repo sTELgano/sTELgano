@@ -53,3 +53,8 @@ config :plug_attack, :storage, {PlugAttack.Storage.Ets, :stelgano_rate_limiter_t
 config :stelgano, :admin_credentials,
   username: "test_admin",
   password: "test_password"
+
+# Timing-side-channel pad on Rooms.join_room/2 is disabled in tests to keep
+# Phoenix.ChannelTest's default assert_reply timeout (100ms) comfortable.
+# Production uses the default floor (~40ms + jitter).
+config :stelgano, :join_time_floor_ms, 0
