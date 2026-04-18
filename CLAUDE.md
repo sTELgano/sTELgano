@@ -122,7 +122,7 @@ Payment flow:
 - `SecurityHeaders` — HSTS, X-Robots-Tag, Cache-Control: no-store
 - `RateLimiter` — IP-based throttling via PlugAttack (ETS-backed, runs in endpoint before router)
 - `AdminAuth` — HTTP Basic Auth for `/admin` scope
-- CSP in router: strict `default-src 'self'` with specific allowances for fonts.googleapis.com/gstatic.com
+- CSP in router: strict `default-src 'self'` with specific allowances for fonts.googleapis.com/gstatic.com. `script-src` uses a **per-request nonce** ([CspNonce plug](lib/stelgano_web/plugs/csp_nonce.ex)) — *not* `'unsafe-inline'` — so attacker-injected inline scripts cannot execute. The only legitimate inline script (service-worker cleanup in `root.html.heex`) carries `nonce={@csp_nonce}`. `style-src` keeps `'unsafe-inline'` because LiveView emits inline `style` attributes for animations — acceptable since inline styles cannot execute JS.
 - Panic route: `GET /x` — instant session clear, no confirmation
 
 ### Routes

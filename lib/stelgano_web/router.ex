@@ -40,17 +40,6 @@ defmodule StelganoWeb.Router do
     plug :protect_from_forgery
 
     plug :put_secure_browser_headers, %{
-      "content-security-policy" =>
-        "default-src 'self'; " <>
-          "script-src 'self' 'unsafe-inline'; " <>
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " <>
-          "font-src 'self' https://fonts.gstatic.com data:; " <>
-          "connect-src 'self' wss: ws:; " <>
-          "img-src 'self' data:; " <>
-          "object-src 'none'; " <>
-          "frame-ancestors 'none'; " <>
-          "base-uri 'self'; " <>
-          "form-action 'self'",
       "x-frame-options" => "DENY",
       "x-content-type-options" => "nosniff",
       "referrer-policy" => "no-referrer",
@@ -60,6 +49,8 @@ defmodule StelganoWeb.Router do
       "cross-origin-resource-policy" => "same-origin"
     }
 
+    # Per-request nonce CSP — replaces 'unsafe-inline' for scripts.
+    plug StelganoWeb.Plugs.CspNonce
     plug StelganoWeb.Plugs.SecurityHeaders
   end
 
