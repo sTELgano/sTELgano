@@ -58,3 +58,7 @@ config :stelgano, :admin_credentials,
 # Phoenix.ChannelTest's default assert_reply timeout (100ms) comfortable.
 # Production uses the default floor (~40ms + jitter).
 config :stelgano, :join_time_floor_ms, 0
+
+# Disable the Monetization.redeem_token temporal-correlation jitter in tests
+# to keep the suite fast. Production uses the default (up to 5000ms).
+config :stelgano, :redeem_token_jitter_ms, 0

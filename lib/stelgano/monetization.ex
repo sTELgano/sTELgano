@@ -135,6 +135,28 @@ defmodule Stelgano.Monetization do
   is identified by `room_id` from the channel socket assigns — **not**
   stored in the token table.
 
+  ## Temporal-correlation mitigation
+
+  A naive implementation would update the token and the room inside a
+  single transaction with identical `updated_at` timestamps. A server
+  operator cross-referencing webhook logs, token timestamps, and room
+  timestamps could re-establish the payment→room linkage that the
+  schema's lack of `room_id` on the token is supposed to prevent.
+
+  Mitigations applied here:
+
+    1. Token and room updates run in **separate transactions**.
+    2. A random jitter (0 – `:redeem_token_jitter_ms`, default 5000ms)
+       sleeps between them, so the two `updated_at` timestamps do not
+       align on millisecond boundaries.
+    3. `ttl_expires_at` is rounded to the nearest hour, so the computed
+       expiry does not encode the exact redemption moment.
+
+  This raises the cost of correlation — it does **not** eliminate it
+  against a determined server operator with DB + log access. See
+  [docs/security](../../lib/stelgano_web/controllers/page_html/security.html.heex)
+  for the product's explicit stance on this threat.
+
   Returns `{:ok, new_ttl_expires_at}` or `{:error, reason}`.
   """
   @spec redeem_token(String.t(), Ecto.UUID.t()) ::
@@ -143,35 +165,60 @@ defmodule Stelgano.Monetization do
       when is_binary(extension_secret) and is_binary(room_id) do
     token_hash = hash_secret(extension_secret)
 
-    result =
-      Repo.transaction(fn ->
-        case Repo.get_by(ExtensionToken, token_hash: token_hash, status: "paid") do
-          nil ->
-            Repo.rollback(:invalid_token)
+    with {:ok, _token} <- mark_token_redeemed(token_hash) do
+      jitter_sleep()
+      extend_room_ttl(room_id)
+    end
+  end
 
-          %ExtensionToken{} = token ->
-            # Mark token as redeemed (no room_id stored — privacy by design)
-            token
-            |> ExtensionToken.redeemed_changeset()
-            |> Repo.update!()
+  @spec mark_token_redeemed(String.t()) ::
+          {:ok, ExtensionToken.t()} | {:error, :invalid_token}
+  defp mark_token_redeemed(token_hash) do
+    case Repo.get_by(ExtensionToken, token_hash: token_hash, status: "paid") do
+      nil ->
+        {:error, :invalid_token}
 
-            # Extend the room TTL
-            new_ttl =
-              DateTime.utc_now()
-              |> DateTime.add(paid_ttl_days() * 86_400, :second)
-              |> DateTime.truncate(:second)
+      %ExtensionToken{} = token ->
+        {:ok, token |> ExtensionToken.redeemed_changeset() |> Repo.update!()}
+    end
+  end
 
-            room = Repo.get!(Room, room_id)
+  @spec extend_room_ttl(Ecto.UUID.t()) :: {:ok, DateTime.t()}
+  defp extend_room_ttl(room_id) do
+    new_ttl =
+      DateTime.utc_now()
+      |> DateTime.add(paid_ttl_days() * 86_400, :second)
+      |> round_to_hour()
 
-            room
-            |> Ecto.Changeset.change(ttl_expires_at: new_ttl, tier: "paid")
-            |> Repo.update!()
+    room = Repo.get!(Room, room_id)
 
-            new_ttl
-        end
-      end)
+    room
+    |> Ecto.Changeset.change(ttl_expires_at: new_ttl, tier: "paid")
+    |> Repo.update!()
 
-    normalize_transaction_result(result)
+    {:ok, new_ttl}
+  end
+
+  # Rounds a DateTime down to the top of its hour so the exact redemption
+  # moment is not encoded in `ttl_expires_at`.
+  @spec round_to_hour(DateTime.t()) :: DateTime.t()
+  defp round_to_hour(dt) do
+    dt
+    |> DateTime.truncate(:second)
+    |> Map.put(:minute, 0)
+    |> Map.put(:second, 0)
+  end
+
+  # Sleeps a uniform random number of ms in `[0, :redeem_token_jitter_ms]`
+  # between the token and room updates, de-aligning their `updated_at`
+  # timestamps. Test env sets jitter to 0 to keep the suite fast.
+  @spec jitter_sleep() :: :ok
+  defp jitter_sleep do
+    case Application.get_env(:stelgano, :redeem_token_jitter_ms, 5_000) do
+      0 -> :ok
+      max_ms when is_integer(max_ms) and max_ms > 0 ->
+        Process.sleep(:rand.uniform(max_ms + 1) - 1)
+    end
   end
 
   @doc """
@@ -229,9 +276,6 @@ defmodule Stelgano.Monetization do
   # ---------------------------------------------------------------------------
   # Private helpers
   # ---------------------------------------------------------------------------
-
-  defp normalize_transaction_result({:ok, new_ttl}), do: {:ok, new_ttl}
-  defp normalize_transaction_result({:error, :invalid_token}), do: {:error, :invalid_token}
 
   @spec hash_secret(String.t()) :: String.t()
   defp hash_secret(secret) do
