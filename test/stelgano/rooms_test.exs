@@ -241,6 +241,21 @@ defmodule Stelgano.RoomsTest do
       assert {:error, :sender_blocked} =
                Rooms.send_message(room.id, sh, ciphertext(), iv())
     end
+
+    test "DB-level unique index rejects a direct second insert", %{room: room} do
+      # The app never tries to insert a second message without first
+      # deleting the existing one — this test guards against regressions
+      # in the delete-then-insert invariant by bypassing it.
+      {:ok, _msg1} = Rooms.send_message(room.id, hex64(84), ciphertext(), iv())
+
+      bypass =
+        %{sender_hash: hex64(85), ciphertext: ciphertext(), iv: iv()}
+        |> Message.create_changeset()
+        |> Ecto.Changeset.put_change(:room_id, room.id)
+
+      assert {:error, changeset} = Repo.insert(bypass)
+      assert Keyword.has_key?(changeset.errors, :room_id)
+    end
   end
 
   # ---------------------------------------------------------------------------

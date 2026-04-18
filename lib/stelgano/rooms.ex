@@ -209,7 +209,15 @@ defmodule Stelgano.Rooms do
   2. Hard-delete any existing message (the other party's previous message).
   3. Insert the new encrypted message.
 
-  Returns `{:ok, message}` or `{:error, :sender_blocked}`.
+  N=1 is enforced both at the application level (the delete-then-insert
+  sequence above) and at the DB level (a UNIQUE index on `messages.room_id`).
+  Under concurrent inserts from two different senders both seeing
+  `current_message = nil`, the second insert hits the unique constraint
+  and this function returns `{:error, :sender_blocked}` — the loser of
+  the race experiences the same UX as a same-sender re-send attempt.
+
+  Returns `{:ok, message}`, `{:error, :sender_blocked}`, or
+  `{:error, Ecto.Changeset.t()}` for validation failures.
   """
   @spec send_message(Ecto.UUID.t(), String.t(), binary(), binary()) ::
           {:ok, Message.t()} | {:error, :sender_blocked} | {:error, Ecto.Changeset.t()}
@@ -227,10 +235,20 @@ defmodule Stelgano.Rooms do
           Repo.delete!(existing)
         end
 
-        %{sender_hash: sender_hash, ciphertext: ciphertext, iv: iv}
-        |> Message.create_changeset()
-        |> Ecto.Changeset.put_change(:room_id, room_id)
-        |> Repo.insert!()
+        changeset =
+          %{sender_hash: sender_hash, ciphertext: ciphertext, iv: iv}
+          |> Message.create_changeset()
+          |> Ecto.Changeset.put_change(:room_id, room_id)
+
+        case Repo.insert(changeset) do
+          {:ok, message} -> message
+          {:error, %Ecto.Changeset{errors: errors}} ->
+            if Keyword.has_key?(errors, :room_id) do
+              Repo.rollback(:sender_blocked)
+            else
+              Repo.rollback(errors)
+            end
+        end
       end)
 
     normalize_transaction_result(result)
