@@ -1,21 +1,155 @@
-name: Deploy
+name: Deploy to DigitalOcean
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  MIX_ENV: prod
+  ELIXIR_VERSION: "1.18.4"
+  OTP_VERSION: "27"
+  NODE_VERSION: "22"
 
 jobs:
-  deploy:
-    name: Deploy to Fly.io
+  build:
+    name: Build Release
     runs-on: ubuntu-latest
-    needs: []   # add 'quality' here once CI is green to gate deploys
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
 
-      - name: Deploy
-        run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: assets/package-lock.json
+
+      - name: Restore Elixir dependencies cache
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - name: Install Elixir dependencies
+        run: mix deps.get --only prod
+
+      - name: Install Node dependencies
+        run: npm install
+        working-directory: ./assets
+
+      - name: Compile
+        run: mix compile
+
+      - name: Build assets
+        run: mix assets.deploy
+
+      - name: Build release
+        run: mix release
+
+      - name: Create tarball
+        run: |
+          cd _build/prod/rel
+          tar -czvf stelgano.tar.gz stelgano
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: _build/prod/rel/stelgano.tar.gz
+          retention-days: 1
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+
+      - name: Copy release to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          port: ${{ secrets.DO_SSH_PORT || 22 }}
+          source: "stelgano.tar.gz"
+          target: "/tmp"
+
+      - name: Execute deployment script
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          port: ${{ secrets.DO_SSH_PORT || 22 }}
+          script: |
+            set -e
+
+            APP_NAME="stelgano"
+            DEPLOY_DIR="/opt/$APP_NAME"
+            RELEASE_DIR="$DEPLOY_DIR/releases"
+            CURRENT_LINK="$DEPLOY_DIR/current"
+            TIMESTAMP=$(date +%Y%m%d%H%M%S)
+            RELEASE_PATH="$RELEASE_DIR/$TIMESTAMP"
+
+            # Create directories if they don't exist
+            sudo mkdir -p $RELEASE_DIR
+            sudo chown -R $USER:$USER $DEPLOY_DIR
+
+            # Clean up old releases (keep last 3)
+            echo "Cleaning up old releases..."
+            ls -dt $RELEASE_DIR/*/ 2>/dev/null | tail -n +4 | xargs rm -rf || true
+
+            # Extract new release
+            mkdir -p $RELEASE_PATH
+            tar -xzf /tmp/stelgano.tar.gz -C $RELEASE_PATH --strip-components=1
+            rm /tmp/stelgano.tar.gz
+
+            echo "Release path: $RELEASE_PATH"
+            ls -la $RELEASE_PATH/releases/*/
+
+            # Stop service
+            echo "Stopping service..."
+            sudo systemctl stop $APP_NAME || true
+
+            # Remove old symlink and create new one
+            rm -f $CURRENT_LINK
+            ln -sfn $RELEASE_PATH $CURRENT_LINK
+
+            # Run migrations
+            echo "Running migrations..."
+            set -a
+            source /opt/stelgano/.env
+            set +a
+            $CURRENT_LINK/bin/$APP_NAME eval "Stelgano.Release.migrate()"
+
+            # Start service
+            echo "Starting service..."
+            sudo systemctl start $APP_NAME
+
+            # Verify
+            sleep 3
+            if sudo systemctl is-active --quiet $APP_NAME; then
+              echo "✓ Deployment successful!"
+            else
+              echo "✗ Deployment failed!"
+              sudo journalctl -u $APP_NAME -n 30 --no-pager
+              exit 1
+            fi
+
+            echo "Deployment complete!"
