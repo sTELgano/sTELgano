@@ -1,5 +1,19 @@
-# See https://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
+# https://www.robotstxt.org/robotstxt.html
 #
-# To ban all spiders from the entire site uncomment the next two lines:
-# User-agent: *
-# Disallow: /
+# Crawlers should index the public marketing / documentation pages
+# (homepage, /about, /security, /privacy, /terms, /spec, /pricing, /blog)
+# but never touch the functional or internal surfaces.
+#
+# Most reputable search engines also honour the X-Robots-Tag: noindex
+# response headers set by StelganoWeb.Plugs.SecurityHeaders on the
+# functional routes; this file is belt-and-braces.
+
+User-agent: *
+Disallow: /chat
+Disallow: /steg-number
+Disallow: /admin
+Disallow: /payment/
+Disallow: /api/
+Disallow: /x
+Disallow: /.well-known/
+Disallow: /dev/
