@@ -15,9 +15,10 @@
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
-    <%!-- Service worker registration — serves from root for full scope --%>
-    <script>
-      // Active removal of service worker and its caches to resolve unwanted behavior
+    <%!-- Clean up any stale service worker/caches from prior deployments.
+         Carries the per-request CSP nonce because script-src no longer
+         permits generic 'unsafe-inline' — see StelganoWeb.Plugs.CspNonce. --%>
+    <script nonce={@csp_nonce}>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations().then(registrations => {
           for (let registration of registrations) { registration.unregister(); }

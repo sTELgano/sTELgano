@@ -67,6 +67,29 @@ defmodule StelganoWeb.Plugs.SecurityHeadersTest do
       assert csp =~ "frame-ancestors 'none'"
       assert csp =~ "object-src 'none'"
     end
+
+    test "script-src uses a per-request nonce, not 'unsafe-inline'", %{conn: conn} do
+      conn = get(conn, ~p"/")
+      [csp] = get_resp_header(conn, "content-security-policy")
+      refute csp =~ "script-src 'self' 'unsafe-inline'"
+      assert csp =~ ~r/script-src 'self' 'nonce-[A-Za-z0-9_-]{20,}'/
+    end
+
+    test "nonce changes between requests", %{conn: conn} do
+      [csp1] = conn |> get(~p"/") |> get_resp_header("content-security-policy")
+      [csp2] = conn |> get(~p"/") |> get_resp_header("content-security-policy")
+      [nonce1] = Regex.run(~r/'nonce-([A-Za-z0-9_-]+)'/, csp1, capture: :all_but_first)
+      [nonce2] = Regex.run(~r/'nonce-([A-Za-z0-9_-]+)'/, csp2, capture: :all_but_first)
+      refute nonce1 == nonce2
+    end
+
+    test "inline cleanup script carries matching nonce", %{conn: conn} do
+      conn = get(conn, ~p"/")
+      [csp] = get_resp_header(conn, "content-security-policy")
+      [nonce] = Regex.run(~r/'nonce-([A-Za-z0-9_-]+)'/, csp, capture: :all_but_first)
+      body = html_response(conn, 200)
+      assert body =~ ~s(nonce="#{nonce}")
+    end
   end
 
   describe "panic route /x" do
