@@ -1276,6 +1276,8 @@ jobs:
 | CSP compliance | Strict nonce-based | No unsafe-inline or unsafe-eval |
 | HTTPS enforcement | HSTS preload | max-age ≥ 2 years |
 | Analytics third-party | None | Server-side aggregates only |
+| Country telemetry | `country_metrics` table: lifetime counters per ISO-3166 alpha-2, no room link | Self-hosted replacement for Google Analytics: shows operators *how many* rooms per country without revealing *which* rooms |
+| Daily telemetry | `daily_metrics` table: per-UTC-day counters for `free_new`, `paid_new`, `free_expired`, `paid_expired` | Trend visibility for operators. Expiry is global (no country) because per-room country metadata is deliberately absent from the `rooms` table |
 
 ---
 

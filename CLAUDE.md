@@ -92,6 +92,35 @@ The `can_type?/1` helper enforces turn-based input: you can type when the room i
 - `StegNumberLive` — steg number generator at `/steg-number` with country selector dropdown and "Open channel" flow (copies number to clipboard, writes it to `sessionStorage.stelegano_handoff_phone`, then navigates to `/chat`). The phone **never** appears in the URL — see the `ChannelHandoff` hook.
 - `AdminDashboardLive` — aggregate metrics at `/admin` (HTTP Basic Auth via `AdminAuth` plug)
 
+### Telemetry: `Stelgano.CountryMetrics` + `Stelgano.DailyMetrics`
+
+Two aggregate-counter tables that together replace Google-Analytics-style
+telemetry without shipping anything third-party and without breaking the
+server-blindness invariant.
+
+**`country_metrics`** — lifetime per-country totals. One row per ISO-3166
+alpha-2 code with two monotonic counters (`free_rooms`, `paid_rooms`).
+Incremented on new-room creation ([chat_live.ex](lib/stelgano_web/live/chat_live.ex)
+`channel_authenticate` handler) and on paid upgrade
+([anon_room_channel.ex](lib/stelgano_web/channels/anon_room_channel.ex)
+`redeem_extension` handler). The ISO is derived client-side from the E.164
+phone via `libphonenumber-js` (no network call) and passed to the server in
+that single event — **never stored alongside any individual `room_hash`
+or `token_hash`**. A DB dump answers "how many rooms from Kenya?" but
+never "which rooms from Kenya?".
+
+**`daily_metrics`** — per-day global totals. One row per UTC calendar day
+with four monotonic counters (`free_new`, `paid_new`, `free_expired`,
+`paid_expired`). New-room and paid-upgrade events bump alongside the
+`country_metrics` bump; expiry events bump from the
+[ExpireTtlRooms](lib/stelgano/jobs/expire_ttl_rooms.ex) Oban job, which
+groups expired rooms by tier.
+
+*Expiry is intentionally global (no country dimension)* because
+individual room records do not carry a `country_code` and will never
+get one — storing country per room would undo server-blindness. The
+admin dashboard renders both tables.
+
 ### Monetization layer: `Stelgano.Monetization`
 
 Fully optional (disabled by default). When enabled, steg numbers have a free TTL (default 7 days). Users can purchase a dedicated number (default 1 year, $2.00) via a blind token protocol.

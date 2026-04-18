@@ -18,7 +18,7 @@
 import { AnonCrypto } from "../crypto/anon.js";
 import { generatePhoneNumber, CountryNames } from "phone-number-generator-js";
 import { Socket } from "phoenix";
-import { AsYouType } from "libphonenumber-js";
+import { AsYouType, parsePhoneNumberFromString } from "libphonenumber-js";
 
 // ---------------------------------------------------------------------------
 // Module-level state (mutable closure singletons)
@@ -156,6 +156,11 @@ export const AnonChat = {
       room_hash: rHash,
       access_hash: aHash,
       sender_hash: sHash,
+      // Derive ISO-3166 alpha-2 from the E.164 phone so the server can bump
+      // the per-country CountryMetrics counter for new rooms. Never leaves
+      // the client bound to anything identifying — only the counter is
+      // incremented server-side, no per-room country metadata is stored.
+      country_iso: countryIsoFromPhone(phone),
     });
 
     this._pendingPhone = phone;
@@ -410,8 +415,17 @@ export const AnonChat = {
     const secret = sessionGet("stelegano_extension_secret");
     if (!secret || !channel) return;
 
+    // Include ISO-3166 alpha-2 (derived from the phone kept in memory for
+    // the current session) so the server can bump the per-country
+    // paid-rooms CountryMetrics counter. Not persisted anywhere tied
+    // to the room or the token.
+    const phone = sessionGet("stelegano_phone") || this._pendingPhone;
+    const payload = { extension_secret: secret };
+    const iso = countryIsoFromPhone(phone);
+    if (iso) payload.country_iso = iso;
+
     channel
-      .push("redeem_extension", { extension_secret: secret })
+      .push("redeem_extension", payload)
       .receive("ok", (resp) => {
         // Token redeemed — clear it from storage and notify the server
         try { sessionStorage.removeItem("stelegano_extension_secret"); } catch (_) {}
@@ -690,6 +704,25 @@ function sessionSet(key, value) {
 function sessionGet(key) {
   try {
     return sessionStorage.getItem(key);
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Returns the ISO-3166 alpha-2 country code for a given E.164 phone, or
+ * null if the number can't be parsed. libphonenumber-js figures this out
+ * from the numeric prefix — no network call, no external lookup.
+ *
+ * Used only to bump the server-side CountryMetrics counter; the ISO is
+ * never stored alongside the room_hash, token_hash, or phone. See the
+ * Stelgano.CountryMetrics module doc for the privacy rationale.
+ */
+function countryIsoFromPhone(phone) {
+  if (!phone || typeof phone !== "string") return null;
+  try {
+    const parsed = parsePhoneNumberFromString(phone);
+    return parsed && parsed.country ? parsed.country : null;
   } catch (_) {
     return null;
   }

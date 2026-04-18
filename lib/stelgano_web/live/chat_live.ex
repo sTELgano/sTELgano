@@ -132,12 +132,26 @@ defmodule StelganoWeb.ChatLive do
     %{"room_hash" => room_hash, "access_hash" => access_hash, "sender_hash" => sender_hash} =
       params
 
+    # Optional ISO-3166 alpha-2 country code, derived client-side from the
+    # E.164 phone prefix via libphonenumber-js. Used **only** for the
+    # aggregate-counter CountryMetrics bump on new-room creation — never
+    # stored alongside the room_hash.
+    country_iso = Map.get(params, "country_iso")
+
     # Check if room exists before join to detect new channel creation
     room_existed = Stelgano.Rooms.room_exists?(room_hash)
 
     case Stelgano.Rooms.join_room(room_hash, access_hash) do
       {:ok, room} ->
         is_new = not room_existed
+
+        # Bump telemetry counters exactly once per new room: the per-country
+        # lifetime total (if the client supplied a valid ISO) and the
+        # per-day global count.
+        if is_new do
+          if country_iso, do: Stelgano.CountryMetrics.increment_free(country_iso)
+          Stelgano.DailyMetrics.increment_free_new()
+        end
 
         # If this is a new channel and monetization is enabled, show plan prompt
         if is_new and Monetization.enabled?() do

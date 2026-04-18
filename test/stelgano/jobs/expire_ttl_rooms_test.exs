@@ -6,6 +6,7 @@ defmodule Stelgano.Jobs.ExpireTtlRoomsTest do
 
   use Stelgano.DataCase, async: true
 
+  alias Stelgano.DailyMetrics
   alias Stelgano.Jobs.ExpireTtlRooms
   alias Stelgano.Rooms
   alias Stelgano.Rooms.Room
@@ -53,6 +54,29 @@ defmodule Stelgano.Jobs.ExpireTtlRoomsTest do
 
       reloaded = Repo.get!(Room, room.id)
       assert reloaded.is_active
+    end
+
+    test "bumps DailyMetrics.free_expired / paid_expired per tier" do
+      past = DateTime.add(DateTime.utc_now(), -3600, :second)
+
+      {:ok, _free_room} =
+        %{room_hash: hex64(30), ttl_expires_at: past}
+        |> Room.create_changeset()
+        |> Repo.insert()
+
+      {:ok, paid_room} =
+        %{room_hash: hex64(31), ttl_expires_at: past}
+        |> Room.create_changeset()
+        |> Repo.insert()
+
+      # Mark the second as paid before it expires
+      paid_room |> Ecto.Changeset.change(tier: "paid") |> Repo.update!()
+
+      assert :ok = ExpireTtlRooms.perform(%Oban.Job{args: %{}})
+
+      [%{free_expired: free, paid_expired: paid}] = DailyMetrics.list_recent(1)
+      assert free >= 1
+      assert paid >= 1
     end
   end
 end
