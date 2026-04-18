@@ -195,6 +195,20 @@ defmodule Stelgano.MonetizationTest do
       room = create_room(4)
       assert {:error, :invalid_token} = Monetization.redeem_token("unknown-secret", room.id)
     end
+
+    test "rounds ttl_expires_at to the top of the hour (temporal correlation mitigation)" do
+      room = create_room(5)
+      secret = generate_secret()
+      token_hash = hash_secret(secret)
+
+      {:ok, _token} = Monetization.create_token(token_hash)
+      {:ok, _paid} = Monetization.mark_paid(token_hash)
+
+      assert {:ok, new_ttl} = Monetization.redeem_token(secret, room.id)
+      assert new_ttl.minute == 0
+      assert new_ttl.second == 0
+      assert new_ttl.microsecond == {0, 0}
+    end
   end
 
   # ---------------------------------------------------------------------------
