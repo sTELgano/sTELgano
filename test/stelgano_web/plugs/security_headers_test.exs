@@ -101,15 +101,15 @@ defmodule StelganoWeb.Plugs.SecurityHeadersTest do
   end
 
   describe "panic route /x" do
-    test "redirects to homepage", %{conn: conn} do
+    test "redirects to homepage with panic flag", %{conn: conn} do
       conn = get(conn, ~p"/x")
-      assert redirected_to(conn) == "/"
+      assert redirected_to(conn) == "/?p=1"
     end
 
     test "clears the session", %{conn: conn} do
       # Panic route clears server-side session and redirects
       conn = get(conn, ~p"/x")
-      assert redirected_to(conn) == "/"
+      assert redirected_to(conn) == "/?p=1"
     end
 
     test "returns no-store cache header", %{conn: conn} do
@@ -117,6 +117,12 @@ defmodule StelganoWeb.Plugs.SecurityHeadersTest do
       headers = get_resp_header(conn, "cache-control")
       cache = Enum.join(headers, ", ")
       assert cache =~ "no-store"
+    end
+
+    test "homepage with ?p=1 ships an inline sessionStorage-clear script", %{conn: conn} do
+      body = conn |> get(~p"/?p=1") |> html_response(200)
+      assert body =~ "sessionStorage.clear"
+      assert body =~ "searchParams.get"
     end
   end
 end

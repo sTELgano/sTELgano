@@ -200,4 +200,6 @@ Dark-first glassmorphism UI. All surfaces use `backdrop-filter: blur(16px)` with
 **SessionStorage keys** (cleared on logout/panic/room-expiry):
 - Session state (6 keys, persisted across lock/re-auth): `stelegano_phone`, `stelegano_room_id`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`, `stelegano_extension_secret`
 - Transient (read-once): `stelegano_handoff_phone` — set by `/steg-number` just before navigation, read & deleted by `AnonChat.mounted()` on `/chat`. Keeps the phone out of the URL, address bar, history, and server logs.
-- UX preference (persists across sessions): `stelgano_selected_country` — last-picked country on `/steg-number`.
+- UX preference (persists across sessions *except panic*): `stelgano_selected_country` — last-picked country on `/steg-number`.
+
+**Panic clear (`/x`)** redirects to `/?p=1`. The root layout's inline bootstrap detects the flag, calls `sessionStorage.clear()` (nuking every key including the country preference), and strips `?p=1` from the URL via `history.replaceState` before the user sees the address bar. The flag is the only way server→client state can travel across the redirect without a LiveView connection, and the flag itself leaks nothing (it's just `p=1`).

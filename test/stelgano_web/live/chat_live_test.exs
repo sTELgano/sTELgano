@@ -40,8 +40,12 @@ defmodule StelganoWeb.ChatLiveTest do
 
     test "entry screen does not reveal any conversation history", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/chat")
-      refute html =~ "conversation"
-      refute html =~ "history"
+      # Strip <script> tags so the inline bootstrap's `history.replaceState`
+      # and similar JS identifiers don't trigger false positives — we care
+      # about user-visible text only.
+      visible = Regex.replace(~r/<script[\s\S]*?<\/script>/, html, "")
+      refute visible =~ "conversation"
+      refute visible =~ "history"
     end
 
     test "Passcode Test — no identifying information visible", %{conn: conn} do
