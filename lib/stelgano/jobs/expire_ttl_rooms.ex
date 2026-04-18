@@ -19,6 +19,7 @@ defmodule Stelgano.Jobs.ExpireTtlRooms do
 
   import Ecto.Query, warn: false
 
+  alias Stelgano.DailyMetrics
   alias Stelgano.Repo
   alias Stelgano.Rooms
   alias Stelgano.Rooms.Room
@@ -28,7 +29,8 @@ defmodule Stelgano.Jobs.ExpireTtlRooms do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    # Fetch rooms BEFORE expiring so we have the room_hash for PubSub
+    # Fetch rooms BEFORE expiring so we have the room_hash for PubSub.
+    # Also carry the tier so we can bump the correct DailyMetrics counter.
     now = DateTime.utc_now()
 
     rooms_to_expire =
@@ -39,20 +41,30 @@ defmodule Stelgano.Jobs.ExpireTtlRooms do
           not is_nil(r.ttl_expires_at) and
           r.ttl_expires_at <= ^now
       )
-      |> select([r], %{id: r.id, room_hash: r.room_hash})
+      |> select([r], %{id: r.id, room_hash: r.room_hash, tier: r.tier})
       |> Repo.all()
 
-    Enum.each(rooms_to_expire, fn %{id: room_id, room_hash: room_hash} ->
-      case Rooms.expire_room(room_id) do
-        {:ok, _room} ->
-          Endpoint.broadcast("anon_room:#{room_hash}", "room_expired", %{})
+    {free_expired, paid_expired} =
+      Enum.reduce(rooms_to_expire, {0, 0}, fn %{id: room_id, room_hash: room_hash, tier: tier},
+                                              {free, paid} ->
+        case Rooms.expire_room(room_id) do
+          {:ok, _room} ->
+            Endpoint.broadcast("anon_room:#{room_hash}", "room_expired", %{})
+            if tier == "paid", do: {free, paid + 1}, else: {free + 1, paid}
 
-        {:error, reason} ->
-          Logger.warning("ExpireTtlRooms: failed to expire room #{room_id}: #{inspect(reason)}")
-      end
-    end)
+          {:error, reason} ->
+            Logger.warning(
+              "ExpireTtlRooms: failed to expire room #{room_id}: #{inspect(reason)}"
+            )
 
-    count = length(rooms_to_expire)
+            {free, paid}
+        end
+      end)
+
+    DailyMetrics.increment_free_expired(free_expired)
+    DailyMetrics.increment_paid_expired(paid_expired)
+
+    count = free_expired + paid_expired
     Logger.info("ExpireTtlRooms: expired #{count} room(s)")
 
     :ok

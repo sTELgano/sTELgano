@@ -29,6 +29,8 @@ defmodule StelganoWeb.AdminDashboardLive do
 
   use StelganoWeb, :live_view
 
+  alias Stelgano.CountryMetrics
+  alias Stelgano.DailyMetrics
   alias Stelgano.Rooms
 
   @refresh_ms 30_000
@@ -39,35 +41,28 @@ defmodule StelganoWeb.AdminDashboardLive do
       schedule_refresh()
     end
 
-    socket =
-      socket
-      |> assign(:page_title, "Admin — sTELgano")
-      |> assign(:metrics, Rooms.aggregate_metrics())
-      |> assign(:last_updated, DateTime.utc_now())
-
+    socket = socket |> assign(:page_title, "Admin — sTELgano") |> load_metrics()
     {:ok, socket}
   end
 
   @impl Phoenix.LiveView
   def handle_info(:refresh, socket) do
     schedule_refresh()
-
-    socket =
-      socket
-      |> assign(:metrics, Rooms.aggregate_metrics())
-      |> assign(:last_updated, DateTime.utc_now())
-
-    {:noreply, socket}
+    {:noreply, load_metrics(socket)}
   end
 
   @impl Phoenix.LiveView
   def handle_event("refresh_now", _params, socket) do
-    socket =
-      socket
-      |> assign(:metrics, Rooms.aggregate_metrics())
-      |> assign(:last_updated, DateTime.utc_now())
+    {:noreply, load_metrics(socket)}
+  end
 
-    {:noreply, socket}
+  @spec load_metrics(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  defp load_metrics(socket) do
+    socket
+    |> assign(:metrics, Rooms.aggregate_metrics())
+    |> assign(:country_metrics, CountryMetrics.list())
+    |> assign(:daily_metrics, DailyMetrics.list_recent(30))
+    |> assign(:last_updated, DateTime.utc_now())
   end
 
   @impl Phoenix.LiveView
@@ -130,6 +125,97 @@ defmodule StelganoWeb.AdminDashboardLive do
             note="Past 3 months"
             icon="calendar"
           />
+        </div>
+
+        <%!-- Per-day breakdown (global, no country) --%>
+        <div class="glass-card p-10 space-y-6">
+          <div class="flex items-center gap-3 text-slate-300">
+            <.icon name="calendar" class="size-5 text-primary" />
+            <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">
+              Daily Breakdown · Last 30 Days
+            </h4>
+          </div>
+          <p class="text-xs text-slate-500 font-medium leading-relaxed">
+            New free / new paid / expired free / expired paid counters per UTC
+            day, across all countries. Expiries are not country-scoped because
+            individual room records do not carry country metadata (by design).
+          </p>
+
+          <%= if @daily_metrics == [] do %>
+            <p class="text-sm text-slate-500 italic">No daily data yet.</p>
+          <% else %>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                    <th class="py-3 pr-8">Day (UTC)</th>
+                    <th class="py-3 pr-8 text-right">New free</th>
+                    <th class="py-3 pr-8 text-right">New paid</th>
+                    <th class="py-3 pr-8 text-right">Expired free</th>
+                    <th class="py-3 text-right">Expired paid</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    :for={row <- @daily_metrics}
+                    class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors"
+                  >
+                    <td class="py-3 pr-8 font-mono text-white">{row.day}</td>
+                    <td class="py-3 pr-8 text-right font-mono text-slate-300">{row.free_new}</td>
+                    <td class="py-3 pr-8 text-right font-mono text-primary">{row.paid_new}</td>
+                    <td class="py-3 pr-8 text-right font-mono text-slate-400">{row.free_expired}</td>
+                    <td class="py-3 text-right font-mono text-slate-400">{row.paid_expired}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          <% end %>
+        </div>
+
+        <%!-- Per-country breakdown (aggregate counters only) --%>
+        <div class="glass-card p-10 space-y-6">
+          <div class="flex items-center gap-3 text-slate-300">
+            <.icon name="globe" class="size-5 text-primary" />
+            <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">
+              Rooms by Country · Aggregate Only
+            </h4>
+          </div>
+          <p class="text-xs text-slate-500 font-medium leading-relaxed">
+            Counters incremented on room creation and paid-tier upgrade. The
+            country is never stored alongside any individual room record —
+            these rows can answer "how many rooms from Kenya?" but never
+            "which rooms from Kenya?".
+          </p>
+
+          <%= if @country_metrics == [] do %>
+            <p class="text-sm text-slate-500 italic">No country data yet.</p>
+          <% else %>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                    <th class="py-3 pr-8">Country</th>
+                    <th class="py-3 pr-8 text-right">Free rooms</th>
+                    <th class="py-3 pr-8 text-right">Paid rooms</th>
+                    <th class="py-3 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    :for={row <- @country_metrics}
+                    class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors"
+                  >
+                    <td class="py-3 pr-8 font-mono text-white">{row.country_code}</td>
+                    <td class="py-3 pr-8 text-right font-mono text-slate-300">{row.free_rooms}</td>
+                    <td class="py-3 pr-8 text-right font-mono text-primary">{row.paid_rooms}</td>
+                    <td class="py-3 text-right font-mono text-slate-400">
+                      {row.free_rooms + row.paid_rooms}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          <% end %>
         </div>
 
         <%!-- Operational Guidelines --%>

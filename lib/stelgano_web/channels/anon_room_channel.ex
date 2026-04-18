@@ -228,11 +228,21 @@ defmodule StelganoWeb.AnonRoomChannel do
   # ---------------------------------------------------------------------------
 
   @impl Phoenix.Channel
-  def handle_in("redeem_extension", %{"extension_secret" => secret}, socket)
+  def handle_in("redeem_extension", %{"extension_secret" => secret} = payload, socket)
       when is_binary(secret) do
     if Monetization.enabled?() do
       case Monetization.redeem_token(secret, socket.assigns.room_id) do
         {:ok, new_ttl} ->
+          # Bump telemetry: per-country lifetime (if the client supplied a
+          # valid ISO) and per-day global paid-new. country_iso is derived
+          # client-side from the E.164 phone and passed optionally; it is
+          # never stored alongside the room or the token.
+          if iso = Map.get(payload, "country_iso") do
+            Stelgano.CountryMetrics.increment_paid(iso)
+          end
+
+          Stelgano.DailyMetrics.increment_paid_new()
+
           broadcast!(socket, "ttl_extended", %{
             ttl_expires_at: DateTime.to_iso8601(new_ttl)
           })
