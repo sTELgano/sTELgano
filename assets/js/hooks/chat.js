@@ -436,6 +436,8 @@ export const AnonChat = {
       sessionStorage.removeItem("stelegano_sender_hash");
       sessionStorage.removeItem("stelegano_access_hash");
       sessionStorage.removeItem("stelegano_extension_secret");
+      sessionStorage.removeItem("stelgano_selected_country");
+      sessionStorage.removeItem("stelegano_handoff_phone");
     } catch (_) {}
     this.disconnectChannel();
   },

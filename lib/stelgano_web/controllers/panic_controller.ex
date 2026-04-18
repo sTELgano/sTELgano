@@ -24,8 +24,10 @@ defmodule StelganoWeb.PanicController do
   ## What it does
 
   - Clears the Plug session (server-side cookie)
-  - Redirects to `/` (the homepage)
-  - The page load at `/` will clear sessionStorage via the app.js bootstrap
+  - Redirects to `/?p=1` (the homepage with a panic flag)
+  - The inline bootstrap in the root layout detects `?p=1`, calls
+    `sessionStorage.clear()`, and strips the flag via `history.replaceState`
+    before the user sees the URL
 
   ## What it does NOT do
 
@@ -47,6 +49,6 @@ defmodule StelganoWeb.PanicController do
     conn
     |> clear_session()
     |> put_resp_header("cache-control", "no-store, no-cache")
-    |> redirect(to: ~p"/")
+    |> redirect(to: ~p"/?p=1")
   end
 end
