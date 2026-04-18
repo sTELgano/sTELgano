@@ -10,6 +10,11 @@ defmodule StelganoWeb.RateLimiter do
 
   ## Rules
 
+  - **Admin paths (`/admin/*`)** — 20 per IP per minute.
+    Tighter budget so a brute-force attempt on HTTP Basic Auth is
+    locked out long before a realistic dictionary attack can complete.
+    Credentials change infrequently and legitimate admin use is bursty
+    but well under this ceiling.
   - **WebSocket upgrade requests** — 30 per IP per minute.
     Prevents rapid socket cycling to enumerate access hashes.
   - **All HTTP requests** — 200 per IP per minute.
@@ -32,6 +37,19 @@ defmodule StelganoWeb.RateLimiter do
   # ---------------------------------------------------------------------------
   # Rules
   # ---------------------------------------------------------------------------
+
+  # Throttle admin dashboard requests aggressively — HTTP Basic Auth
+  # otherwise has no built-in rate limit, and 20/min + 10-attempt lock in
+  # AdminAuth effectively caps dictionary attacks at ~20 guesses/min.
+  rule "throttle admin by IP", conn do
+    if String.starts_with?(conn.request_path, "/admin") do
+      throttle({:admin, conn.remote_ip},
+        period: 60_000,
+        limit: 20,
+        storage: {PlugAttack.Storage.Ets, :stelgano_rate_limiter}
+      )
+    end
+  end
 
   # Throttle WebSocket upgrade requests at 30 per IP per minute.
   rule "throttle websocket by IP", conn do
