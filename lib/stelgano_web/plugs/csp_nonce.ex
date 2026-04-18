@@ -58,8 +58,8 @@ defmodule StelganoWeb.Plugs.CspNonce do
   defp csp_header(nonce) do
     "default-src 'self'; " <>
       "script-src 'self' 'nonce-#{nonce}'; " <>
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " <>
-      "font-src 'self' https://fonts.gstatic.com data:; " <>
+      "style-src 'self' 'unsafe-inline'; " <>
+      "font-src 'self'; " <>
       "connect-src 'self' wss: ws:; " <>
       "img-src 'self' data:; " <>
       "object-src 'none'; " <>

@@ -90,6 +90,14 @@ defmodule StelganoWeb.Plugs.SecurityHeadersTest do
       body = html_response(conn, 200)
       assert body =~ ~s(nonce="#{nonce}")
     end
+
+    test "CSP does not allow Google Fonts (self-hosted)", %{conn: conn} do
+      conn = get(conn, ~p"/")
+      [csp] = get_resp_header(conn, "content-security-policy")
+      refute csp =~ "fonts.googleapis.com"
+      refute csp =~ "fonts.gstatic.com"
+      assert csp =~ "font-src 'self'"
+    end
   end
 
   describe "panic route /x" do

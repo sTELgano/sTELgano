@@ -187,7 +187,7 @@ Run `mix precommit` before submitting changes — it runs the full quality suite
 
 Dark-first glassmorphism UI. All surfaces use `backdrop-filter: blur(16px)` with translucent dark backgrounds. Accent colour is emerald green (`#10B981`).
 
-**Fonts:** Outfit (display/headings), Inter (body/UI), JetBrains Mono (code/hashes). Loaded via Google Fonts CDN.
+**Fonts:** Outfit (display/headings), Inter (body/UI), JetBrains Mono (code/hashes). **Self-hosted** — Latin-normal WOFF2 files live in [priv/static/fonts/](priv/static/fonts/), sourced from the Fontsource npm packages (`@fontsource/inter`, `@fontsource/outfit`, `@fontsource/jetbrains-mono`). Not loaded from Google Fonts CDN — doing so would ping `fonts.googleapis.com` / `fonts.gstatic.com` on every pageload and leak IP + UA + timestamp to Google. `font-src` and `style-src` in CSP are locked to `'self'`.
 
 **Key CSS tokens:** `--color-primary` (#10B981), `--bg-dark` (#030712), `--text-main` (#f9fafb), `--text-muted` (#9ca3af), `--color-surface` (rgba(17,24,39,0.6)), `--color-surface-border` (rgba(255,255,255,0.1)).
 
