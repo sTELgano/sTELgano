@@ -279,7 +279,8 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
           <li>
             <span class="text-white">DNS lookups</span>
             — unless you use DNS-over-HTTPS or DNS-over-TLS, the query for
-            <code class="text-primary/80 font-mono">stelgano.com</code> is also visible.
+            <code class="text-primary/80 font-mono">stelgano.com</code>
+            is also visible.
           </li>
           <li>
             <span class="text-white">IP address + connection timing</span>
@@ -308,8 +309,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
         <p>
           If you pay for a dedicated number, the payment flow is deliberately structured so the
           <code class="text-primary/80 font-mono">extension_tokens</code>
-          table never stores a
-          <code class="text-primary/80 font-mono">room_id</code>. No DB dump can answer
+          table never stores a <code class="text-primary/80 font-mono">room_id</code>. No DB dump can answer
           "which room did this payment pay for?".
         </p>
         <p>

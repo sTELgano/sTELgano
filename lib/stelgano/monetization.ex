@@ -215,7 +215,9 @@ defmodule Stelgano.Monetization do
   @spec jitter_sleep() :: :ok
   defp jitter_sleep do
     case Application.get_env(:stelgano, :redeem_token_jitter_ms, 5_000) do
-      0 -> :ok
+      0 ->
+        :ok
+
       max_ms when is_integer(max_ms) and max_ms > 0 ->
         Process.sleep(:rand.uniform(max_ms + 1) - 1)
     end

@@ -252,17 +252,16 @@
           </h4>
           <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
             <p>
-              <span class="text-white">Google Fonts CDN</span>
-              is used for loading the Outfit, Inter, and
-              JetBrains Mono typefaces. Font requests go to
-              <span class="font-mono text-xs text-slate-300">fonts.googleapis.com</span>
-              and <span class="font-mono text-xs text-slate-300">fonts.gstatic.com</span>, which are
-              explicitly allowed in our CSP headers.
+              <span class="text-primary">None.</span>
+              Fonts (Outfit, Inter, JetBrains Mono) are
+              <span class="text-white">self-hosted</span>
+              — they ship from the same server that serves the site, so your browser makes no
+              requests to Google, Cloudflare, jsdelivr, or any other third-party CDN on page load.
             </p>
             <p>
-              <span class="text-primary">No other third-party services are used.</span>
-              No CDNs for JavaScript,
-              no external APIs, no cloud-hosted analytics, no advertising networks.
+              No external APIs, no cloud-hosted analytics (not even privacy-friendly ones), no
+              advertising networks, no error-reporting services. The only network traffic your
+              browser generates while using sTELgano is to <span class="font-mono text-xs text-slate-300">stelgano.com</span>.
             </p>
           </div>
         </div>

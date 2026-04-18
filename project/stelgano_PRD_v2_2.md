@@ -136,7 +136,7 @@ Rationale for emerald accent: green reads as "safe", "go", "verified" — it avo
 
 The wordmark renders as: `s` (weight 300, italic, `--text-muted`) + `TEL` (weight 600, `--color-primary`) + `gano` (weight 600, `--text-main`). This typographically encodes the concept — the telephone number (TEL) is the visible signal; the steganographic wrapper (s, gano) frames it.
 
-All fonts loaded via Google Fonts CDN. TODO: self-host for stricter CSP.
+All three fonts are **self-hosted** — Latin-normal WOFF2 files live in `priv/static/fonts/` (sourced from the `@fontsource/*` npm packages). No runtime request to Google Fonts; CSP's `font-src` and `style-src` are locked to `'self'`.
 
 ### 3.4 Spacing & Geometry
 

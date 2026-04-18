@@ -53,9 +53,7 @@ defmodule Stelgano.Jobs.ExpireTtlRooms do
             if tier == "paid", do: {free, paid + 1}, else: {free + 1, paid}
 
           {:error, reason} ->
-            Logger.warning(
-              "ExpireTtlRooms: failed to expire room #{room_id}: #{inspect(reason)}"
-            )
+            Logger.warning("ExpireTtlRooms: failed to expire room #{room_id}: #{inspect(reason)}")
 
             {free, paid}
         end
