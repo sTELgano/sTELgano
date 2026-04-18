@@ -213,7 +213,7 @@
                "Binary UUIDs for all identifiers. Encrypted-at-rest capable. The database only ever stores opaque hashes and ciphertext -- never plaintext.",
                "database"},
               {"Oban",
-               "Background job processing for automatic room expiry. Expired rooms and their messages are hard-deleted hourly. No deferred cleanup needed &mdash; messages are hard-deleted immediately on reply.",
+               "Background job processing for automatic room expiry. Hourly, expired rooms are deactivated and their messages and access records are hard-deleted in the same transaction. Messages replaced by a reply don't wait for the job &mdash; they are hard-deleted immediately on reply.",
                "clock"}
             ]
           }

@@ -397,7 +397,9 @@
               </li>
               <li class="flex items-start gap-2">
                 <.icon name="chevron_right" class="size-4 text-primary shrink-0 mt-0.5" />
-                <span>Expired TTL rooms and their messages are hard-deleted every hour</span>
+                <span>
+                  Every hour, expired TTL rooms are deactivated and their messages and (room_hash, access_hash) records are hard-deleted in the same transaction
+                </span>
               </li>
             </ul>
             <p>

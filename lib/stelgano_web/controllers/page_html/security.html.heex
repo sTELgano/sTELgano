@@ -388,7 +388,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
                "When you reply, the previous message is permanently hard-deleted from the database in the same transaction that inserts your new message. The old row is gone instantly &mdash; no deferred cleanup, no residual data.",
                "trash_2", "IMMEDIATE"},
               {"Room Expiry via TTL",
-               "Rooms can be set to expire after a time-to-live period. An hourly background job checks for expired rooms and deactivates them. Expired rooms cannot be rejoined.",
+               "Rooms can be set to expire after a time-to-live period. An hourly background job deactivates expired rooms and, in the same transaction, hard-deletes all their messages and every (room_hash, access_hash) record so no long-term linkability of past attempts remains. Expired rooms cannot be rejoined.",
                "timer", "TTL ENFORCED"}
             ]
           }

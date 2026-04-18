@@ -168,8 +168,8 @@
             </p>
             <p>
               <span class="text-white">SessionStorage</span>
-              holds 5 keys during an active session: your
-              phone, room ID, room hash, sender hash, and access hash. All 5 keys are
+              holds up to 6 keys during an active session: your
+              phone, room ID, room hash, sender hash, access hash, and &mdash; if paid tiers are enabled &mdash; a random extension secret used to redeem a dedicated number. Every one of these is
               <span class="text-primary">automatically cleared</span>
               on logout, panic (/x), or room expiry.
             </p>
@@ -293,7 +293,7 @@
                 {"Messages", "Deleted on reply",
                  "Hard-deleted immediately when a reply is sent (N=1 invariant). The previous message row is permanently removed from the database in the same transaction. No deferred cleanup."},
                 {"Rooms", "TTL-based expiry",
-                 "Rooms expire based on their configured time-to-live. An hourly job deactivates expired rooms permanently."},
+                 "Rooms expire based on their configured time-to-live. An hourly job deactivates expired rooms and, in the same transaction, hard-deletes their messages and every stored (room_hash, access_hash) record."},
                 {"IP Logs", "48 hours maximum",
                  "Stored only in volatile memory for rate limiting. Never persisted to disk or database."},
                 {"Everything Else", "Not applicable",
