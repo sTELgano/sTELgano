@@ -7,7 +7,103 @@
 @source "../../lib/stelgano_web";
 
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap");
+/* ===========================================================================
+   Self-hosted fonts
+   ---------------------------------------------------------------------------
+   Fonts were previously loaded from fonts.googleapis.com / fonts.gstatic.com,
+   which pinged Google on every page load (IP + UA + timestamp leaked). Files
+   below are shipped by the Fontsource npm packages (`@fontsource/inter`,
+   `@fontsource/outfit`, `@fontsource/jetbrains-mono`) and copied into
+   priv/static/fonts/ at release build time. Latin-normal WOFF2 only — no
+   cyrillic/greek/vietnamese/italic variants, since the app is Latin-script UI.
+   =========================================================================== */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/inter-latin-300-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/inter-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/inter-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/inter-latin-600-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/outfit-latin-300-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/outfit-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/outfit-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/outfit-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/outfit-latin-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/outfit-latin-800-normal.woff2') format('woff2');
+}
 
 /* ===========================================================================
    Design tokens - Hyper-Glass System
