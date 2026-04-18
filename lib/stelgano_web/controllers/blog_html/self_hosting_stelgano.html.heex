@@ -137,6 +137,14 @@
               </thead>
               <tbody class="text-slate-400">
                 <tr class="border-b border-white/5">
+                  <td class="py-3 px-4 font-mono text-primary text-xs">PHX_SERVER</td>
+                  <td class="py-3 px-4">Yes</td>
+                  <td class="py-3 px-4">
+                    Set to <span class="font-mono">true</span>
+                    so the release binds the HTTP endpoint on boot
+                  </td>
+                </tr>
+                <tr class="border-b border-white/5">
                   <td class="py-3 px-4 font-mono text-primary text-xs">SECRET_KEY_BASE</td>
                   <td class="py-3 px-4">Yes</td>
                   <td class="py-3 px-4">Phoenix session signing (64+ hex chars)</td>
@@ -150,6 +158,13 @@
                   <td class="py-3 px-4 font-mono text-primary text-xs">PHX_HOST</td>
                   <td class="py-3 px-4">Yes</td>
                   <td class="py-3 px-4">Your production domain name</td>
+                </tr>
+                <tr class="border-b border-white/5">
+                  <td class="py-3 px-4 font-mono text-primary text-xs">ADMIN_PASSWORD</td>
+                  <td class="py-3 px-4">Yes</td>
+                  <td class="py-3 px-4">
+                    HTTP Basic Auth password for <span class="font-mono">/admin</span>
+                  </td>
                 </tr>
                 <tr>
                   <td class="py-3 px-4 font-mono text-primary text-xs">POOL_SIZE</td>
