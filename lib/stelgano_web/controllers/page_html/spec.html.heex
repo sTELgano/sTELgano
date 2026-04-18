@@ -297,7 +297,7 @@
                     {"Lockout",
                      "10 failed access attempts trigger a 30-minute lock on that access_hash"},
                     {"Room Expiry",
-                     "Optional TTL per room, enforced by an hourly background worker"},
+                     "Optional TTL per room, enforced by an hourly background worker that also hard-deletes the room's messages and access records"},
                     {"Max Occupancy",
                      "Two access_hash entries per room (the two conversation parties)"}
                   ]
@@ -334,10 +334,10 @@
                "Hard-deleted immediately on reply (N=1 invariant). The previous message row is permanently removed from the database in the same transaction that inserts the new message. No deferred purge, no soft-delete window.",
                "message_circle", "Instant Delete"},
               {"Rooms",
-               "Expire at their configured TTL. An hourly background worker checks for and deactivates expired rooms, hard-deleting all their messages in the same transaction.",
+               "Expire at their configured TTL. An hourly background worker deactivates expired rooms and, in a single atomic transaction, hard-deletes every message and every (room_hash, access_hash) record so no long-term linkability of past attempts survives.",
                "door_open", "Hourly Check"},
               {"Sessions",
-               "Stored in browser sessionStorage only (5 keys). Cleared automatically on logout, panic route (/x), or room expiry. Never sent to the server. Never persisted to disk.",
+               "Stored in browser sessionStorage only (up to 6 keys, including an optional extension secret when paid tiers are enabled). Cleared automatically on logout, panic route (/x), or room expiry. Never sent to the server. Never persisted to disk.",
                "monitor", "Ephemeral"}
             ]
           }
