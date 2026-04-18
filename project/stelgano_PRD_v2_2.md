@@ -974,15 +974,13 @@ stelgano/
 ├── priv/
 │   ├── repo/migrations/            6 migrations (rooms, access, messages, oban, rate_limit, remove_deleted_at)
 │   └── static/
-│       ├── manifest.json            PWA manifest (standalone mode)
-│       ├── manifest.json            PWA manifest
+│       ├── robots.txt
 │       ├── favicon.ico
 │       └── images/
-│           ├── icon-192.png         PWA icon
-│           ├── icon-512.png         PWA icon
 │           ├── apple-touch-icon.png
 │           ├── favicon.svg
 │           └── favicon-96x96.png
+│       (no manifest.json, no service worker — see §15.x "No PWA" rationale)
 ├── project/
 │   ├── stelgano_PRD_v2_1.md        this document
 │   ├── stelgano_Epics_v2_1.md      epics & user stories
@@ -1285,7 +1283,7 @@ jobs:
 
 - Group conversations — strictly 1:1 in v1
 - Media messages — text only in v1
-- Native mobile app — PWA installation from browser only
+- Native mobile app — browser-only; **no PWA**, no home-screen install, no service worker (PWA surfaces break the passcode test — see the passcode-test blog post)
 - Push notifications — async delivery handles the use case; tab must be open
 - Message search — no history means no search
 - Government or institutional privacy protection

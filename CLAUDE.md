@@ -146,6 +146,7 @@ Payment flow:
 - Write Tailwind-based components manually — do NOT use daisyUI components
 - No inline `<script>` tags in templates (except theme bootstrap in root layout) — use colocated JS hooks or external hooks in `assets/js/`
 - No third-party analytics, tracking pixels, or external scripts — CSP enforces this
+- **No PWA. sTELgano is a pure web app.** No `manifest.json`, no `<link rel="manifest">`, no `theme-color` meta, no service worker, no installable app icon. Rationale: every PWA surface (install banners, app drawers, `chrome://apps`, iOS home-screen long-press menus) is a passcode-test failure — an intimate-access attacker inspecting the device sees the app's name, description, and category, which breaks the "blank entry screen" invariant. Anyone shipping a PWA variant would need to ship a separate fork with neutral branding.
 - AGPL-3.0 licence; all source files need SPDX header: `# SPDX-License-Identifier: AGPL-3.0-only`
 - UI terminology: "steg number" (technical), "the number in your contacts" (user-facing); "channel" not "conversation"
 - "Room" is used only in internal code/DB, not user-facing copy
