@@ -629,7 +629,7 @@ defmodule StelganoWeb.ChatLive do
         </div>
 
         <.premium_card class="p-1 sm:p-1 overflow-hidden shadow-primary-glow/20">
-          <div class="p-8 sm:p-12 space-y-10">
+          <div class="p-5 sm:p-10 space-y-10">
             <%= if @error do %>
               <div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
                 <.icon name="alert_circle" class="size-6 text-danger shrink-0" />
@@ -716,7 +716,7 @@ defmodule StelganoWeb.ChatLive do
                   placeholder="Secret PIN"
                   autocomplete="current-password"
                   autofocus={@phone_locked}
-                  class="text-center text-2xl sm:text-4xl tracking-[0.3em] sm:tracking-[0.6em] font-mono py-4 sm:py-6 bg-slate-950/40 border-white/10"
+                  class="text-center text-xl sm:text-4xl tracking-[0.2em] sm:tracking-[0.6em] font-mono py-4 sm:py-6 bg-slate-950/40 border-white/10"
                 />
               </div>
 

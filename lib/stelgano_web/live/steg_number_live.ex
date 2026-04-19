@@ -358,7 +358,7 @@ defmodule StelganoWeb.StegNumberLive do
         <%!-- Main selection and action area --%>
         <div class="space-y-10">
           <div class="glass-card p-0.5">
-            <div class="p-5 sm:p-10 space-y-8 sm:space-y-10">
+            <div class="p-4 sm:p-10 space-y-8 sm:space-y-10">
               <%!-- Global Country Context --%>
               <div class="space-y-6">
                 <div class="space-y-4">
@@ -471,7 +471,7 @@ defmodule StelganoWeb.StegNumberLive do
 
                     <%= if @generated_number do %>
                       <div class="relative z-10 space-y-6">
-                        <div class="font-mono font-black text-white tracking-widest text-3xl sm:text-5xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] break-all px-2">
+                        <div class="font-mono font-black text-white tracking-widest text-2xl sm:text-5xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] break-all px-2">
                           {@generated_number.display}
                         </div>
 

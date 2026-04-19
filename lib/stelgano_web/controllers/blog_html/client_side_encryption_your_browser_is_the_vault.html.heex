@@ -31,7 +31,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             If the server encrypts your messages, you have to trust the server. You have to trust that it uses the algorithm it claims. That it doesn't log plaintext before encrypting. That it doesn't keep a copy of the key. That its employees can't access your data. That it won't be compelled to add a backdoor.
           </p>
@@ -50,7 +50,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <.premium_card class="p-8 sm:p-10 space-y-6">
+        <.premium_card class="p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             sTELgano uses the Web Crypto API to perform all encryption and decryption in your browser. The server never sees plaintext. It never sees your encryption key. It never sees your phone number or PIN.
           </p>
@@ -70,7 +70,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             The Web Crypto API is built into every modern browser. It's not a library you download&mdash;it's part of the browser itself, maintained by the browser vendors and audited by security researchers worldwide.
           </p>
@@ -109,7 +109,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             Your encryption key is derived from the steg number and room ID using PBKDF2 with <span class="text-white font-bold">600,000 iterations</span>. This is the OWASP 2023 recommendation for PBKDF2-HMAC-SHA256.
           </p>
@@ -148,7 +148,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-6 border-primary/20 bg-primary/2">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6 border-primary/20 bg-primary/2">
           <p class="text-slate-300 leading-relaxed font-medium">
             This is a design decision that often surprises people. If the PIN were part of the encryption key, each user would derive a different key&mdash;because they have different PINs. They wouldn't be able to decrypt each other's messages.
           </p>
@@ -269,7 +269,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             The entire cryptographic module is a single JavaScript file with no imports. No CryptoJS. No tweetnacl. No libsodium-wrappers. Just the Web Crypto API that ships with your browser.
           </p>
