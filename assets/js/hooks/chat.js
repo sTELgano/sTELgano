@@ -158,6 +158,18 @@ export const AnonChat = {
     if (data.action !== "join") return;
 
     const { phone, pin } = data;
+
+    // The server only sees hashes, so it cannot reject malformed steg
+    // numbers like "12345" — without this check, any garbage string would
+    // reach the plan-selection screen and a single click would create a
+    // real room. Reject anything that doesn't parse as a valid E.164
+    // number before we derive hashes.
+    const parsed = parsePhoneNumberFromString(phone);
+    if (!parsed || !parsed.isValid()) {
+      this.pushEvent("entry_invalid_phone", {});
+      return;
+    }
+
     const rHash = await AnonCrypto.roomHash(phone);
     const aHash = await AnonCrypto.accessHash(phone, pin);
     const sHash = await AnonCrypto.senderHash(phone, aHash, rHash);
