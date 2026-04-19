@@ -1,24 +1,24 @@
 <Layouts.app flash={@flash}>
   <div class="max-w-5xl mx-auto space-y-20 py-12 animate-in pb-40">
     <%!-- Hero Header --%>
-    <div class="text-center space-y-6 pt-12">
+    <div class="text-center space-y-6 pt-6 sm:pt-12 px-4">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
         <.icon name="hand" class="size-3" /> Privacy First
       </div>
 
-      <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
+      <h1 class="text-4xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.9] sm:leading-tight">
         Privacy <span class="text-gradient">Policy.</span>
       </h1>
 
-      <p class="text-slate-500 font-mono text-[10px] font-bold uppercase tracking-[0.4em] animate-in stagger-3">
+      <p class="text-slate-500 font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.4em] animate-in stagger-3">
         Plain English Policy &middot; Updated April 2026
       </p>
     </div>
 
     <%!-- TL;DR --%>
-    <div class="animate-in stagger-3">
+    <div class="animate-in stagger-3 px-4">
       <.premium_card class="p-0 overflow-hidden ring-1 ring-primary/20 shadow-2xl shadow-primary/5">
-        <div class="bg-slate-950/90 p-10 sm:p-12 relative">
+        <div class="bg-slate-950/90 p-6 sm:p-12 relative">
           <div class="absolute top-0 right-0 p-4 opacity-5">
             <.icon name="shield_check" class="size-32 text-white" />
           </div>
@@ -49,7 +49,7 @@
     </div>
 
     <%!-- What We Collect --%>
-    <div class="space-y-8 animate-in stagger-4">
+    <div class="space-y-8 animate-in stagger-4 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           What We Collect
@@ -57,7 +57,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
             <.icon name="database" class="size-6 text-primary" />
@@ -100,7 +100,7 @@
     </div>
 
     <%!-- What We Don't Collect --%>
-    <div class="space-y-8 animate-in stagger-4">
+    <div class="space-y-8 animate-in stagger-4 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           What We Don't Collect
@@ -108,7 +108,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 sm:p-12 space-y-6 border-primary/20 bg-primary/2 group transition-all hover:bg-primary/4">
+      <div class="glass-card p-6 sm:p-12 space-y-6 border-primary/20 bg-primary/2 group transition-all hover:bg-primary/4">
         <div class="flex items-center gap-4 text-primary">
           <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center">
             <.icon name="shield_off" class="size-6" />
@@ -148,8 +148,8 @@
     </div>
 
     <%!-- Cookies & Storage / Analytics & Tracking --%>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-4">
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-4 px-4">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
           <.icon
             name="cookie"
@@ -180,7 +180,7 @@
         </div>
       </div>
 
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
           <.icon
             name="bar_chart"
@@ -213,8 +213,8 @@
     </div>
 
     <%!-- IP Address Handling / Third-Party Services --%>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-5">
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-5 px-4">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
           <.icon
             name="globe"
@@ -239,7 +239,7 @@
         </div>
       </div>
 
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
           <.icon
             name="blocks"
@@ -269,7 +269,7 @@
     </div>
 
     <%!-- Data Retention --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Data Retention
@@ -277,7 +277,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
             <.icon name="clock" class="size-6 text-primary" />
@@ -317,8 +317,8 @@
     </div>
 
     <%!-- Regulatory Compliance / Children's Privacy --%>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-5">
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-5 px-4">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center justify-between">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <.icon
@@ -352,7 +352,7 @@
         </div>
       </div>
 
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center justify-between">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <.icon
@@ -383,7 +383,7 @@
     </div>
 
     <%!-- Changes to This Policy --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Policy Changes
@@ -391,7 +391,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <.icon
@@ -420,7 +420,7 @@
     </div>
 
     <%!-- Contact --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Contact
@@ -483,7 +483,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500 px-4 sm:px-12">
           <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
             <.icon name="credit_card" class="size-7 text-primary" />
           </div>

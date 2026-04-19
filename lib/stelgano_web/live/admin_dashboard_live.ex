@@ -71,15 +71,15 @@ defmodule StelganoWeb.AdminDashboardLive do
     <Layouts.app flash={@flash}>
       <div class="max-w-4xl mx-auto space-y-12 py-12 animate-in lg:pb-40">
         <%!-- Header --%>
-        <div class="flex flex-col md:flex-row items-center justify-between gap-8 pb-8 border-b border-white/5">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-8 pb-8 border-b border-white/5 px-4">
           <div class="text-center md:text-left space-y-4">
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.3em] mb-2 shadow-[0_0_20px_var(--color-primary-glow)]">
               <.icon name="terminal" class="size-3" /> System Status
             </div>
-            <h1 class="text-5xl sm:text-6xl font-extrabold text-white font-display tracking-tighter uppercase leading-none">
+            <h1 class="text-4xl sm:text-6xl font-extrabold text-white font-display tracking-tighter uppercase leading-[0.9] sm:leading-none">
               Admin <span class="text-gradient">Dashboard.</span>
             </h1>
-            <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] leading-relaxed">
+            <p class="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest sm:tracking-[0.5em] leading-relaxed">
               Total Stats Only · No Private Data ·
               <span class="text-primary italic">
                 Updated {Calendar.strftime(@last_updated, "%H:%M:%S UTC")}
@@ -89,7 +89,7 @@ defmodule StelganoWeb.AdminDashboardLive do
 
           <button
             phx-click="refresh_now"
-            class="btn-primary py-4 px-10 text-sm flex items-center gap-3 group"
+            class="w-full sm:w-auto btn-primary py-4 px-10 text-sm flex items-center justify-center gap-3 group"
           >
             <.icon
               name="refresh_cw"
@@ -128,7 +128,7 @@ defmodule StelganoWeb.AdminDashboardLive do
         </div>
 
         <%!-- Per-day breakdown (global, no country) --%>
-        <div class="glass-card p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
           <div class="flex items-center gap-3 text-slate-300">
             <.icon name="calendar" class="size-5 text-primary" />
             <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">
@@ -173,7 +173,7 @@ defmodule StelganoWeb.AdminDashboardLive do
         </div>
 
         <%!-- Per-country breakdown (aggregate counters only) --%>
-        <div class="glass-card p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
           <div class="flex items-center gap-3 text-slate-300">
             <.icon name="globe" class="size-5 text-primary" />
             <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">
@@ -219,7 +219,7 @@ defmodule StelganoWeb.AdminDashboardLive do
         </div>
 
         <%!-- Operational Guidelines --%>
-        <div class="glass-card p-10 space-y-8 border-white/5 bg-slate-950/40 relative overflow-hidden group">
+        <div class="glass-card p-6 sm:p-10 space-y-8 border-white/5 bg-slate-950/40 relative overflow-hidden group mx-4 sm:mx-0">
           <div class="absolute -right-20 -bottom-20 size-64 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors">
           </div>
 
@@ -267,16 +267,16 @@ defmodule StelganoWeb.AdminDashboardLive do
 
   defp metric_panel(assigns) do
     ~H"""
-    <div class="glass-card-premium p-10 space-y-8 group hover:border-primary/50 transition-all duration-500">
+    <div class="glass-card-premium p-6 sm:p-10 space-y-8 group hover:border-primary/50 transition-all duration-500 mx-4 sm:mx-0">
       <div class="flex items-center justify-between">
-        <div class="size-14 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all shadow-inner">
+        <div class="size-12 sm:size-14 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all shadow-inner">
           <.icon
             name={@icon}
-            class="size-7 text-primary/40 group-hover:text-primary transition-colors"
+            class="size-6 sm:size-7 text-primary/40 group-hover:text-primary transition-colors"
           />
         </div>
         <div class="flex flex-col items-end gap-1">
-          <span class="text-[10px] font-black uppercase tracking-widest text-slate-600">
+          <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-600">
             {@note}
           </span>
           <div
@@ -287,10 +287,10 @@ defmodule StelganoWeb.AdminDashboardLive do
         </div>
       </div>
       <div class="space-y-3">
-        <div class="text-5xl sm:text-6xl font-mono font-black text-white group-hover:scale-110 transition-transform origin-left tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+        <div class="text-4xl sm:text-6xl font-mono font-black text-white group-hover:scale-110 transition-transform origin-left tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
           {@value}
         </div>
-        <div class="text-[11px] font-black uppercase tracking-[0.4em] text-slate-500 group-hover:text-slate-400 transition-colors">
+        <div class="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-slate-500 group-hover:text-slate-400 transition-colors">
           {@label}
         </div>
       </div>

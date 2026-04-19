@@ -357,8 +357,8 @@ defmodule StelganoWeb.StegNumberLive do
 
         <%!-- Main selection and action area --%>
         <div class="space-y-10">
-          <div class="glass-card p-1">
-            <div class="p-8 sm:p-10 space-y-10">
+          <div class="glass-card p-0.5">
+            <div class="p-5 sm:p-10 space-y-8 sm:space-y-10">
               <%!-- Global Country Context --%>
               <div class="space-y-6">
                 <div class="space-y-4">
@@ -466,12 +466,12 @@ defmodule StelganoWeb.StegNumberLive do
                   data-country={@selected_country}
                   data-iso={@selected_iso}
                 >
-                  <div class="relative py-12 px-8 rounded-3xl bg-slate-950/50 border border-white/5 text-center overflow-hidden group">
+                  <div class="relative py-8 sm:py-12 px-4 sm:px-8 rounded-3xl bg-slate-950/50 border border-white/5 text-center overflow-hidden group">
                     <div class="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent"></div>
 
                     <%= if @generated_number do %>
                       <div class="relative z-10 space-y-6">
-                        <div class="font-mono font-black text-white tracking-widest text-4xl sm:text-5xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)]">
+                        <div class="font-mono font-black text-white tracking-widest text-3xl sm:text-5xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] break-all px-2">
                           {@generated_number.display}
                         </div>
 
@@ -481,24 +481,32 @@ defmodule StelganoWeb.StegNumberLive do
                           </div>
                         <% end %>
 
-                        <div class="flex flex-wrap items-center justify-center gap-4">
+                        <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
                           <button
                             type="button"
                             phx-click="copied"
                             data-number={@generated_number.e164}
                             id="copy-generated-btn"
                             class={[
-                              "inline-flex items-center gap-3 px-8 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all",
+                              "w-full sm:w-auto flex items-center justify-center gap-2 py-4 px-8 rounded-2xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all duration-300",
                               if(@copied,
-                                do: "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20",
-                                else: "bg-white/5 text-white hover:bg-white/10 border border-white/10"
+                                do:
+                                  "bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] scale-[1.02]",
+                                else:
+                                  "bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-emerald-500/30"
                               )
                             ]}
                           >
                             <%= if @copied do %>
-                              <.icon name="check_circle" class="size-5" /> Copied
+                              <.icon
+                                name="check_circle"
+                                class="size-4 animate-in zoom-in duration-300"
+                              /> Copied
                             <% else %>
-                              <.icon name="clipboard" class="size-5" /> Copy Number
+                              <.icon
+                                name="clipboard"
+                                class="size-4 group-hover:scale-110 transition-transform"
+                              /> Copy Number
                             <% end %>
                           </button>
 
@@ -506,17 +514,20 @@ defmodule StelganoWeb.StegNumberLive do
                             type="button"
                             id="regen-btn"
                             class={[
-                              "inline-flex items-center gap-3 px-8 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all",
-                              "bg-white/5 text-white hover:bg-white/10 border border-white/10",
+                              "w-full sm:w-auto flex items-center justify-center gap-2 py-4 px-8 rounded-2xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all duration-300",
+                              "bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-primary/30",
                               !@selected_country &&
                                 "opacity-20 cursor-not-allowed grayscale pointer-events-none"
                             ]}
                             title="Regenerate"
-                            disabled={is_nil(@selected_country)}
+                            disabled={is_nil(@selected_country) or @generating}
                           >
                             <.icon
                               name="refresh_cw"
-                              class={["size-5 text-primary", @generating && "animate-spin"]}
+                              class={[
+                                "size-4 text-primary transition-transform duration-700",
+                                @generating && "animate-spin"
+                              ]}
                             />
                             {if @generating, do: "Generating...", else: "Refresh"}
                           </button>
@@ -548,20 +559,19 @@ defmodule StelganoWeb.StegNumberLive do
                         value={@manual_number}
                         placeholder="Enter phone number..."
                         class={[
-                          "glass-input w-full font-mono text-xl text-center pl-12",
+                          "glass-input w-full font-mono text-lg sm:text-xl text-center px-12",
                           @manual_error && "border-red-500/50"
                         ]}
                       />
                       <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
-                        <.icon name="phone" class="size-5" />
+                        <.icon name="phone" class="size-4 sm:size-5" />
                       </div>
-
-                      <%= if @manual_error do %>
-                        <div class="mt-2 text-[10px] font-bold uppercase tracking-wider text-red-500 animate-in">
-                          <.icon name="alert-circle" class="size-3 inline mr-1" /> {@manual_error}
-                        </div>
-                      <% end %>
                     </div>
+                    <%= if @manual_error do %>
+                      <div class="mt-2 text-[10px] font-bold uppercase tracking-wider text-red-500 animate-in">
+                        <.icon name="alert-circle" class="size-3 inline mr-1" /> {@manual_error}
+                      </div>
+                    <% end %>
                   </div>
 
                   <%= if @availability != :idle do %>
@@ -620,7 +630,7 @@ defmodule StelganoWeb.StegNumberLive do
                     (@entry_mode == :generate and not is_nil(@generated_number) and @availability == :available) or
                     (@availability == :taken and @room_details && @room_details.tier == "free")
                   ) do %>
-                <div class="glass-card p-6 space-y-6 border-emerald-500/20 shadow-emerald-500/5 animate-in">
+                <div class="glass-card p-6 sm:p-12 space-y-6 border-emerald-500/20 shadow-emerald-500/5 animate-in">
                   <h3 class="text-xs font-bold uppercase tracking-widest text-emerald-500">
                     Tier Selection
                   </h3>
@@ -686,7 +696,7 @@ defmodule StelganoWeb.StegNumberLive do
                   <button
                     id="enter-chat-btn"
                     type="button"
-                    phx-hook="ChannelHandoff"
+                    phx-hook="IdentityHandoff"
                     data-phone={
                       case {@entry_mode, @generated_number} do
                         {:generate, %{e164: e164}} -> e164

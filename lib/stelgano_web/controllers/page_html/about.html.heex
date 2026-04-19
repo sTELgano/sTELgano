@@ -1,22 +1,22 @@
 <Layouts.app flash={@flash}>
   <div class="max-w-5xl mx-auto space-y-20 py-12 animate-in pb-40">
     <%!-- Hero Header --%>
-    <div class="text-center space-y-8 pt-12">
+    <div class="text-center space-y-8 pt-6 sm:pt-12 px-4">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
         <.icon name="contact" class="size-3" /> About sTELgano
       </div>
 
-      <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
+      <h1 class="text-4xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.9] sm:leading-tight">
         Hiding in <span class="text-gradient">Plain Sight.</span>
       </h1>
 
-      <p class="text-slate-400 text-lg sm:text-2xl font-medium leading-relaxed max-w-3xl mx-auto animate-in stagger-3">
+      <p class="text-slate-400 text-base sm:text-2xl font-medium leading-relaxed max-w-3xl mx-auto animate-in stagger-3 px-2">
         The messaging app <span class="text-white">hidden in your contacts.</span>
       </p>
     </div>
 
     <%!-- The Name --%>
-    <div class="space-y-8 animate-in stagger-3">
+    <div class="space-y-8 animate-in stagger-3 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           The Name
@@ -24,7 +24,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4 flex-wrap">
           <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
             <.icon name="sparkles" class="size-7 text-primary" />
@@ -48,7 +48,7 @@
     </div>
 
     <%!-- The Problem --%>
-    <div class="space-y-8 animate-in stagger-3">
+    <div class="space-y-8 animate-in stagger-3 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           The Problem
@@ -56,7 +56,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-14 rounded-2xl bg-danger/10 flex items-center justify-center border border-danger/20">
             <.icon name="eye" class="size-7 text-danger" />
@@ -78,7 +78,7 @@
     </div>
 
     <%!-- Our Approach --%>
-    <div class="space-y-8 animate-in stagger-4">
+    <div class="space-y-8 animate-in stagger-4 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Our Approach
@@ -86,7 +86,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
             <.icon name="eye_off" class="size-7 text-primary" />
@@ -109,7 +109,7 @@
     </div>
 
     <%!-- Design Philosophy --%>
-    <div class="space-y-8 animate-in stagger-4">
+    <div class="space-y-8 animate-in stagger-4 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Design Philosophy
@@ -135,7 +135,7 @@
                "globe"}
             ]
           }
-          class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"
+          class="glass-card p-8 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"
         >
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <.icon
@@ -156,7 +156,7 @@
     </div>
 
     <%!-- The Protocol --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           The Protocol
@@ -165,7 +165,7 @@
       </div>
 
       <.premium_card class="p-0 overflow-hidden ring-1 ring-white/5 shadow-2xl">
-        <div class="bg-slate-950/90 p-8 sm:p-12 space-y-6">
+        <div class="bg-slate-950/90 p-6 sm:p-12 space-y-6">
           <div class="flex items-center gap-4">
             <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
               <.icon name="file_code" class="size-7 text-primary" />
@@ -191,7 +191,7 @@
     </div>
 
     <%!-- Tech Stack --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Tech Stack
@@ -217,7 +217,7 @@
                "clock"}
             ]
           }
-          class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"
+          class="glass-card p-8 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500"
         >
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <.icon
@@ -238,7 +238,7 @@
     </div>
 
     <%!-- Open Source --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Open Source
@@ -265,7 +265,7 @@
     </div>
 
     <%!-- Project Links --%>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 animate-in stagger-5">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 animate-in stagger-5 px-4">
       <.link
         href="https://github.com/stelgano/stelgano"
         class="premium_card p-1 group overflow-hidden"

@@ -1,22 +1,22 @@
 <Layouts.app flash={@flash}>
   <div class="max-w-5xl mx-auto space-y-16 py-12 animate-in pb-40">
     <%!-- Hero Header --%>
-    <div class="text-center space-y-6 pt-12">
+    <div class="text-center space-y-6 pt-6 sm:pt-12 px-4">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
         <.icon name="scale" class="size-3" /> Legal
       </div>
 
-      <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2">
+      <h1 class="text-4xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.9] sm:leading-tight">
         Terms of <span class="text-gradient">Service.</span>
       </h1>
 
-      <p class="text-slate-500 font-mono text-[10px] font-bold uppercase tracking-[0.4em] animate-in stagger-3">
+      <p class="text-slate-500 font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.4em] animate-in stagger-3">
         Effective April 2026 · Plain English
       </p>
     </div>
 
     <%!-- Acceptance --%>
-    <div class="space-y-8 animate-in stagger-3">
+    <div class="space-y-8 animate-in stagger-3 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Acceptance
@@ -24,7 +24,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
             <.icon name="check_circle" class="size-6 text-primary" />
@@ -40,7 +40,7 @@
     </div>
 
     <%!-- What sTELgano Is --%>
-    <div class="space-y-8 animate-in stagger-4">
+    <div class="space-y-8 animate-in stagger-4 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           What sTELgano Is
@@ -48,7 +48,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="flex items-center gap-4">
           <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
             <.icon name="message_circle" class="size-6 text-primary" />
@@ -69,7 +69,7 @@
     </div>
 
     <%!-- Terms Sections --%>
-    <div class="space-y-8 animate-in stagger-4">
+    <div class="space-y-8 animate-in stagger-4 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Terms & Conditions
@@ -79,7 +79,7 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         <%!-- Open Source License --%>
-        <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+        <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
           <div class="flex items-center justify-between">
             <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
               <.icon
@@ -105,7 +105,7 @@
         </div>
 
         <%!-- No Warranty --%>
-        <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+        <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
           <div class="flex items-center justify-between">
             <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
               <.icon
@@ -128,7 +128,7 @@
         </div>
 
         <%!-- Limitation of Liability --%>
-        <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+        <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
           <div class="flex items-center justify-between">
             <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
               <.icon
@@ -151,7 +151,7 @@
         </div>
 
         <%!-- Modifications --%>
-        <div class="glass-card p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+        <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
           <div class="flex items-center justify-between">
             <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
               <.icon
@@ -183,7 +183,7 @@
     </div>
 
     <%!-- Your Responsibilities --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Your Responsibilities
@@ -191,7 +191,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
 
-      <div class="glass-card p-10 space-y-8 border-danger/20 bg-danger/2 group transition-all hover:bg-danger/4">
+      <div class="glass-card p-6 sm:p-10 space-y-8 border-danger/20 bg-danger/2 group transition-all hover:bg-danger/4">
         <div class="flex items-center gap-4 text-danger">
           <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center">
             <.icon name="alert_triangle" class="size-6" />
@@ -224,7 +224,7 @@
     </div>
 
     <%!-- Acceptable Use --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Acceptable Use
@@ -233,7 +233,7 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div class="glass-card p-10 space-y-8 border-primary/20 bg-primary/2 group transition-all hover:bg-primary/4">
+        <div class="glass-card p-6 sm:p-10 space-y-8 border-primary/20 bg-primary/2 group transition-all hover:bg-primary/4">
           <div class="flex items-center gap-4 text-primary">
             <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center">
               <.icon name="check_circle" class="size-6" />
@@ -265,7 +265,7 @@
           </ul>
         </div>
 
-        <div class="glass-card p-10 space-y-8 border-danger/20 bg-danger/2 group transition-all hover:bg-danger/4">
+        <div class="glass-card p-6 sm:p-10 space-y-8 border-danger/20 bg-danger/2 group transition-all hover:bg-danger/4">
           <div class="flex items-center gap-4 text-danger">
             <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center">
               <.icon name="x_circle" class="size-6" />
@@ -299,7 +299,7 @@
     </div>
 
     <%!-- Account Termination & Governing Law --%>
-    <div class="space-y-8 animate-in stagger-5">
+    <div class="space-y-8 animate-in stagger-5 px-4">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Additional Terms
@@ -308,7 +308,7 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <.icon
               name="user_x"
@@ -325,7 +325,7 @@
           </div>
         </div>
 
-        <div class="glass-card p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <.icon
               name="globe"

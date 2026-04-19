@@ -577,14 +577,15 @@ defmodule StelganoWeb.ChatLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div
-      id="chat-root"
-      phx-hook="AnonChat"
-      class="h-dvh w-screen overflow-hidden bg-slate-950 text-white"
-    >
-      <Layouts.flash_group flash={@flash} id="chat-flash" />
-      {render_state(assigns)}
-    </div>
+    <Layouts.app flash={@flash} active_chat={true}>
+      <div
+        id="chat-root"
+        phx-hook="AnonChat"
+        class="h-dvh w-screen overflow-hidden bg-slate-950 text-white"
+      >
+        {render_state(assigns)}
+      </div>
+    </Layouts.app>
     """
   end
 
@@ -609,10 +610,10 @@ defmodule StelganoWeb.ChatLive do
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-4 shadow-[0_0_15px_rgba(0,255,163,0.1)]">
             <.icon name="ban" class="size-3" /> Secure Chat Session
           </div>
-          <h1 class="text-5xl sm:text-6xl font-extrabold tracking-tighter text-white font-display">
+          <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tighter text-white font-display leading-[0.9]">
             Open <span class="text-gradient">Chat.</span>
           </h1>
-          <p class="text-slate-500 font-medium text-lg leading-relaxed">
+          <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed px-4">
             Enter your details below to secure your connection.
           </p>
         </div>
@@ -639,12 +640,12 @@ defmodule StelganoWeb.ChatLive do
               id="entry-form"
               phx-submit="entry_submit"
               phx-change="entry_change"
-              class="space-y-10"
+              class="space-y-8 sm:space-y-10"
             >
               <%!-- Phone Field --%>
               <div class="space-y-4">
                 <div class="flex items-center justify-between px-1">
-                  <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                  <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.3em] text-slate-500">
                     Secret Number
                   </label>
                   <%= if @phone_locked do %>
@@ -652,7 +653,7 @@ defmodule StelganoWeb.ChatLive do
                   <% else %>
                     <.link
                       navigate={~p"/steg-number"}
-                      class="text-[10px] font-bold uppercase tracking-[0.2em] text-primary hover:text-white transition-colors"
+                      class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-primary hover:text-white transition-colors"
                     >
                       Generate New
                     </.link>
@@ -662,8 +663,15 @@ defmodule StelganoWeb.ChatLive do
                   <input
                     id="entry-phone"
                     name="phone"
-                    type={if @phone_visible, do: "text", else: "password"}
-                    class="glass-input w-full pr-14 font-mono text-xl font-bold tracking-widest bg-slate-950/40"
+                    type={if @phone_visible or @phone_locked, do: "text", else: "password"}
+                    class={[
+                      "glass-input w-full pr-14 font-mono text-lg sm:text-xl font-bold bg-slate-950/40",
+                      @phone_locked && "opacity-80",
+                      if(@phone_visible or @phone_locked,
+                        do: "tracking-wider",
+                        else: "tracking-widest"
+                      )
+                    ]}
                     value={@_pending_phone}
                     readonly={@phone_locked}
                     placeholder="Enter number"
@@ -680,7 +688,7 @@ defmodule StelganoWeb.ChatLive do
                   >
                     <.icon
                       name={if @phone_visible, do: "eye_off", else: "eye"}
-                      class="size-6"
+                      class="size-5 sm:size-6"
                     />
                   </button>
                 </div>
@@ -689,10 +697,10 @@ defmodule StelganoWeb.ChatLive do
               <%!-- PIN Input --%>
               <div class="space-y-4">
                 <div class="flex items-center justify-between px-1">
-                  <label class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                  <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.3em] text-slate-500">
                     Private PIN
                   </label>
-                  <span class="text-[10px] font-mono text-slate-500 font-bold">
+                  <span class="text-[9px] sm:text-[10px] font-mono text-slate-500 font-bold whitespace-nowrap">
                     SECURED LOCALLY
                   </span>
                 </div>
@@ -702,22 +710,22 @@ defmodule StelganoWeb.ChatLive do
                   type="password"
                   inputmode="numeric"
                   pattern="[0-9]*"
-                  placeholder="••••"
+                  placeholder="Secret PIN"
                   autocomplete="current-password"
                   autofocus={@phone_locked}
-                  class="text-center text-3xl sm:text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10"
+                  class="text-center text-2xl sm:text-4xl tracking-[0.3em] sm:tracking-[0.6em] font-mono py-4 sm:py-6 bg-slate-950/40 border-white/10"
                 />
               </div>
 
               <button
                 id="entry-submit"
                 type="submit"
-                class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+                class="btn-primary w-full py-4 sm:py-5 text-lg sm:text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
               >
                 Open Chat
                 <.icon
                   name="zap"
-                  class="size-6 group-hover:scale-125 transition-transform"
+                  class="size-5 sm:size-6 group-hover:scale-125 transition-transform"
                 />
               </button>
             </form>
@@ -874,42 +882,42 @@ defmodule StelganoWeb.ChatLive do
 
   defp render_chat(assigns) do
     ~H"""
-    <div class="h-full w-full flex flex-col relative overflow-hidden">
+    <div class="h-full w-full flex flex-col">
       <%!-- Navigation Header --%>
-      <div class="px-6 py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl sticky top-0 z-50">
-        <div class="flex items-center gap-4">
-          <.link navigate={~p"/"} class="wordmark text-2xl leading-tight group">
+      <div class="px-4 sm:px-6 py-3 sm:py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl sticky top-0 z-50">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <.link navigate={~p"/"} class="wordmark text-lg sm:text-2xl leading-tight group">
             <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
           </.link>
           <div class="hidden sm:block h-6 w-px bg-white/20"></div>
-          <span class="hidden sm:inline text-xs font-bold uppercase tracking-[0.3em] text-primary">
+          <span class="hidden lg:inline text-[9px] font-bold uppercase tracking-[0.3em] text-primary">
             WORKSPACE SECURED
           </span>
         </div>
 
         <%!-- Session Controls --%>
-        <div class="flex items-center gap-1 sm:gap-4">
+        <div class="flex items-center gap-1.5 sm:gap-4">
           <button
-            class="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
+            class="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
             phx-click="lock_chat"
             title="Lock session"
           >
-            <.icon name="lock" class="size-6" />
+            <.icon name="lock" class="size-5 sm:size-6" />
           </button>
           <button
-            class="p-3 rounded-2xl bg-danger/10 hover:bg-danger/20 text-danger transition-all flex items-center justify-center border border-danger/20 shadow-lg shadow-danger/5"
+            class="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-danger/10 hover:bg-danger/20 text-danger transition-all flex items-center justify-center border border-danger/20 shadow-lg shadow-danger/5"
             phx-click="confirm_expire"
             title="Erase all"
           >
-            <.icon name="flame" class="size-6" />
+            <.icon name="flame" class="size-5 sm:size-6" />
           </button>
-          <div class="w-px h-6 bg-white/20 mx-1"></div>
+          <div class="w-px h-6 bg-white/20 mx-0.5 sm:mx-1"></div>
           <button
-            class="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
+            class="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
             phx-click="leave_chat"
             title="Exit Chat"
           >
-            <.icon name="power" class="size-6 text-danger" />
+            <.icon name="power" class="size-5 sm:size-6 text-danger" />
           </button>
         </div>
       </div>
@@ -957,7 +965,7 @@ defmodule StelganoWeb.ChatLive do
 
       <%!-- Workspace Message Area --%>
       <div
-        class="flex-1 overflow-y-auto px-6 py-10 space-y-10 scrollbar-hide"
+        class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-10 scrollbar-hide"
         role="log"
         aria-live="polite"
         id="message-list"
@@ -986,7 +994,7 @@ defmodule StelganoWeb.ChatLive do
       </div>
 
       <%!-- User Interaction Zone --%>
-      <div class="p-8 pb-10">
+      <div class="p-4 sm:p-8 pb-10">
         <%= cond do %>
           <% @editing -> %>
             <.render_input_area
@@ -1064,11 +1072,11 @@ defmodule StelganoWeb.ChatLive do
       data-message-id={@msg.id}
     >
       <div class={[
-        "max-w-[80%] group space-y-3",
+        "max-w-[85%] sm:max-w-[80%] group space-y-3",
         if(@msg.is_mine, do: "flex flex-col items-end", else: "flex flex-col items-start")
       ]}>
         <div class={[
-          "relative p-6 sm:p-8 rounded-4xl transition-all duration-500 border overflow-hidden",
+          "relative p-4 sm:p-8 rounded-2xl sm:rounded-4xl transition-all duration-500 border overflow-hidden",
           if(@msg.is_mine,
             do:
               "bg-linear-to-br from-primary/10 to-emerald-500/5 border-primary/20 rounded-tr-none text-white shadow-[0_10px_30px_-10px_rgba(0,255,163,0.1)]",
@@ -1076,7 +1084,7 @@ defmodule StelganoWeb.ChatLive do
               "bg-slate-900/50 backdrop-blur-xl border-white/5 rounded-tl-none text-slate-200 shadow-inner"
           )
         ]}>
-          <p class="relative z-10 whitespace-pre-wrap text-base sm:text-lg leading-relaxed font-medium tracking-tight">
+          <p class="relative z-10 whitespace-pre-wrap text-sm sm:text-lg leading-relaxed font-medium tracking-tight">
             {@msg.plaintext}
           </p>
         </div>
@@ -1137,7 +1145,7 @@ defmodule StelganoWeb.ChatLive do
       </div>
 
       <div class={[
-        "relative flex items-end gap-3 p-3 sm:p-5 rounded-4xl bg-slate-900 border-2 transition-all duration-300 shadow-2xl z-50",
+        "relative flex items-end gap-2 sm:gap-3 p-2 sm:p-5 rounded-2xl sm:rounded-4xl bg-slate-900 border-2 transition-all duration-300 shadow-2xl z-50",
         if(@editing,
           do: "border-amber-500/30 group-focus-within:border-amber-500/50",
           else: "border-white/10 group-focus-within:border-primary/50 group-focus-within:bg-slate-950"
@@ -1145,7 +1153,7 @@ defmodule StelganoWeb.ChatLive do
       ]}>
         <textarea
           id="chat-textarea"
-          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 focus:outline-none py-4 px-2 resize-none max-h-60 min-h-[3.5rem] scrollbar-hide text-lg leading-relaxed font-medium"
+          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 focus:outline-none py-2 sm:py-4 px-2 resize-none max-h-60 min-h-[3rem] sm:min-h-[3.5rem] scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
           placeholder={if @editing, do: "Revise message...", else: "Construct secure message…"}
           rows="1"
           maxlength={@max_chars}
@@ -1154,9 +1162,9 @@ defmodule StelganoWeb.ChatLive do
           phx-update="ignore"
         >{@value}</textarea>
 
-        <div class="flex items-center gap-4 pr-1 pb-1">
+        <div class="flex items-center gap-2 sm:gap-4 pr-1 pb-1">
           <%= if @char_count >= @counter_warn_at do %>
-            <div class="flex flex-col items-end mr-2">
+            <div class="hidden sm:flex flex-col items-end mr-2">
               <span class={[
                 "text-[10px] font-mono font-bold tracking-widest",
                 if(@char_count >= @counter_danger_at, do: "text-danger", else: "text-warning")
@@ -1169,29 +1177,29 @@ defmodule StelganoWeb.ChatLive do
           <%= if @editing do %>
             <button
               phx-click="cancel_edit"
-              class="size-16 rounded-[1.75rem] bg-white/5 text-slate-400 flex items-center justify-center hover:bg-white/10 transition-all border border-white/10"
+              class="size-12 sm:size-16 rounded-xl sm:rounded-[1.75rem] bg-white/5 text-slate-400 flex items-center justify-center hover:bg-white/10 transition-all border border-white/10"
               aria-label="Cancel Edit"
             >
-              <.icon name="x" class="size-6" />
+              <.icon name="x" class="size-5 sm:size-6" />
             </button>
             <button
               id="btn-save"
-              class="size-16 rounded-[1.75rem] bg-amber-500 text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.3)] hover:scale-110 active:scale-95 transition-all group"
+              class="size-12 sm:size-16 rounded-xl sm:rounded-[1.75rem] bg-amber-500 text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.3)] hover:scale-110 active:scale-95 transition-all group"
               phx-click="save_edit"
               aria-label="Update Message"
             >
-              <.icon name="check" class="size-8 transition-transform text-slate-950" />
+              <.icon name="check" class="size-6 sm:size-8 transition-transform text-slate-950" />
             </button>
           <% else %>
             <button
               id="btn-send"
-              class="size-16 rounded-[1.75rem] bg-primary text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,163,0.3)] hover:scale-110 active:scale-95 transition-all group disabled:grayscale disabled:opacity-50"
+              class="size-12 sm:size-16 rounded-xl sm:rounded-[1.75rem] bg-primary text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,163,0.3)] hover:scale-110 active:scale-95 transition-all group disabled:grayscale disabled:opacity-50"
               phx-click="send_message"
               aria-label="Encrypt & Broadcast"
             >
               <.icon
                 name="send"
-                class="size-8 -rotate-12 group-hover:rotate-0 transition-transform text-slate-950"
+                class="size-6 sm:size-8 -rotate-12 group-hover:rotate-0 transition-transform text-slate-950"
               />
             </button>
           <% end %>
@@ -1211,7 +1219,7 @@ defmodule StelganoWeb.ChatLive do
   defp render_waiting_area(assigns) do
     ~H"""
     <div class={[
-      "glass-card p-6 flex flex-col sm:flex-row items-center justify-between gap-6 transition-all duration-700 animate-in relative overflow-hidden group",
+      "glass-card p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-6 transition-all duration-700 animate-in relative overflow-hidden group",
       if(@typing,
         do: "border-primary/40 shadow-[0_0_40px_-5px_var(--color-primary-glow)]",
         else: "border-white/5"
@@ -1221,8 +1229,8 @@ defmodule StelganoWeb.ChatLive do
       <div class="absolute inset-0 bg-linear-to-r from-primary/0 via-primary/5 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-2000 ease-in-out pointer-events-none">
       </div>
 
-      <div class="flex items-center gap-6 z-10">
-        <div class="relative flex items-center justify-center size-12">
+      <div class="flex items-center gap-4 sm:gap-6 z-10 w-full sm:w-auto">
+        <div class="relative flex items-center justify-center size-10 sm:size-12 shrink-0">
           <div class={[
             "absolute inset-0 rounded-xl blur-lg animate-pulse transition-colors duration-500",
             if(@typing, do: "bg-primary/40", else: "bg-primary/20")
@@ -1230,17 +1238,17 @@ defmodule StelganoWeb.ChatLive do
           </div>
           <div class="relative flex gap-1.5 items-center">
             <div class={[
-              "size-2 rounded-full animate-bounce transition-colors duration-500",
+              "size-1.5 sm:size-2 rounded-full animate-bounce transition-colors duration-500",
               if(@typing, do: "bg-primary", else: "bg-primary/60")
             ]}>
             </div>
             <div class={[
-              "size-2 rounded-full animate-bounce [animation-delay:0.2s] transition-colors duration-500",
+              "size-1.5 sm:size-2 rounded-full animate-bounce [animation-delay:0.2s] transition-colors duration-500",
               if(@typing, do: "bg-primary", else: "bg-primary/60")
             ]}>
             </div>
             <div class={[
-              "size-2 rounded-full animate-bounce [animation-delay:0.4s] transition-colors duration-500",
+              "size-1.5 sm:size-2 rounded-full animate-bounce [animation-delay:0.4s] transition-colors duration-500",
               if(@typing, do: "bg-primary", else: "bg-primary/60")
             ]}>
             </div>
@@ -1248,7 +1256,7 @@ defmodule StelganoWeb.ChatLive do
         </div>
         <div class="space-y-1">
           <p class={[
-            "text-xs font-black uppercase tracking-[0.3em] transition-all duration-500",
+            "text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] sm:tracking-[0.3em] transition-all duration-500",
             if(@typing,
               do: "text-primary scale-105 origin-left",
               else: "text-slate-400 group-hover:text-primary"
@@ -1256,27 +1264,27 @@ defmodule StelganoWeb.ChatLive do
           ]}>
             {if @typing, do: "Node is typing...", else: "Waiting for Reply"}
           </p>
-          <p class="text-[10px] text-slate-500 font-medium uppercase tracking-widest transition-opacity duration-500">
+          <p class="text-[8px] sm:text-[10px] text-slate-500 font-medium uppercase tracking-widest transition-opacity duration-500">
             {if @typing,
               do: "Processing incoming sequence...",
-              else: "Identity artifacts are locked until response"}
+              else: "Identity artifacts are locked"}
           </p>
         </div>
       </div>
 
       <div
         :if={@message && @message.is_mine && is_nil(@message.read_at)}
-        class="flex items-center gap-3 z-10"
+        class="flex items-center gap-2 sm:gap-3 z-10 w-full sm:w-auto"
       >
         <button
           phx-click="start_edit"
-          class="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-all border border-white/5 flex items-center gap-2"
+          class="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2"
         >
-          <.icon name="edit_3" class="size-3" /> Edit Message
+          <.icon name="edit_3" class="size-3" /> Edit
         </button>
         <button
           phx-click="delete_mine"
-          class="px-5 py-2.5 rounded-xl bg-danger/10 hover:bg-danger/20 text-danger text-[10px] font-bold uppercase tracking-widest transition-all border border-danger/20 flex items-center gap-2"
+          class="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-danger/10 hover:bg-danger/20 text-danger text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all border border-danger/20 flex items-center justify-center gap-2"
         >
           <.icon name="trash_2" class="size-3" /> Delete
         </button>
