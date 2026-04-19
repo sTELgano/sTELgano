@@ -1,51 +1,58 @@
 <Layouts.app flash={@flash}>
   <%!-- Hero Section --%>
   <section class="relative min-h-[90vh] flex flex-col items-center justify-center px-6 py-24 text-center overflow-hidden">
-    <div class="relative z-10 animate-in stagger-1">
-      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-[0.2em] mb-10 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-        <.icon name="shield_check" class="size-4" /> Open Protocol &middot; End-to-End Encrypted
+    <div class="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center max-w-7xl mx-auto w-full relative z-10 animate-in stagger-1">
+      <div class="text-left space-y-8">
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+          <.icon name="shield_check" class="size-4" /> Open Protocol &middot; End-to-End Encrypted
+        </div>
+
+        <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter font-display leading-[0.9]">
+          <span class="text-slate-500 font-light italic">s</span><span class="text-gradient">TEL</span><span class="text-white">gano</span>
+        </h1>
+
+        <p class="text-[10px] sm:text-xs font-mono uppercase tracking-[0.35em] text-slate-500">
+          stel<span class="text-primary">·GAH·</span>no
+        </p>
+
+        <p class="text-xl sm:text-2xl md:text-3xl text-slate-300 font-medium tracking-tight leading-tight">
+          The messaging app hidden in<br />
+          <span class="text-white italic underline decoration-primary decoration-4 underline-offset-8">
+            your contacts.
+          </span>
+        </p>
+
+        <p class="text-slate-500 text-sm sm:text-lg leading-relaxed max-w-lg">
+          No accounts. No chat history. No metadata. Your browser encrypts everything locally with AES-256-GCM before it ever touches a server. The server only sees ciphertext.
+        </p>
+
+        <div class="flex flex-col sm:flex-row gap-4 pt-4">
+          <.link
+            navigate={~p"/chat"}
+            class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto"
+          >
+            Open Chat
+            <.icon
+              name="sparkles"
+              class="size-6 group-hover:rotate-12 transition-transform"
+            />
+          </.link>
+          <.link
+            navigate={~p"/spec"}
+            class="btn-secondary px-10 py-4 text-xl w-full sm:w-auto group"
+          >
+            Read the Spec
+            <.icon
+              name="arrow_right"
+              class="size-6 group-hover:translate-x-1 transition-transform"
+            />
+          </.link>
+        </div>
       </div>
-
-      <h1 class="text-5xl sm:text-8xl md:text-9xl font-extrabold tracking-tighter mb-4 font-display leading-[0.9]">
-        <span class="text-slate-500 font-light italic">s</span><span class="text-gradient">TEL</span><span class="text-white">gano</span>
-      </h1>
-
-      <p class="text-[10px] sm:text-xs font-mono uppercase tracking-[0.35em] text-slate-500 mb-10">
-        stel<span class="text-primary">·GAH·</span>no
-      </p>
-
-      <p class="text-xl sm:text-2xl md:text-3xl text-slate-300 font-medium mb-6 tracking-tight max-w-3xl mx-auto leading-tight">
-        The messaging app hidden in
-        <span class="text-white italic underline decoration-primary decoration-4 underline-offset-8">
-          your contacts.
-        </span>
-      </p>
-
-      <p class="text-slate-500 text-sm sm:text-lg mb-12 max-w-xl mx-auto leading-relaxed px-4">
-        No accounts. No chat history. No metadata. Your browser encrypts everything locally with AES-256-GCM before it ever touches a server. The server only sees ciphertext.
-      </p>
-
-      <div class="flex flex-col md:flex-row gap-4 justify-center items-center">
-        <.link
-          navigate={~p"/chat"}
-          class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto"
-        >
-          Open Chat
-          <.icon
-            name="sparkles"
-            class="size-6 group-hover:rotate-12 transition-transform"
-          />
-        </.link>
-        <.link
-          navigate={~p"/spec"}
-          class="btn-secondary px-10 py-4 text-xl w-full sm:w-auto group"
-        >
-          Read the Spec
-          <.icon
-            name="arrow_right"
-            class="size-6 group-hover:translate-x-1 transition-transform"
-          />
-        </.link>
+      
+      <div class="relative hidden lg:block animate-in duration-1000 zoom-in-95">
+        <div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full"></div>
+        <img src="/images/hero_illustration.png" alt="sTELgano End-to-End Encryption" class="relative z-10 w-full h-auto drop-shadow-[0_0_50px_rgba(16,185,129,0.3)] floating" />
       </div>
     </div>
   </section>
@@ -104,32 +111,43 @@
         </h3>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div
-          :for={
-            {{title, desc}, i} <-
-              Enum.with_index([
-                {"Generate a Steg Number",
-                 "Use our generator to create a random phone number for any country. Save it in your partner's phone as a normal contact. They save one in yours. That's your secret handshake."},
-                {"Choose Your PIN",
-                 "Each person picks their own PIN. This PIN never leaves your device&mdash;it's hashed locally and used to prove you have the right to access the room. Forget it and you're locked out forever. By design."},
-                {"Open the Channel",
-                 "Enter the steg number and your PIN. Your browser derives the encryption key using PBKDF2 with 600,000 iterations, connects to the room, and you're chatting with end-to-end encryption. No registration required."}
-              ])
-          }
-          class="glass-card p-8 group relative overflow-hidden animate-in"
-          style={"animation-delay: #{i * 0.1}s"}
-        >
-          <div class="absolute -right-6 -bottom-6 text-9xl font-black text-white/2 group-hover:text-white/4 transition-colors italic">
-            {i + 1}
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="order-2 lg:order-1 relative animate-in duration-1000 slide-in-from-left-8">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img src="/images/contact_steg.png" alt="Contact-Layer Steganography Concept" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
+        </div>
+        
+        <div class="order-1 lg:order-2 space-y-6">
+          <div
+            :for={
+              {{title, desc}, i} <-
+                Enum.with_index([
+                  {"Generate a Steg Number",
+                   "Use our generator to create a random phone number for any country. Save it in your partner's phone as a normal contact. That's your secret handshake."},
+                  {"Choose Your PIN",
+                   "Each person picks their own PIN. This PIN never leaves your device—it's hashed locally and used to prove you have the right to access the room."},
+                  {"Open the Channel",
+                   "Enter the steg number and your PIN. Your browser derives the encryption key, connects to the room, and you're chatting with end-to-end encryption."}
+                ])
+            }
+            class="glass-card p-6 group relative overflow-hidden animate-in"
+            style={"animation-delay: #{i * 0.1}s"}
+          >
+            <div class="absolute -right-4 -bottom-4 text-8xl font-black text-white/2 group-hover:text-white/4 transition-colors italic pointer-events-none">
+              {i + 1}
+            </div>
+            <div class="flex items-start gap-5">
+              <div class="size-12 rounded-2xl bg-primary/10 flex shrink-0 items-center justify-center text-primary font-black text-xl shadow-inner ring-1 ring-primary/20">
+                {i + 1}
+              </div>
+              <div>
+                <h4 class="text-lg font-bold text-white mb-2 font-display">{title}</h4>
+                <p class="text-slate-400 leading-relaxed font-medium text-sm">
+                  {desc}
+                </p>
+              </div>
+            </div>
           </div>
-          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-2xl mb-8 shadow-inner ring-1 ring-primary/20">
-            {i + 1}
-          </div>
-          <h4 class="text-xl font-bold text-white mb-4 font-display">{title}</h4>
-          <p class="text-slate-400 leading-relaxed font-medium">
-            {desc}
-          </p>
         </div>
       </div>
     </div>
