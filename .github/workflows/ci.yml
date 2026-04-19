@@ -71,7 +71,7 @@ jobs:
           DATABASE_URL: "ecto://postgres:postgres@localhost/stelgano_test"
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
