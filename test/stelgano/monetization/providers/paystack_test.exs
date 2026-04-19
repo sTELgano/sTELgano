@@ -20,11 +20,8 @@ defmodule Stelgano.Monetization.Providers.PaystackTest do
       receipt_email_domain: "test.stelgano.com"
     )
 
-    Application.put_env(:stelgano, :req_test_enabled, true)
-
     on_exit(fn ->
       Application.delete_env(:stelgano, Paystack)
-      Application.delete_env(:stelgano, :req_test_enabled)
     end)
 
     :ok

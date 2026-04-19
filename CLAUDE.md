@@ -138,6 +138,7 @@ Key modules:
 - `Stelgano.Monetization.ExtensionToken` — Ecto schema for payment tokens (pending → paid → redeemed)
 - `Stelgano.Monetization.PaymentProvider` — behaviour for payment gateway adapters
 - `Stelgano.Monetization.Providers.Paystack` — Paystack adapter (hosted checkout + webhook verification)
+- `Stelgano.Monetization.FxRate` — GenServer caching a single `base → quote` exchange rate, refreshed every 24h from Fawazahmed0's currency-api (keyless public CDN JSON). Started conditionally via `Paystack.child_specs/0` only when `PAYSTACK_SETTLEMENT_CURRENCY` is set and differs from `PAYMENT_CURRENCY`.
 
 Payment flow:
 1. Client generates random `extension_secret`, computes `token_hash = SHA-256(secret)`
@@ -145,6 +146,8 @@ Payment flow:
 3. Paystack webhook marks token as `paid`
 4. Client sends `extension_secret` via channel `redeem_extension` event
 5. Server hashes it, finds matching paid token, extends room TTL — token table still has no room_id
+
+**Settlement currency conversion.** `PRICE_CENTS` is always denominated in `PAYMENT_CURRENCY` (the display currency). If the Paystack merchant account only accepts a different currency, set `PAYSTACK_SETTLEMENT_CURRENCY` to that code. `Paystack.initialize/3` then reads the cached rate from `FxRate`, applies `PAYSTACK_FX_BUFFER_PCT` (default 5%) on top to absorb drift, rounds to the nearest integer minor unit, and submits that to Paystack. This config lives on the **adapter** — a future Stripe/Flutterwave adapter is responsible for its own settlement-currency story (or doesn't need one).
 
 ### Background jobs (Oban)
 
@@ -209,10 +212,13 @@ PostgreSQL with binary UUIDs. Migrations in [priv/repo/migrations/](priv/repo/mi
 | `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key |
 | `PAYSTACK_CALLBACK_URL` | If monetization | Post-payment redirect URL |
 | `PAYSTACK_RECEIPT_EMAIL_DOMAIN` | If monetization | Operator-owned domain used as the `@domain` of the anonymous placeholder email sent to Paystack on initialize |
+| `PAYSTACK_SETTLEMENT_CURRENCY` | No | ISO 4217 code submitted to Paystack when it differs from `PAYMENT_CURRENCY` (e.g. show USD, settle KES). Leave unset to disable conversion. |
+| `PAYSTACK_FX_BUFFER_PCT` | No | Percent buffer on converted amount (default: 5) |
+| `PAYMENT_FX_FALLBACK_RATE` | No | Seed rate for `FxRate` (quote per base unit). Used if the boot fetch fails. |
 | `FREE_TTL_DAYS` | No | Free tier TTL (default: 7) |
 | `PAID_TTL_DAYS` | No | Paid tier TTL (default: 365) |
-| `PRICE_CENTS` | No | Price in smallest currency unit (default: 200) |
-| `PAYMENT_CURRENCY` | No | ISO 4217 currency code (default: USD) |
+| `PRICE_CENTS` | No | Price in smallest display-currency unit (default: 200) |
+| `PAYMENT_CURRENCY` | No | ISO 4217 display currency (default: USD). What the UI shows and what `PRICE_CENTS` is denominated in. |
 
 Salts (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`) are public constants in client JS; rotating them is a breaking change (all existing rooms become inaccessible).
 
