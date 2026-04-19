@@ -660,13 +660,6 @@ defmodule StelganoWeb.ChatLive do
                   </label>
                   <%= if @phone_locked do %>
                     <span class="text-[10px] font-mono text-primary font-bold">LOCKED</span>
-                  <% else %>
-                    <.link
-                      navigate={~p"/steg-number"}
-                      class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-primary hover:text-white transition-colors"
-                    >
-                      Generate New
-                    </.link>
                   <% end %>
                 </div>
                 <div class="relative group">
@@ -739,6 +732,19 @@ defmodule StelganoWeb.ChatLive do
                 />
               </button>
             </form>
+
+            <div class="pt-8 border-t border-white/5 flex flex-col items-center gap-5 text-center">
+              <p class="text-slate-400 text-sm font-medium">
+                Don't have a secret number yet?
+              </p>
+              <.link
+                navigate={~p"/steg-number"}
+                class="btn-secondary w-full py-4 sm:py-5 text-lg sm:text-xl inline-flex items-center justify-center gap-2 group"
+              >
+                <.icon name="sparkles" class="size-5 text-primary group-hover:rotate-12 transition-transform" />
+                Generate New Number
+              </.link>
+            </div>
           </div>
         </.premium_card>
       </div>

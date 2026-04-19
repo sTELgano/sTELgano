@@ -453,7 +453,7 @@ defmodule StelganoWeb.StegNumberLive do
                     )
                   ]}
                 >
-                  Manual Entry
+                  Check / Upgrade Number
                 </button>
               </div>
 
