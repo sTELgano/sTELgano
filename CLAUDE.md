@@ -37,6 +37,10 @@ mix ecto.gen.migration migration_name  # generate migration with correct timesta
 
 Single context module ([rooms.ex](lib/stelgano/rooms.ex)) owns all business logic. Server-blindness: no function accepts plaintext phone numbers or PINs — only opaque hashes.
 
+Room lifecycle is split into two distinct operations so a probe attacker can't pollute the `rooms` table just by guessing `room_hash` values:
+- `get_active_room/1` — read-only lookup. Returns `{:ok, room}` or `{:error, :not_found}`.
+- `create_room/3` — explicit insert with `tier` and optional `ttl_expires_at`. Only ever called from `ChatLive.handle_event("continue_free", …)` (free path / monetization disabled) or the paid-extension flow. `join_room/2` never calls it — that function only reads via `get_active_room/1` and manages `room_access` rows.
+
 Schemas in [lib/stelgano/rooms/](lib/stelgano/rooms/):
 - `Room` — identified by `room_hash` (SHA-256 hex), has `is_active` flag, `tier` ("free"/"paid"), and optional `ttl_expires_at`
 - `RoomAccess` — `(room_hash, access_hash)` pairs with failed-attempt lockout (10 attempts → 30min lock). Hard-deleted when the room expires so the DB carries no long-term linkability of past attempts. See [rooms.ex](lib/stelgano/rooms.ex) `expire_room/1`.
@@ -78,7 +82,7 @@ PIN is NOT part of enc_key (both users need the same key but have different PINs
 
 - `:entry` — form with phone + PIN fields. Phone is pre-populated and read-only when handed off from `/steg-number` (via the `stelegano_handoff_phone` sessionStorage key → `prefill_phone` hook event), otherwise editable for returning to existing channels. Passcode test compliant.
 - `:deriving` — three-dot loading while hashes are computed
-- `:new_channel` — plan selection screen (free/paid) shown when monetization is enabled and a new room was just created. Helps detect mistyped numbers.
+- `:new_channel` — plan selection screen (free/paid) shown when monetization is enabled and the room does not yet exist. No `Room` row has been created at this point — the `(room_hash, access_hash, sender_hash, country_iso)` tuple is held only in LiveView assigns. The row is only inserted once the user confirms via `continue_free` (or the paid-extension flow completes). This means probe attackers hashing random phones never pollute the `rooms` table. Helps detect mistyped numbers. If monetization is disabled **or** the handoff carried `tier=free`, the server auto-fires `continue_free` without showing this screen.
 - `:connecting` — three-dot loading while PBKDF2 derives the encryption key
 - `:chat` — active chat with message area, input, and header controls
 - `:locked` — PIN re-entry screen (re-derives key without re-joining channel)
@@ -126,6 +130,8 @@ admin dashboard renders both tables.
 Fully optional (disabled by default). When enabled, steg numbers have a free TTL (default 7 days). Users can purchase a dedicated number (default 1 year, $2.00) via a blind token protocol.
 
 **Privacy guarantee:** The `extension_tokens` table has **no `room_id` column**. The server cannot link a payment to a specific room. Correlation exists only ephemerally in memory during the channel `redeem_extension` event.
+
+**Paystack placeholder email:** Paystack's `/transaction/initialize` requires an email and mails receipts to it. We supply `anonymous+<token_hash[0..7]>@<PAYSTACK_RECEIPT_EMAIL_DOMAIN>` so the user is never prompted for a real address. The domain **must be operator-controlled** — a domain owned by a third party would receive every transaction receipt. Typically set to the deployment's `PHX_HOST` with no MX record (receipts bounce / void). The email prefix adds no info beyond the `reference` Paystack already receives.
 
 Key modules:
 - `Stelgano.Monetization` — config accessors, token lifecycle, redemption logic
@@ -202,6 +208,7 @@ PostgreSQL with binary UUIDs. Migrations in [priv/repo/migrations/](priv/repo/mi
 | `PAYSTACK_SECRET_KEY` | If monetization | Paystack secret key |
 | `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key |
 | `PAYSTACK_CALLBACK_URL` | If monetization | Post-payment redirect URL |
+| `PAYSTACK_RECEIPT_EMAIL_DOMAIN` | If monetization | Operator-owned domain used as the `@domain` of the anonymous placeholder email sent to Paystack on initialize |
 | `FREE_TTL_DAYS` | No | Free tier TTL (default: 7) |
 | `PAID_TTL_DAYS` | No | Paid tier TTL (default: 365) |
 | `PRICE_CENTS` | No | Price in smallest currency unit (default: 200) |

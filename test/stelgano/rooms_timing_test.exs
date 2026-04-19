@@ -27,25 +27,30 @@ defmodule Stelgano.RoomsTimingTest do
   end
 
   describe "timing pad" do
-    test "pads fast path (room exists) to at least the configured floor" do
-      rh = hex64(1)
-      {:ok, _room} = Rooms.find_or_create_room(rh)
+    test "pads the fast :not_found branch (single SELECT) to at least the configured floor" do
+      # Probe for a room that was never materialised — the attacker's enumeration
+      # attempt. Without the pad this returns almost immediately.
+      {us, {:error, :not_found}} =
+        :timer.tc(fn -> Rooms.join_room(hex64(1), hex64(2)) end)
 
-      {us, {:ok, _room}} = :timer.tc(fn -> Rooms.join_room(rh, hex64(2)) end)
       assert div(us, 1000) >= 30
     end
 
-    test "pads slow path (creates room) to at least the configured floor" do
+    test "pads the slow :ok branch (SELECT + SELECT + INSERT into room_access) to the floor" do
       rh = hex64(3)
+      {:ok, _room} = Rooms.create_room(rh, "free")
+
       {us, {:ok, _room}} = :timer.tc(fn -> Rooms.join_room(rh, hex64(4)) end)
       assert div(us, 1000) >= 30
     end
 
     test "no pad when floor is 0" do
       Application.put_env(:stelgano, :join_time_floor_ms, 0)
-      rh = hex64(5)
-      {us, {:ok, _room}} = :timer.tc(fn -> Rooms.join_room(rh, hex64(6)) end)
-      # Without a floor, a local query+insert is well under 30ms.
+
+      {us, {:error, :not_found}} =
+        :timer.tc(fn -> Rooms.join_room(hex64(5), hex64(6)) end)
+
+      # Without a floor, a local SELECT is well under 30ms.
       assert div(us, 1000) < 30
     end
   end

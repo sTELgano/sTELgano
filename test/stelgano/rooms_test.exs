@@ -39,26 +39,61 @@ defmodule Stelgano.RoomsTest do
     RoomAccess |> where([a], a.room_hash == ^rh) |> Repo.aggregate(:count)
   end
 
+  # Set-up helper: `join_room/2` no longer auto-creates the `Room` row
+  # (that's now an explicit `create_room/3` step from plan selection).
+  # Tests that exercise `join_room/2` must materialise the room first.
+  defp seed_room(rh) do
+    {:ok, _room} = Rooms.create_room(rh, "free")
+    :ok
+  end
+
   # ---------------------------------------------------------------------------
-  # Room creation via find_or_create_room/1
+  # Room creation via create_room/3
   # ---------------------------------------------------------------------------
 
-  describe "find_or_create_room/1" do
+  describe "create_room/3" do
     test "creates a new room for a fresh hash" do
       rh = hex64(10)
-      assert {:ok, %Room{room_hash: ^rh, is_active: true}} = Rooms.find_or_create_room(rh)
+
+      assert {:ok, %Room{room_hash: ^rh, is_active: true, tier: "free"}} =
+               Rooms.create_room(rh, "free")
     end
 
-    test "returns the same room on second call with same hash" do
+    test "honours the explicit tier argument" do
       rh = hex64(11)
-      {:ok, room1} = Rooms.find_or_create_room(rh)
-      {:ok, room2} = Rooms.find_or_create_room(rh)
-      assert room1.id == room2.id
+      assert {:ok, %Room{tier: "paid"}} = Rooms.create_room(rh, "paid")
+    end
+
+    test "duplicate insert for the same active room_hash fails the unique constraint" do
+      rh = hex64(12)
+      {:ok, _room1} = Rooms.create_room(rh, "free")
+      assert {:error, %Ecto.Changeset{} = cs} = Rooms.create_room(rh, "free")
+      assert cs.errors[:room_hash]
     end
 
     test "returns error for invalid hash format" do
-      assert {:error, changeset} = Rooms.find_or_create_room("not-valid")
+      assert {:error, changeset} = Rooms.create_room("not-valid", "free")
       assert changeset.errors[:room_hash]
+    end
+  end
+
+  describe "get_active_room/1" do
+    test "returns :not_found when no room exists" do
+      assert {:error, :not_found} = 13 |> hex64() |> Rooms.get_active_room()
+    end
+
+    test "returns the room when it exists and is active" do
+      rh = hex64(14)
+      seed_room(rh)
+      assert {:ok, %Room{room_hash: ^rh, is_active: true}} = Rooms.get_active_room(rh)
+    end
+
+    test "returns :not_found once the room has been expired" do
+      rh = hex64(15)
+      seed_room(rh)
+      {:ok, room} = Rooms.get_active_room(rh)
+      Rooms.expire_room(room.id)
+      assert {:error, :not_found} = Rooms.get_active_room(rh)
     end
   end
 
@@ -73,13 +108,13 @@ defmodule Stelgano.RoomsTest do
 
     test "returns true for an active room" do
       rh = hex64(21)
-      Rooms.find_or_create_room(rh)
+      seed_room(rh)
       assert Rooms.room_exists?(rh)
     end
 
     test "returns false for an expired room" do
       rh = hex64(22)
-      {:ok, room} = Rooms.find_or_create_room(rh)
+      {:ok, room} = Rooms.create_room(rh, "free")
       Rooms.expire_room(room.id)
       refute Rooms.room_exists?(rh)
     end
@@ -90,17 +125,26 @@ defmodule Stelgano.RoomsTest do
   # ---------------------------------------------------------------------------
 
   describe "join_room/2 — happy path" do
-    test "first join creates room + access record and returns room" do
+    test "first join on a materialised room creates the access record and returns the room" do
       rh = hex64(30)
       ah = hex64(31)
+      seed_room(rh)
       assert {:ok, %Room{room_hash: ^rh}} = Rooms.join_room(rh, ah)
       # Access record should now exist
       assert Repo.get_by(RoomAccess, room_hash: rh, access_hash: ah)
     end
 
+    test "returns :not_found when the room has not been materialised yet" do
+      # join_room/2 no longer auto-creates the Room — that is an explicit step.
+      rh = hex64(31_500)
+      ah = hex64(31_501)
+      assert {:error, :not_found} = Rooms.join_room(rh, ah)
+    end
+
     test "second join with same credentials succeeds" do
       rh = hex64(32)
       ah = hex64(33)
+      seed_room(rh)
       Rooms.join_room(rh, ah)
       assert {:ok, %Room{}} = Rooms.join_room(rh, ah)
     end
@@ -109,6 +153,7 @@ defmodule Stelgano.RoomsTest do
       rh = hex64(34)
       ah1 = hex64(35)
       ah2 = hex64(36)
+      seed_room(rh)
       {:ok, room1} = Rooms.join_room(rh, ah1)
       {:ok, room2} = Rooms.join_room(rh, ah2)
       assert room1.id == room2.id
@@ -122,16 +167,16 @@ defmodule Stelgano.RoomsTest do
   describe "join_room/2 — failure" do
     test "returns :not_found for unknown room_hash with no access records" do
       rh = hex64(40)
-      ah = hex64(41)
-      # Room was never created via find_or_create_room
-      # But join_room auto-creates rooms on first join; test not_found needs:
-      # a room_hash that doesn't have an active room — we test after expire
-      Rooms.join_room(rh, ah)
-      {:ok, room} = Rooms.find_or_create_room(rh)
-      Rooms.expire_room(room.id)
-      # Now room is inactive
+      # Room was never materialised via create_room/3.
       result = Rooms.join_room(rh, hex64(42))
       assert result == {:error, :not_found}
+    end
+
+    test "returns :not_found once an existing room has been expired" do
+      rh = hex64(40_500)
+      {:ok, room} = Rooms.create_room(rh, "free")
+      Rooms.expire_room(room.id)
+      assert {:error, :not_found} = Rooms.join_room(rh, hex64(40_501))
     end
 
     test "returns :unauthorized with remaining count on wrong hash after room is full" do
@@ -140,6 +185,7 @@ defmodule Stelgano.RoomsTest do
       ah_correct2 = hex64(52)
       ah_wrong = hex64(53)
 
+      seed_room(rh)
       Rooms.join_room(rh, ah_correct1)
       Rooms.join_room(rh, ah_correct2)
 
@@ -153,6 +199,7 @@ defmodule Stelgano.RoomsTest do
       ah_correct2 = hex64(62)
       ah_wrong = hex64(63)
 
+      seed_room(rh)
       Rooms.join_room(rh, ah_correct1)
       Rooms.join_room(rh, ah_correct2)
 
@@ -170,6 +217,7 @@ defmodule Stelgano.RoomsTest do
       ah2 = hex64(72)
       ah_wrong = hex64(73)
 
+      seed_room(rh)
       Rooms.join_room(rh, ah1)
       Rooms.join_room(rh, ah2)
 
@@ -197,7 +245,7 @@ defmodule Stelgano.RoomsTest do
   describe "send_message/4" do
     setup do
       rh = room_hash()
-      {:ok, room} = Rooms.find_or_create_room(rh)
+      {:ok, room} = Rooms.create_room(rh, "free")
       %{room: room, room_hash: rh}
     end
 
@@ -264,7 +312,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "current_message/1" do
     setup do
-      {:ok, room} = 90 |> hex64() |> Rooms.find_or_create_room()
+      {:ok, room} = 90 |> hex64() |> Rooms.create_room("free")
       %{room: room}
     end
 
@@ -285,7 +333,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "mark_read/1" do
     setup do
-      {:ok, room} = 100 |> hex64() |> Rooms.find_or_create_room()
+      {:ok, room} = 100 |> hex64() |> Rooms.create_room("free")
       {:ok, msg} = Rooms.send_message(room.id, sender_hash(), ciphertext(), iv())
       %{room: room, msg: msg}
     end
@@ -312,7 +360,7 @@ defmodule Stelgano.RoomsTest do
   describe "edit_message/5" do
     setup do
       rh = hex64(110)
-      {:ok, room} = Rooms.find_or_create_room(rh)
+      {:ok, room} = Rooms.create_room(rh, "free")
       sh = sender_hash()
       {:ok, msg} = Rooms.send_message(room.id, sh, ciphertext(), iv())
       %{room: room, msg: msg, sh: sh}
@@ -344,7 +392,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "delete_message/3" do
     setup do
-      {:ok, room} = 120 |> hex64() |> Rooms.find_or_create_room()
+      {:ok, room} = 120 |> hex64() |> Rooms.create_room("free")
       sh = sender_hash()
       {:ok, msg} = Rooms.send_message(room.id, sh, ciphertext(), iv())
       %{room: room, msg: msg, sh: sh}
@@ -372,7 +420,7 @@ defmodule Stelgano.RoomsTest do
 
   describe "expire_room/1" do
     test "sets is_active = false and hard-deletes messages" do
-      {:ok, room} = 130 |> hex64() |> Rooms.find_or_create_room()
+      {:ok, room} = 130 |> hex64() |> Rooms.create_room("free")
       {:ok, msg} = Rooms.send_message(room.id, sender_hash(), ciphertext(), iv())
 
       assert {:ok, expired} = Rooms.expire_room(room.id)
@@ -384,14 +432,14 @@ defmodule Stelgano.RoomsTest do
 
     test "room_exists? returns false for expired room" do
       rh = hex64(131)
-      {:ok, room} = Rooms.find_or_create_room(rh)
+      {:ok, room} = Rooms.create_room(rh, "free")
       Rooms.expire_room(room.id)
       refute Rooms.room_exists?(rh)
     end
 
     test "hard-deletes all RoomAccess rows for the expired room" do
       rh = hex64(132)
-      {:ok, room} = Rooms.find_or_create_room(rh)
+      {:ok, room} = Rooms.create_room(rh, "free")
 
       # Register two access records (two parties)
       Rooms.join_room(rh, hex64(133))
@@ -406,8 +454,8 @@ defmodule Stelgano.RoomsTest do
       rh_a = hex64(135)
       rh_b = hex64(136)
 
-      {:ok, room_a} = Rooms.find_or_create_room(rh_a)
-      {:ok, _room_b} = Rooms.find_or_create_room(rh_b)
+      {:ok, room_a} = Rooms.create_room(rh_a, "free")
+      {:ok, _room_b} = Rooms.create_room(rh_b, "free")
 
       Rooms.join_room(rh_a, hex64(137))
       Rooms.join_room(rh_b, hex64(138))
@@ -434,7 +482,7 @@ defmodule Stelgano.RoomsTest do
 
     test "active_rooms count increments on room creation" do
       before = Rooms.aggregate_metrics().active_rooms
-      140 |> hex64() |> Rooms.find_or_create_room()
+      140 |> hex64() |> Rooms.create_room("free")
       after_ = Rooms.aggregate_metrics().active_rooms
       assert after_ == before + 1
     end

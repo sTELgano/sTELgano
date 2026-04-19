@@ -77,6 +77,7 @@ defmodule StelganoWeb.ChatLive do
       |> assign(:paid_ttl_days, Monetization.paid_ttl_days())
       |> assign(:price_cents, Monetization.price_cents())
       |> assign(:currency, Monetization.currency())
+      |> assign(:preselected_tier, nil)
       |> assign(:_pending_phone, "")
       |> assign(:_pending_pin, "")
       |> assign(:editing, false)
@@ -108,12 +109,21 @@ defmodule StelganoWeb.ChatLive do
 
   # Phone handoff from /steg-number via sessionStorage (keeps phone out of the URL).
   @impl Phoenix.LiveView
-  def handle_event("prefill_phone", %{"phone" => phone}, socket)
-      when is_binary(phone) and phone != "" do
+  def handle_event("prefill_phone", %{"phone" => phone} = params, socket)
+      when is_binary(phone) and phone != "" and byte_size(phone) <= 32 do
     if socket.assigns.state == :entry and socket.assigns._pending_phone == "" do
+      # The handoff ships through client-controlled sessionStorage; only accept
+      # a known tier token, anything else collapses to nil (=> no auto-advance).
+      tier =
+        case Map.get(params, "tier") do
+          t when t in ["free", "paid"] -> t
+          _other -> nil
+        end
+
       {:noreply,
        socket
        |> assign(:_pending_phone, phone)
+       |> assign(:preselected_tier, tier)
        |> assign(:phone_locked, true)}
     else
       {:noreply, socket}
@@ -138,101 +148,89 @@ defmodule StelganoWeb.ChatLive do
     # stored alongside the room_hash.
     country_iso = Map.get(params, "country_iso")
 
-    # Check if room exists before join to detect new channel creation
-    room_existed = Stelgano.Rooms.room_exists?(room_hash)
-
     case Stelgano.Rooms.join_room(room_hash, access_hash) do
       {:ok, room} ->
-        is_new = not room_existed
+        join_existing_room(socket, room, room_hash, sender_hash)
 
-        # Bump telemetry counters exactly once per new room: the per-country
-        # lifetime total (if the client supplied a valid ISO) and the
-        # per-day global count.
-        if is_new do
-          if country_iso, do: Stelgano.CountryMetrics.increment_free(country_iso)
-          Stelgano.DailyMetrics.increment_free_new()
-        end
-
-        # If this is a new channel and monetization is enabled, show plan prompt
-        if is_new and Monetization.enabled?() do
-          socket =
-            socket
-            |> assign(:state, :new_channel)
-            |> assign(:room_id, room.id)
-            |> assign(:room_hash, room_hash)
-            |> assign(:sender_hash, sender_hash)
-            |> assign(:is_new_channel, true)
-            |> assign(:error, nil)
-            |> assign(:attempts_remaining, nil)
-
-          {:noreply, socket}
-        else
-          socket =
-            socket
-            |> assign(:state, :connecting)
-            |> assign(:room_id, room.id)
-            |> assign(:room_hash, room_hash)
-            |> assign(:sender_hash, sender_hash)
-            |> assign(:is_new_channel, is_new)
-            |> assign(:error, nil)
-            |> assign(:attempts_remaining, nil)
-
-          {:noreply,
-           push_event(socket, "channel_join_now", %{
-             room_id: room.id,
-             sender_hash: sender_hash,
-             room_hash: room_hash,
-             phone: socket.assigns._pending_phone
-           })}
-        end
+      {:error, :not_found} ->
+        start_new_channel_flow(socket, room_hash, access_hash, sender_hash, country_iso)
 
       {:error, :locked, remaining} ->
-        socket =
-          socket
-          |> assign(:state, :entry)
-          |> assign(:error, "Too many failed attempts. Try again in 30 minutes.")
-          |> assign(:attempts_remaining, remaining)
-
-        {:noreply, socket}
+        entry_error(socket, "Too many failed attempts. Try again in 30 minutes.", remaining)
 
       {:error, :unauthorized, remaining} ->
-        socket =
-          socket
-          |> assign(:state, :entry)
-          |> assign(:error, "Could not open this room.")
-          |> assign(:attempts_remaining, remaining)
-
-        {:noreply, socket}
+        entry_error(socket, "Could not open this room.", remaining)
 
       {:error, _reason} ->
-        socket =
-          socket
-          |> assign(:state, :entry)
-          |> assign(:error, "Could not open this room.")
-
-        {:noreply, socket}
+        entry_error(socket, "Could not open this room.", nil)
     end
   end
 
-  # User chose free tier or skipped — continue to chat
+  # User chose free tier or skipped — continue to chat.
+  # Only valid from :new_channel state; any other state means the room_hash /
+  # access_hash assigns are not populated yet (or belong to a different flow).
   @impl Phoenix.LiveView
-  def handle_event("continue_free", _params, socket) do
-    socket = assign(socket, :state, :connecting)
+  def handle_event("continue_free", _params, %{assigns: %{state: :new_channel}} = socket) do
+    case Stelgano.Rooms.create_room(socket.assigns.room_hash, "free") do
+      {:ok, _room} ->
+        # Bump telemetry counters exactly once per new room: the per-country
+        # lifetime total (if the client supplied a valid ISO) and the
+        # per-day global count.
+        if socket.assigns.country_iso,
+          do: Stelgano.CountryMetrics.increment_free(socket.assigns.country_iso)
 
+        Stelgano.DailyMetrics.increment_free_new()
+
+        # Now join the newly created room
+        case Stelgano.Rooms.join_room(socket.assigns.room_hash, socket.assigns.access_hash) do
+          {:ok, room} ->
+            socket =
+              socket
+              |> assign(:state, :connecting)
+              |> assign(:room_id, room.id)
+
+            {:noreply,
+             push_event(socket, "channel_join_now", %{
+               room_id: room.id,
+               sender_hash: socket.assigns.sender_hash,
+               room_hash: socket.assigns.room_hash,
+               phone: socket.assigns._pending_phone
+             })}
+
+          {:error, _reason} ->
+            {:noreply, assign(socket, :error, "Internal error: Could not join new channel.")}
+        end
+
+      {:error, _changeset} ->
+        {:noreply, assign(socket, :error, "Internal error: Could not create channel.")}
+    end
+  end
+
+  def handle_event("continue_free", _params, socket), do: {:noreply, socket}
+
+  # User chose paid tier from the plan-selection screen (new channel).
+  @impl Phoenix.LiveView
+  def handle_event("choose_paid", _params, %{assigns: %{state: :new_channel}} = socket) do
     {:noreply,
-     push_event(socket, "channel_join_now", %{
-       room_id: socket.assigns.room_id,
-       sender_hash: socket.assigns.sender_hash,
-       room_hash: socket.assigns.room_hash,
-       phone: socket.assigns._pending_phone
+     push_event(socket, "reverse_handoff", %{
+       phone: socket.assigns._pending_phone,
+       tier: "paid"
      })}
   end
 
-  # User wants to extend — redirect to steg-number page with payment flow
+  def handle_event("choose_paid", _params, socket), do: {:noreply, socket}
+
+  # "Extend" button from the chat header — only meaningful once in :chat.
   @impl Phoenix.LiveView
-  def handle_event("choose_paid", _params, socket) do
-    {:noreply, redirect(socket, to: ~p"/steg-number")}
+  def handle_event("go_to_upgrade", _params, %{assigns: %{state: :chat}} = socket) do
+    {:noreply,
+     push_event(socket, "reverse_handoff", %{
+       phone: socket.assigns._pending_phone,
+       tier: "paid"
+     })}
   end
+
+  def handle_event("go_to_upgrade", _params, socket), do: {:noreply, socket}
 
   # Handle TTL extension from channel redemption
   @impl Phoenix.LiveView
@@ -946,12 +944,13 @@ defmodule StelganoWeb.ChatLive do
             <% end %>
           </span>
           <%= if @monetization_enabled do %>
-            <.link
-              navigate={~p"/steg-number"}
+            <button
+              type="button"
+              phx-click="go_to_upgrade"
               class="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-[10px]"
             >
               Extend
-            </.link>
+            </button>
           <% end %>
         </div>
       <% end %>
@@ -1416,4 +1415,65 @@ defmodule StelganoWeb.ChatLive do
   defp can_type?(%{state: :chat, message: %{is_mine: false}}), do: true
   defp can_type?(%{state: :chat, message: %{is_mine: true}}), do: false
   defp can_type?(_assigns), do: false
+
+  # ---------------------------------------------------------------------------
+  # channel_authenticate branch helpers
+  # ---------------------------------------------------------------------------
+
+  # Room already exists → transition straight to :connecting and push the
+  # join event that kicks off the channel handshake client-side.
+  defp join_existing_room(socket, room, room_hash, sender_hash) do
+    socket =
+      socket
+      |> assign(:state, :connecting)
+      |> assign(:room_id, room.id)
+      |> assign(:room_hash, room_hash)
+      |> assign(:sender_hash, sender_hash)
+      |> assign(:is_new_channel, false)
+      |> assign(:error, nil)
+      |> assign(:attempts_remaining, nil)
+
+    {:noreply,
+     push_event(socket, "channel_join_now", %{
+       room_id: room.id,
+       sender_hash: sender_hash,
+       room_hash: room_hash,
+       phone: socket.assigns._pending_phone
+     })}
+  end
+
+  # Room does not exist → transition to :new_channel and either auto-create
+  # (free path / monetization disabled) or wait for the user to pick a tier.
+  defp start_new_channel_flow(socket, room_hash, access_hash, sender_hash, country_iso) do
+    socket =
+      socket
+      |> assign(:state, :new_channel)
+      |> assign(:room_hash, room_hash)
+      |> assign(:access_hash, access_hash)
+      |> assign(:sender_hash, sender_hash)
+      |> assign(:country_iso, country_iso)
+      |> assign(:is_new_channel, true)
+      |> assign(:error, nil)
+      |> assign(:attempts_remaining, nil)
+
+    if auto_free_new_channel?(socket) do
+      handle_event("continue_free", %{}, socket)
+    else
+      {:noreply, socket}
+    end
+  end
+
+  defp auto_free_new_channel?(socket) do
+    not Monetization.enabled?() or socket.assigns.preselected_tier == "free"
+  end
+
+  defp entry_error(socket, message, remaining) do
+    socket =
+      socket
+      |> assign(:state, :entry)
+      |> assign(:error, message)
+      |> assign(:attempts_remaining, remaining)
+
+    {:noreply, socket}
+  end
 end
