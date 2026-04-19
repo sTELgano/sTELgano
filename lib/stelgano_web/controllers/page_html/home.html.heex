@@ -151,8 +151,61 @@
         </div>
       </div>
     </div>
+      </div>
+    </div>
   </section>
 
+  <%!-- The N=1 Invariant --%>
+  <section class="px-4 sm:px-6 py-20 sm:py-32 max-w-7xl mx-auto relative overflow-hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <div class="space-y-8 animate-in slide-in-from-left-8">
+        <div>
+          <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
+            The Core Invariant
+          </h2>
+          <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display mb-6">
+            N=1 Messaging.
+          </h3>
+          <p class="text-slate-400 text-lg leading-relaxed">
+            sTELgano enforces a strict <span class="text-white font-bold">N=1 invariant</span> at the database level. 
+            At most, one message can exist per room at any given time.
+          </p>
+        </div>
+
+        <ul class="space-y-6">
+          <li
+            :for={
+              {title, desc, icon} <- [
+                {"Instant Annihilation",
+                 "The moment a reply is sent, the previous message is atomically wiped from the database in a single transaction.",
+                 "zap"},
+                {"No Chat History",
+                 "Because old messages are actively destroyed to make room for new ones, there is no scrollback. No logs. No history to recover.",
+                 "delete_row"},
+                {"Zero Long-Term Liability",
+                 "Even if a server is physically seized or fully compromised, there is nothing to extract except the single current ciphertext.",
+                 "shield_x"}
+              ]
+            }
+            class="flex items-start gap-4"
+          >
+            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+              <.icon name={icon} class="size-5 text-primary" />
+            </div>
+            <div>
+              <h4 class="text-white font-bold font-display mb-1">{title}</h4>
+              <p class="text-slate-500 text-sm leading-relaxed">{desc}</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="relative animate-in slide-in-from-right-8 duration-1000">
+        <div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full mix-blend-screen"></div>
+        <img src="/images/n_equals_1.png" alt="N=1 Messaging - Shattering the previous message" class="relative z-10 w-full max-w-lg mx-auto h-auto floating drop-shadow-[0_0_60px_rgba(16,185,129,0.3)]" />
+      </div>
+    </div>
+  </section>
   <%!-- Security Model --%>
   <section class="px-4 sm:px-6 py-20 sm:py-32 relative">
     <div class="max-w-4xl mx-auto">
