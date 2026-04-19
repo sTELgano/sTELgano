@@ -31,7 +31,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             Steganography is the art of hiding information in plain sight. Unlike cryptography, which makes a message unreadable, steganography makes the message invisible. The goal isn't to protect the content&mdash;it's to hide the fact that content exists at all.
           </p>
@@ -68,7 +68,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             Most digital steganography works by hiding data inside a carrier medium&mdash;an image, an audio file, a video. You embed your secret message in the noise floor of a JPEG or the inaudible frequencies of an MP3.
           </p>
@@ -103,7 +103,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <.premium_card class="p-8 sm:p-10 space-y-6">
+        <.premium_card class="p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             Contact-layer steganography takes a fundamentally different approach. Instead of hiding data inside a file, we hide the communication channel inside a phone contact.
           </p>
@@ -126,7 +126,7 @@
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-6">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
           <p class="text-slate-300 leading-relaxed font-medium">
             The steg number is a random phone number that serves as a cryptographic derivation seed. From this single number, the client derives everything needed for secure communication:
           </p>
@@ -207,7 +207,7 @@
         </div>
 
         <.premium_card class="p-0 overflow-hidden ring-1 ring-white/5 shadow-2xl">
-          <div class="bg-slate-950/90 p-8 sm:p-10 relative">
+          <div class="bg-slate-950/90 p-6 sm:p-8 md:p-10 relative">
             <div class="absolute top-0 right-0 p-4 opacity-5">
               <.icon name="cpu" class="size-32 text-white" />
             </div>
@@ -252,7 +252,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
           <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
         </div>
 
-        <div class="glass-card p-8 sm:p-10 space-y-4">
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-4">
           <ul class="space-y-4">
             <li
               :for={
