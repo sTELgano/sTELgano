@@ -70,31 +70,85 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-      <div
-        :for={
-          {icon, title, desc, i} <- [
-            {"eye_off", "Invisible by Design",
-             "No app icon to explain. No suspicious chat logs. Just a phone number in your contacts that opens a fully encrypted channel in your browser.",
-             0},
-            {"lock", "Zero-Knowledge Server",
-             "The server never sees your phone number, your PIN, or your messages. It stores only SHA-256 hashes and AES-256-GCM ciphertext. Even a full database breach reveals nothing.",
-             1},
-            {"zap", "No Accounts, No Traces",
-             "No email signup. No phone verification. No profile picture. You generate a number, pick a PIN, and start chatting. Close the tab and the session is gone.",
-             2}
-          ]
-        }
-        class="glass-card p-8 group relative overflow-hidden animate-in"
-        style={"animation-delay: #{i * 0.1}s"}
-      >
-        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-8 shadow-inner ring-1 ring-primary/20 group-hover:scale-110 transition-transform">
-          <.icon name={icon} class="size-7" />
+    <div class="space-y-32">
+      <%!-- Zero Knowledge --%>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="relative animate-in duration-1000 slide-in-from-left-8">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img src="/images/zero_knowledge_server.png" alt="Zero-Knowledge Architecture" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
         </div>
-        <h4 class="text-xl font-bold text-white mb-4 font-display">{title}</h4>
-        <p class="text-slate-400 leading-relaxed font-medium">
-          {desc}
-        </p>
+        
+        <div class="space-y-8 animate-in slide-in-from-right-8">
+          <div>
+            <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+              Zero-Knowledge Architecture.
+            </h3>
+            <p class="text-slate-400 text-lg leading-relaxed mb-6">
+              The server is entirely blind. It acts only as a dumb relay for hashes and ciphertext, knowing absolutely nothing about you or your data.
+            </p>
+          </div>
+          
+          <ul class="space-y-4">
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="lock_closed" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">Opaque by Default</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">No plaintext ever touches the backend. Even a full database breach reveals nothing but uncrackable hashes and AES-256-GCM ciphertext.</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="server" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">Untrusted Backend</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">The protocol is designed so you don't even have to trust us. The cryptography guarantees your privacy strictly on the client side.</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <%!-- Ephemeral Identity --%>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="order-2 lg:order-1 space-y-8 animate-in slide-in-from-left-8">
+          <div>
+            <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+              Ephemeral Identity.
+            </h3>
+            <p class="text-slate-400 text-lg leading-relaxed mb-6">
+              No accounts. No signups. No traces. Your identity is generated strictly on-the-fly and vanishes the moment you close the tab.
+            </p>
+          </div>
+          
+          <ul class="space-y-4">
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="user_minus" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">No Email, No Phone</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">We don't want to know who you are. The system is designed to prevent us from ever tying a session to a real-world identity.</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="sparkles" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">Memory-Only Sessions</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">Session keys are kept strictly in volatile memory. Close the browser, and the encryption keys are wiped from existence forever.</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="order-1 lg:order-2 relative animate-in duration-1000 slide-in-from-right-8">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img src="/images/ephemeral_identity.png" alt="Ephemeral Identity Concept" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
+        </div>
       </div>
     </div>
   </section>
