@@ -48,7 +48,7 @@ defmodule Stelgano.Jobs.ExpireTtlRoomsTest do
 
     test "does not expire rooms with no TTL" do
       rh = hex64(20)
-      {:ok, room} = Rooms.find_or_create_room(rh)
+      {:ok, room} = Rooms.create_room(rh, "free")
 
       assert :ok = ExpireTtlRooms.perform(%Oban.Job{args: %{}})
 

@@ -97,9 +97,11 @@ export const AnonChat = {
     // Phone handoff from /steg-number via sessionStorage (keeps phone out of URL).
     try {
       const handoff = sessionStorage.getItem("stelegano_handoff_phone");
+      const tierHandoff = sessionStorage.getItem("stelegano_handoff_tier");
       if (handoff) {
         sessionStorage.removeItem("stelegano_handoff_phone");
-        this.pushEvent("prefill_phone", { phone: handoff });
+        sessionStorage.removeItem("stelegano_handoff_tier");
+        this.pushEvent("prefill_phone", { phone: handoff, tier: tierHandoff });
       }
     } catch (_) {}
 
@@ -128,6 +130,14 @@ export const AnonChat = {
         const event = new Event("input", { bubbles: true });
         textarea.dispatchEvent(event);
       }
+    });
+
+    this.handleEvent("reverse_handoff", ({ phone, tier }) => {
+      try {
+        sessionStorage.setItem("stelegano_handoff_phone", phone);
+        if (tier) sessionStorage.setItem("stelegano_handoff_tier", tier);
+        window.location.href = "/steg-number";
+      } catch (_) {}
     });
 
     // Typing detection on textarea
@@ -452,6 +462,7 @@ export const AnonChat = {
       sessionStorage.removeItem("stelegano_extension_secret");
       sessionStorage.removeItem("stelgano_selected_country");
       sessionStorage.removeItem("stelegano_handoff_phone");
+      sessionStorage.removeItem("stelegano_handoff_tier");
     } catch (_) {}
     this.disconnectChannel();
   },
@@ -498,6 +509,17 @@ export const PhoneGenerator = {
     });
 
     // Synchronise countries logic removed -- now handled by native Elixir database.
+
+    // Phone handoff from /chat via sessionStorage (reverse handoff/upgrade)
+    try {
+      const handoff = sessionStorage.getItem("stelegano_handoff_phone");
+      const tierHandoff = sessionStorage.getItem("stelegano_handoff_tier");
+      if (handoff) {
+        sessionStorage.removeItem("stelegano_handoff_phone");
+        sessionStorage.removeItem("stelegano_handoff_tier");
+        this.pushEvent("restore_number", { phone: handoff, tier: tierHandoff });
+      }
+    } catch (_) {}
   },
 
   initGeneratorMode() {
@@ -612,6 +634,10 @@ export const PhoneGenerator = {
       }
     };
 
+    this.handleEvent("check_manual_number_trigger", ({ number }) => {
+      handleManualChange(number);
+    });
+
     input.addEventListener("input", () => {
       this.formatInput();
     });
@@ -661,10 +687,12 @@ export const ChannelHandoff = {
   mounted() {
     this.el.addEventListener("click", (e) => {
       const phone = this.el.dataset.phone;
+      const tier = this.el.dataset.tier;
       if (!phone) return;
       e.preventDefault();
       try {
         sessionStorage.setItem("stelegano_handoff_phone", phone);
+        if (tier) sessionStorage.setItem("stelegano_handoff_tier", tier);
       } catch (_) {}
       window.location.href = "/chat";
     });

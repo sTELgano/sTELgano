@@ -182,6 +182,15 @@ if config_env() == :prod do
         Example: https://stelgano.com/payment/callback
         """
 
+    receipt_email_domain =
+      System.get_env("PAYSTACK_RECEIPT_EMAIL_DOMAIN") ||
+        raise """
+        environment variable PAYSTACK_RECEIPT_EMAIL_DOMAIN is missing.
+        Must be a domain you control — Paystack requires an email on
+        transaction initialize and mails receipts to it. Set to your
+        deployment's host (e.g. the PHX_HOST value).
+        """
+
     config :stelgano, Stelgano.Monetization,
       enabled: true,
       provider: Stelgano.Monetization.Providers.Paystack,
@@ -193,7 +202,8 @@ if config_env() == :prod do
     config :stelgano, Stelgano.Monetization.Providers.Paystack,
       secret_key: paystack_secret,
       public_key: paystack_public,
-      callback_url: callback_url
+      callback_url: callback_url,
+      receipt_email_domain: receipt_email_domain
   end
 end
 

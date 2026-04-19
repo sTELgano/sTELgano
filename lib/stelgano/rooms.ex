@@ -30,39 +30,48 @@ defmodule Stelgano.Rooms do
   # ---------------------------------------------------------------------------
 
   @doc """
-  Finds an active room by `room_hash`, or creates it if none exists.
-
-  Returns `{:ok, room}` on success, `{:error, changeset}` on validation failure.
+  Finds an active room by `room_hash`. Returns `{:ok, room}` or `{:error, :not_found}`.
   """
-  @spec find_or_create_room(String.t()) :: {:ok, Room.t()} | {:error, Ecto.Changeset.t()}
-  def find_or_create_room(room_hash) when is_binary(room_hash) do
+  @spec get_active_room(String.t()) :: {:ok, Room.t()} | {:error, :not_found}
+  def get_active_room(room_hash) when is_binary(room_hash) do
     case Repo.get_by(Room, room_hash: room_hash, is_active: true) do
-      %Room{} = room ->
-        {:ok, room}
-
-      nil ->
-        %{room_hash: room_hash, ttl_expires_at: Monetization.default_ttl()}
-        |> Room.create_changeset()
-        |> Repo.insert()
+      %Room{} = room -> {:ok, room}
+      nil -> {:error, :not_found}
     end
+  end
+
+  @doc """
+  Explicitly creates a new room with a given tier.
+  """
+  @spec create_room(String.t(), String.t(), DateTime.t() | nil) ::
+          {:ok, Room.t()} | {:error, Ecto.Changeset.t()}
+  def create_room(room_hash, tier, ttl_expires_at \\ nil) do
+    # Default TTL if not provided
+    ttl = ttl_expires_at || Monetization.default_ttl()
+
+    %{room_hash: room_hash, tier: tier, ttl_expires_at: ttl}
+    |> Room.create_changeset()
+    |> Repo.insert()
   end
 
   @doc """
   Attempts to join a room using a `(room_hash, access_hash)` credential pair.
 
-  On first join with a new `access_hash`, the access record is created and the
-  join succeeds. On subsequent joins, the existing record is verified.
+  On first join with a new `access_hash` (and fewer than 2 existing accesses),
+  the access record is created and the join succeeds. On subsequent joins, the
+  existing record is verified. This function never creates the `Room` itself —
+  that is an explicit step via `create_room/3` from the plan-selection flow.
 
   ## Timing-side-channel pad
 
   Every call is padded to a floor of `config :stelgano, :join_time_floor_ms`
   (default 40ms, disabled in tests via 0). Without this, an attacker could
-  time the reply and classify arbitrary `room_hash` values as "existed
-  already" (fast path — single SELECT) vs. "just created by the probe"
-  (slow path — SELECT then INSERT into `rooms` and `room_access`),
+  time the reply and classify arbitrary `room_hash` values as "room exists"
+  (slow path — SELECT on `rooms` then SELECT/INSERT/UPDATE on `room_access`)
+  vs. "room does not exist" (fast path — single SELECT on `rooms`),
   enumerating live rooms despite the opaque `:not_found` error. The floor
-  is comfortably larger than the inter-path delta (~10ms locally) so the
-  two branches become indistinguishable over any real network.
+  is comfortably larger than the inter-path delta so the branches become
+  indistinguishable over any real network.
 
   ## Returns
 
@@ -79,9 +88,9 @@ defmodule Stelgano.Rooms do
   def join_room(room_hash, access_hash)
       when is_binary(room_hash) and is_binary(access_hash) do
     with_time_floor(fn ->
-      case find_or_create_room(room_hash) do
+      case get_active_room(room_hash) do
         {:ok, room} -> handle_access(room, access_hash)
-        {:error, _changeset} -> {:error, :not_found}
+        {:error, :not_found} -> {:error, :not_found}
       end
     end)
   end

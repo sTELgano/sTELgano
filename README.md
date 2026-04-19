@@ -120,6 +120,7 @@ mix phx.server   # → http://localhost:4000
 | `PAYSTACK_SECRET_KEY` | Paystack secret key (required if monetization enabled) |
 | `PAYSTACK_PUBLIC_KEY` | Paystack public key (required if monetization enabled) |
 | `PAYSTACK_CALLBACK_URL` | Post-payment redirect URL (e.g. `https://stelgano.com/payment/callback`) |
+| `PAYSTACK_RECEIPT_EMAIL_DOMAIN` | **Domain you control** — used as the `@domain` of the anonymous placeholder email we send to Paystack on initialize. Paystack mails receipts to this address; if the domain isn't yours, a third party receives them. Typically your `PHX_HOST`. Required when monetization is enabled. |
 
 Optional: `PORT` (default 4000), `POOL_SIZE` (default 10), `ADMIN_USERNAME` (default `admin`), salt overrides (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`), monetization tuning (`FREE_TTL_DAYS`, `PAID_TTL_DAYS`, `PRICE_CENTS`, `PAYMENT_CURRENCY`). See [.env.example](.env.example) for the full reference.
 

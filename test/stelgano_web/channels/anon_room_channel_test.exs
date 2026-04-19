@@ -33,8 +33,14 @@ defmodule StelganoWeb.AnonRoomChannelTest do
     Base.encode64(bytes)
   end
 
-  # Connect an anonymous socket and join a room in one step.
+  # Materialise the `Room` row, then connect and join in one step.
+  # `Rooms.join_room/2` no longer auto-creates rooms — that's a deliberate
+  # change so probe attackers can't pollute the table by guessing room_hashes.
+  # For channel tests, we pre-seed (ignoring "already exists" so helpers can
+  # be called repeatedly within a single test).
   defp connect_and_join(rh, ah, sh) do
+    seed_room(rh)
+
     {:ok, _reply, socket} =
       AnonSocket
       |> socket("anon_socket", %{})
@@ -46,13 +52,37 @@ defmodule StelganoWeb.AnonRoomChannelTest do
     socket
   end
 
+  defp seed_room(rh) do
+    case Rooms.create_room(rh, "free") do
+      {:ok, _room} ->
+        :ok
+
+      {:error, %Ecto.Changeset{errors: errors}} ->
+        if Keyword.has_key?(errors, :room_hash), do: :ok, else: {:error, errors}
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Join
   # ---------------------------------------------------------------------------
 
   describe "join" do
-    test "creates room on first join and returns room_id" do
+    test "returns not_found when the room has not been materialised yet" do
+      # join_room/2 no longer auto-creates rooms — tests must seed.
       rh = hex64(10 + 2000)
+
+      assert {:error, %{reason: "not_found"}} =
+               AnonSocket
+               |> socket("anon_socket", %{})
+               |> subscribe_and_join(StelganoWeb.AnonRoomChannel, "anon_room:#{rh}", %{
+                 "access_hash" => hex64(11 + 2000),
+                 "sender_hash" => hex64(12 + 2000)
+               })
+    end
+
+    test "returns room_id on first join once the room is materialised" do
+      rh = hex64(10_500 + 2000)
+      seed_room(rh)
 
       {:ok, reply, _socket} =
         AnonSocket
@@ -75,6 +105,7 @@ defmodule StelganoWeb.AnonRoomChannelTest do
       assert_reply ref, :ok, _
 
       # Second client joins and should receive the live message
+      # (Room already materialised by connect_and_join above.)
       {:ok, reply, _socket2} =
         AnonSocket
         |> socket("anon_socket", %{})
@@ -115,7 +146,9 @@ defmodule StelganoWeb.AnonRoomChannelTest do
       ah = hex64(41 + 2000)
       sh = hex64(42 + 2000)
 
-      # Join first to create the room, then expire it
+      seed_room(rh)
+
+      # Join the (now existing) room, then expire it.
       {:ok, _reply, socket} =
         AnonSocket
         |> socket("anon_socket", %{})

@@ -248,6 +248,31 @@ defmodule StelganoWeb.StegNumberLive do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("restore_number", %{"phone" => phone} = params, socket)
+      when is_binary(phone) and byte_size(phone) > 0 and byte_size(phone) <= 32 do
+    # Values arrive from client-controlled sessionStorage. Guard on the socket
+    # types/shape before storing or echoing anything back.
+    tier =
+      case Map.get(params, "tier") do
+        t when t in ["free", "paid"] -> t
+        _other -> nil
+      end
+
+    # When a number is restored (e.g. from chat upgrade flow), we force manual
+    # mode and pre-select the tier.
+    socket =
+      socket
+      |> assign(:entry_mode, :manual)
+      |> assign(:manual_number, phone)
+      |> assign(:selected_tier, tier)
+      |> push_event("check_manual_number_trigger", %{number: phone})
+
+    {:noreply, socket}
+  end
+
+  def handle_event("restore_number", _params, socket), do: {:noreply, socket}
+
+  @impl Phoenix.LiveView
   def handle_event("restore_country", %{"country" => country}, socket) do
     # Validate country against available list
     found = Enum.find(socket.assigns.all_countries, fn {_name, v, _iso} -> v == country end)
@@ -590,8 +615,11 @@ defmodule StelganoWeb.StegNumberLive do
               <% end %>
 
               <%!-- Promotion / Tier Selection --%>
-              <%= if (@entry_mode == :manual and @availability == :available and @monetization_enabled) or
-                     (@entry_mode == :generate and not is_nil(@generated_number) and @availability == :available and @monetization_enabled) do %>
+              <%= if @monetization_enabled and (
+                    (@entry_mode == :manual and @availability == :available) or
+                    (@entry_mode == :generate and not is_nil(@generated_number) and @availability == :available) or
+                    (@availability == :taken and @room_details && @room_details.tier == "free")
+                  ) do %>
                 <div class="glass-card p-6 space-y-6 border-emerald-500/20 shadow-emerald-500/5 animate-in">
                   <h3 class="text-xs font-bold uppercase tracking-widest text-emerald-500">
                     Tier Selection
@@ -666,6 +694,7 @@ defmodule StelganoWeb.StegNumberLive do
                         _ -> ""
                       end
                     }
+                    data-tier={@selected_tier}
                     class={[
                       "w-full py-5 rounded-2xl flex items-center justify-center gap-3 font-bold uppercase tracking-widest transition-all",
                       "bg-white text-slate-950 shadow-xl hover:scale-[1.02] hover:shadow-white/10"
@@ -685,7 +714,7 @@ defmodule StelganoWeb.StegNumberLive do
                   </p>
                 <% end %>
 
-                <%= if @availability == :available and @selected_tier == "paid" do %>
+                <%= if (@availability == :available or (@availability == :taken and @room_details && @room_details.tier == "free")) and @selected_tier == "paid" do %>
                   <button
                     id="checkout-btn"
                     phx-hook="PaymentInitiator"

@@ -65,6 +65,13 @@ breaking protocol change increments the major version and requires a migration.
 - Removed `deleted_at` column from messages table (migration `20260416000001`)
 - Updated UI copy throughout to use "steg number" terminology consistently
 - Improved code quality: added type specs, fixed Credo linting issues, refactored pipe chains
+- `Rooms.join_room/2` no longer auto-creates the `Room` row. Room creation is now an explicit step via `Rooms.create_room/3`, invoked from the plan-selection flow in `ChatLive.handle_event("continue_free", ...)`. Removes a resource-exhaustion surface where any client probing arbitrary `room_hash` values would pollute the `rooms` table. `find_or_create_room/1` is replaced by `get_active_room/1` (read-only) + `create_room/3` (explicit insert).
+- `AnonRoomChannel.join/3` now validates all hex64 inputs (room_hash, sender_hash) **before** touching the DB. Previously, a malformed `sender_hash` on a non-existent room would leak `:not_found` instead of `:invalid_sender`; the reordered validator surfaces `:invalid_sender` without any DB work.
+
+### Security
+- Paystack's `/transaction/initialize` now uses a placeholder email derived from the token_hash, with the `@domain` part sourced from a new required env var `PAYSTACK_RECEIPT_EMAIL_DOMAIN`. Previously, the domain was hardcoded to `stelgano.com` — any operator who didn't own that domain would have had their payment receipts delivered to whoever did. The env var must be set to a domain the operator controls (typically `PHX_HOST`); `runtime.exs` raises on boot if monetization is enabled without it.
+- `ChatLive.handle_event/3` clauses for `continue_free`, `choose_paid`, and `go_to_upgrade` now carry pattern-matched state guards (`:new_channel` / `:chat`) with catch-all fallbacks. Stray client events from other states are ignored instead of crashing on missing assigns or echoing data from the wrong flow.
+- `ChatLive.handle_event("prefill_phone", …)` and `StegNumberLive.handle_event("restore_number", …)` now validate the handoff phone length (`byte_size <= 32`) and whitelist the handoff tier to `"free" | "paid" | nil`. Values arrive from client-controlled `sessionStorage` and were previously stored and echoed back unchecked.
 
 ---
 

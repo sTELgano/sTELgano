@@ -59,9 +59,13 @@ defmodule StelganoWeb.AnonRoomChannel do
     access_hash = Map.get(payload, "access_hash", "")
     raw_sender = Map.get(payload, "sender_hash", "")
 
+    # Validate all hex64 inputs up-front — no DB work for malformed payloads.
+    # (`Rooms.join_room/2` no longer auto-creates rooms, so putting the sender
+    # check after the join would leak `:not_found` for malformed senders that
+    # previously returned `:invalid_sender`.)
     with :ok <- validate_hex64(room_hash, :invalid_room),
-         {:ok, room} <- Rooms.join_room(room_hash, access_hash),
-         :ok <- validate_hex64(raw_sender, :invalid_sender) do
+         :ok <- validate_hex64(raw_sender, :invalid_sender),
+         {:ok, room} <- Rooms.join_room(room_hash, access_hash) do
       socket =
         socket
         |> assign(:room_id, room.id)

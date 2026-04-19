@@ -16,7 +16,8 @@ defmodule Stelgano.Monetization.Providers.PaystackTest do
     Application.put_env(:stelgano, Paystack,
       secret_key: "sk_test_secret",
       public_key: "pk_test_public",
-      callback_url: "https://test.stelgano.com/payment/callback"
+      callback_url: "https://test.stelgano.com/payment/callback",
+      receipt_email_domain: "test.stelgano.com"
     )
 
     Application.put_env(:stelgano, :req_test_enabled, true)

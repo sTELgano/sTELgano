@@ -17,12 +17,21 @@ defmodule Stelgano.Monetization.Providers.Paystack do
   - `PAYSTACK_PUBLIC_KEY` — Paystack public key (starts with `pk_`)
   - `PAYSTACK_CALLBACK_URL` — URL to redirect after payment (e.g.
     `https://stelgano.com/payment/callback`)
+  - `PAYSTACK_RECEIPT_EMAIL_DOMAIN` — a domain the operator **controls**,
+    used as the `@domain` part of the anonymous placeholder email sent
+    to Paystack (Paystack requires an email on `/transaction/initialize`
+    and mails receipts to it). The operator must own this domain — if
+    it's owned by a third party, every transaction receipt is delivered
+    to them. No MX record is fine; undeliverable is the desired outcome.
 
   ## Privacy
 
   The Paystack transaction contains only the `token_hash` as reference.
-  The user provides their email directly to Paystack's hosted page.
-  No room_hash, steg number, or user identifier is sent to Paystack.
+  Because Paystack's API requires an email on initialize, we supply a
+  placeholder derived from the `token_hash` (see `initialize/3`) so the
+  user is not prompted for a real one. The `token_hash` is already the
+  transaction reference — the email prefix reveals no additional info
+  to Paystack. No room_hash, steg number, or user identifier is sent.
   """
 
   @behaviour Stelgano.Monetization.PaymentProvider
@@ -33,7 +42,10 @@ defmodule Stelgano.Monetization.Providers.Paystack do
   def initialize(token_hash, amount_cents, currency) do
     callback_url = paystack_config(:callback_url)
 
+    email = placeholder_email(token_hash)
+
     body = %{
+      email: email,
       reference: token_hash,
       amount: amount_cents,
       currency: currency,
@@ -140,5 +152,13 @@ defmodule Stelgano.Monetization.Providers.Paystack do
     :stelgano
     |> Application.get_env(__MODULE__, [])
     |> Keyword.fetch!(key)
+  end
+
+  # Paystack's `/transaction/initialize` requires an email and mails a
+  # receipt to it. The operator configures `receipt_email_domain` to a
+  # domain they own so receipts land in (or bounce from) infrastructure
+  # they control — never a third party's mailbox.
+  defp placeholder_email(token_hash) do
+    "anonymous+#{String.slice(token_hash, 0, 8)}@#{paystack_config(:receipt_email_domain)}"
   end
 end
