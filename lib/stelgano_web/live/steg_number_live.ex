@@ -53,7 +53,7 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:all_countries, Countries.list())
       # Will be populated on select/search
       |> assign(:countries, [])
-      |> assign(:selected_tier, nil)
+      |> assign(:selected_tier, "free")
       |> assign(:manual_error, nil)
       # Per-LV-session ring buffer of availability-check timestamps (ms).
       # Limits manual-entry probing to `@check_limit` per
@@ -89,7 +89,7 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:copied, false)
       |> assign(:availability, availability)
       |> assign(:generating, false)
-      |> assign(:selected_tier, nil)
+      |> assign(:selected_tier, "free")
 
     {:noreply, socket}
   end
@@ -163,7 +163,7 @@ defmodule StelganoWeb.StegNumberLive do
       |> assign(:manual_number, "")
       |> assign(:room_details, nil)
       |> assign(:availability, :idle)
-      |> assign(:selected_tier, nil)
+      |> assign(:selected_tier, "free")
 
     {:noreply, socket}
   end
@@ -187,7 +187,7 @@ defmodule StelganoWeb.StegNumberLive do
          manual_number: number,
          manual_error: error,
          availability: :idle,
-         selected_tier: nil
+         selected_tier: "free"
        )}
     end
   end
@@ -471,8 +471,29 @@ defmodule StelganoWeb.StegNumberLive do
 
                     <%= if @generated_number do %>
                       <div class="relative z-10 space-y-6">
-                        <div class="font-mono font-black text-white tracking-widest text-2xl sm:text-5xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] break-all px-2">
-                          {@generated_number.display}
+                        <div class="flex flex-col items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            phx-click="copied"
+                            data-number={@generated_number.e164}
+                            id="copy-generated-btn"
+                            class="font-mono font-black text-white tracking-widest text-2xl sm:text-5xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] break-all px-2 relative group hover:scale-[1.02] transition-transform"
+                          >
+                            {@generated_number.display}
+                            <div class="absolute -right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
+                              <.icon name={if @copied, do: "check_circle", else: "clipboard"} class={["size-5", if(@copied, do: "text-emerald-500", else: "text-slate-400 hover:text-white")]} />
+                            </div>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            phx-click="copied"
+                            data-number={@generated_number.e164}
+                            class="text-[10px] uppercase font-bold text-slate-500 hover:text-white transition-colors flex items-center gap-1 sm:hidden mt-2"
+                          >
+                            <.icon name={if @copied, do: "check_circle", else: "clipboard"} class={["size-4", if(@copied, do: "text-emerald-500", else: "")]} />
+                            {if @copied, do: "Copied!", else: "Tap to copy"}
+                          </button>
                         </div>
 
                         <%= if @availability == :available do %>
@@ -481,43 +502,14 @@ defmodule StelganoWeb.StegNumberLive do
                           </div>
                         <% end %>
 
-                        <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-                          <button
-                            type="button"
-                            phx-click="copied"
-                            data-number={@generated_number.e164}
-                            id="copy-generated-btn"
-                            class={[
-                              "w-full sm:w-auto flex items-center justify-center gap-2 py-4 px-8 rounded-2xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all duration-300",
-                              if(@copied,
-                                do:
-                                  "bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] scale-[1.02]",
-                                else:
-                                  "bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-emerald-500/30"
-                              )
-                            ]}
-                          >
-                            <%= if @copied do %>
-                              <.icon
-                                name="check_circle"
-                                class="size-4 animate-in zoom-in duration-300"
-                              /> Copied
-                            <% else %>
-                              <.icon
-                                name="clipboard"
-                                class="size-4 group-hover:scale-110 transition-transform"
-                              /> Copy Number
-                            <% end %>
-                          </button>
-
+                        <div class="pt-2">
                           <button
                             type="button"
                             id="regen-btn"
                             class={[
-                              "w-full sm:w-auto flex items-center justify-center gap-2 py-4 px-8 rounded-2xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all duration-300",
-                              "bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-primary/30",
-                              !@selected_country &&
-                                "opacity-20 cursor-not-allowed grayscale pointer-events-none"
+                              "text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 mx-auto",
+                              "text-slate-500 hover:text-primary",
+                              !@selected_country && "opacity-20 cursor-not-allowed pointer-events-none"
                             ]}
                             title="Regenerate"
                             disabled={is_nil(@selected_country) or @generating}
@@ -525,17 +517,22 @@ defmodule StelganoWeb.StegNumberLive do
                             <.icon
                               name="refresh_cw"
                               class={[
-                                "size-4 text-primary transition-transform duration-700",
+                                "size-3 transition-transform duration-700",
                                 @generating && "animate-spin"
                               ]}
                             />
-                            {if @generating, do: "Generating...", else: "Refresh"}
+                            {if @generating, do: "Generating...", else: "Generate Another Number"}
                           </button>
                         </div>
                       </div>
                     <% else %>
-                      <div class="relative z-10 py-6 text-slate-600 font-bold uppercase tracking-widest text-xs">
-                        {if @generating, do: "Generating...", else: "Select country to generate"}
+                      <div class="relative z-10 py-12 flex flex-col items-center justify-center gap-4 text-slate-500">
+                        <div class="size-16 rounded-full bg-white/5 flex items-center justify-center border border-white/5 animate-pulse">
+                          <.icon name="globe_americas" class="size-8" />
+                        </div>
+                        <div class="font-bold uppercase tracking-widest text-[10px] sm:text-xs">
+                          {if @generating, do: "Generating...", else: "Select country to generate"}
+                        </div>
                       </div>
                     <% end %>
                   </div>
@@ -630,27 +627,27 @@ defmodule StelganoWeb.StegNumberLive do
                     (@entry_mode == :generate and not is_nil(@generated_number) and @availability == :available) or
                     (@availability == :taken and @room_details && @room_details.tier == "free")
                   ) do %>
-                <div class="glass-card p-6 sm:p-12 space-y-6 border-emerald-500/20 shadow-emerald-500/5 animate-in">
-                  <h3 class="text-xs font-bold uppercase tracking-widest text-emerald-500">
-                    Tier Selection
+                <div class="space-y-3 animate-in pt-4">
+                  <h3 class="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 ml-1">
+                    Select Channel Tier
                   </h3>
-                  <div class="space-y-3">
+                  <div class="flex flex-col sm:flex-row gap-3">
                     <button
                       phx-click="select_tier"
                       phx-value-tier="free"
                       class={[
-                        "w-full p-4 rounded-xl border text-left transition-all",
+                        "flex-1 p-4 rounded-xl border text-left transition-all",
                         if(@selected_tier == "free",
-                          do: "bg-white/10 border-white/20 ring-2 ring-white/20",
+                          do: "bg-white/10 border-white/30 shadow-inner ring-1 ring-white/10",
                           else: "bg-white/5 border-white/5 hover:border-white/20"
                         )
                       ]}
                     >
                       <div class="flex justify-between items-center mb-1">
-                        <span class="font-bold text-white text-sm">Free Tier</span>
-                        <span class="text-[10px] font-black uppercase text-slate-500">Default</span>
+                        <span class="font-bold text-white text-xs">Free Tier</span>
+                        <span class="text-[9px] font-black uppercase text-slate-500">Default</span>
                       </div>
-                      <p class="text-[10px] text-slate-400 uppercase tracking-widest">
+                      <p class="text-[9px] text-slate-400 uppercase tracking-widest">
                         Expires in {@free_ttl_days} Days
                       </p>
                     </button>
@@ -659,20 +656,20 @@ defmodule StelganoWeb.StegNumberLive do
                       phx-click="select_tier"
                       phx-value-tier="paid"
                       class={[
-                        "w-full p-4 rounded-xl border text-left transition-all group",
+                        "flex-1 p-4 rounded-xl border text-left transition-all group",
                         if(@selected_tier == "paid",
-                          do: "bg-primary/10 border-primary/20 ring-2 ring-primary/20",
+                          do: "bg-primary/10 border-primary/30 shadow-inner ring-1 ring-primary/20",
                           else: "bg-white/5 border-white/5 hover:border-primary/20"
                         )
                       ]}
                     >
                       <div class="flex justify-between items-center mb-1">
-                        <span class="font-bold text-primary text-sm">Dedicated Tier</span>
-                        <span class="text-[10px] font-black uppercase text-primary/60">
+                        <span class="font-bold text-primary text-xs">Dedicated Tier</span>
+                        <span class="text-[9px] font-black uppercase text-primary/60">
                           Best Value
                         </span>
                       </div>
-                      <p class="text-[10px] text-slate-400 uppercase tracking-widest">
+                      <p class="text-[9px] text-slate-400 uppercase tracking-widest">
                         1 Year &mdash; {format_price(@price_cents, @currency)}
                       </p>
                     </button>
