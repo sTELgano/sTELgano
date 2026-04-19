@@ -163,6 +163,19 @@ defmodule StelganoWeb.ChatLive do
     end
   end
 
+  # Client-side phone validation failed. The JS hook calls libphonenumber-js
+  # before hashing; anything that doesn't parse as a valid E.164 number is
+  # bounced here so the user never reaches the plan-selection screen with a
+  # junk input. The server has no plaintext phone to validate itself.
+  @impl Phoenix.LiveView
+  def handle_event("entry_invalid_phone", _params, socket) do
+    entry_error(
+      socket,
+      "That doesn't look like a valid steg number. Generate one from the steg-number page.",
+      nil
+    )
+  end
+
   # User chose free tier or skipped — continue to chat.
   # Only valid from :new_channel state; any other state means the room_hash /
   # access_hash assigns are not populated yet (or belong to a different flow).
