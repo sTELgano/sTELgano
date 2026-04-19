@@ -72,8 +72,8 @@ defmodule StelganoWeb.Layouts do
 
           <div class="flex items-center gap-3">
             <%= if assigns[:view_module] not in [StelganoWeb.ChatLive, StelganoWeb.StegNumberLive] do %>
-              <.link navigate={~p"/steg-number"} class="btn-primary py-2 px-4 text-[10px] sm:text-xs">
-                Start Chat
+              <.link navigate={~p"/chat"} class="btn-primary py-2 px-4 text-[10px] sm:text-xs">
+                Open Chat
               </.link>
             <% end %>
 
@@ -158,11 +158,11 @@ defmodule StelganoWeb.Layouts do
 
           <div class="mt-auto">
             <.link
-              navigate={~p"/steg-number"}
+              navigate={~p"/chat"}
               class="btn-primary w-full py-3 text-xs"
               phx-click={JS.hide(to: "#mobile-menu")}
             >
-              Secure Login
+              Open Chat
             </.link>
           </div>
         </nav>
