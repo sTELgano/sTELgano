@@ -160,9 +160,6 @@ defmodule StelganoWeb.ChatLive do
 
       {:error, :unauthorized, remaining} ->
         entry_error(socket, "Could not open this room.", remaining)
-
-      {:error, _reason} ->
-        entry_error(socket, "Could not open this room.", nil)
     end
   end
 
