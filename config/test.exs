@@ -62,3 +62,9 @@ config :stelgano, :join_time_floor_ms, 0
 # Disable the Monetization.redeem_token temporal-correlation jitter in tests
 # to keep the suite fast. Production uses the default (up to 5000ms).
 config :stelgano, :redeem_token_jitter_ms, 0
+
+# Route outbound Req calls through Req.Test plugs. Every test that issues
+# a request must register a stub with `Req.Test.stub/2`. Set globally
+# (rather than per-test) so concurrent `Application.delete_env` calls
+# from parallel test modules cannot race and briefly toggle it off.
+config :stelgano, :req_test_enabled, true

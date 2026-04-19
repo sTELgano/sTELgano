@@ -23,6 +23,24 @@ defmodule Stelgano.Monetization.Providers.Paystack do
     and mails receipts to it). The operator must own this domain — if
     it's owned by a third party, every transaction receipt is delivered
     to them. No MX record is fine; undeliverable is the desired outcome.
+  - `PAYSTACK_SETTLEMENT_CURRENCY` — optional. Overrides the display
+    currency (`PAYMENT_CURRENCY`) when submitting to Paystack. Useful
+    when the merchant account only accepts a specific currency (e.g.
+    show USD, settle in KES). When unset, no conversion happens.
+  - `PAYSTACK_FX_BUFFER_PCT` — optional, default `5`. Percent added on
+    top of the converted amount to absorb FX drift between the cached
+    rate and the moment the charge settles. Ignored when no conversion.
+  - `PAYMENT_FX_FALLBACK_RATE` — optional. Seeds `FxRate` so the first
+    payment after a cold start still works if the rate API is down.
+
+  ## Settlement-currency conversion
+
+  When `settlement_currency` differs from the amount's currency,
+  `initialize/3` fetches the current rate from `Stelgano.Monetization.FxRate`,
+  multiplies by `(1 + fx_buffer_pct / 100)`, rounds to the nearest
+  integer cent of the settlement currency, and sends that to Paystack.
+  The `FxRate` GenServer is started conditionally from the supervision
+  tree — see `child_specs/0`.
 
   ## Privacy
 
@@ -36,36 +54,98 @@ defmodule Stelgano.Monetization.Providers.Paystack do
 
   @behaviour Stelgano.Monetization.PaymentProvider
 
+  alias Stelgano.Monetization.FxRate
+
   require Logger
 
   @impl Stelgano.Monetization.PaymentProvider
   def initialize(token_hash, amount_cents, currency) do
-    callback_url = paystack_config(:callback_url)
+    with {:ok, final_amount, final_currency} <- convert_if_needed(amount_cents, currency) do
+      callback_url = paystack_config(:callback_url)
 
-    email = placeholder_email(token_hash)
+      body = %{
+        email: placeholder_email(token_hash),
+        reference: token_hash,
+        amount: final_amount,
+        currency: final_currency,
+        callback_url: callback_url,
+        channels: ["card", "bank", "ussd", "mobile_money"]
+      }
 
-    body = %{
-      email: email,
-      reference: token_hash,
-      amount: amount_cents,
-      currency: currency,
-      callback_url: callback_url,
-      channels: ["card", "bank", "ussd", "mobile_money"]
-    }
+      req = build_req()
 
-    req = build_req()
+      case Req.post(req, url: "/transaction/initialize", json: body) do
+        {:ok, %{status: 200, body: %{"status" => true, "data" => %{"authorization_url" => url}}}} ->
+          {:ok, url}
 
-    case Req.post(req, url: "/transaction/initialize", json: body) do
-      {:ok, %{status: 200, body: %{"status" => true, "data" => %{"authorization_url" => url}}}} ->
-        {:ok, url}
+        {:ok, %{body: resp_body}} ->
+          Logger.error("Paystack initialize failed: #{inspect(resp_body)}")
+          {:error, :provider_error}
 
-      {:ok, %{body: resp_body}} ->
-        Logger.error("Paystack initialize failed: #{inspect(resp_body)}")
-        {:error, :provider_error}
+        {:error, reason} ->
+          Logger.error("Paystack request failed: #{inspect(reason)}")
+          {:error, :provider_unavailable}
+      end
+    end
+  end
 
-      {:error, reason} ->
-        Logger.error("Paystack request failed: #{inspect(reason)}")
-        {:error, :provider_unavailable}
+  @doc """
+  Settlement currency submitted to Paystack. Defaults to
+  `Stelgano.Monetization.currency/0` (no conversion) when unset.
+  """
+  @spec settlement_currency() :: String.t()
+  def settlement_currency do
+    paystack_config_opt(:settlement_currency) || Stelgano.Monetization.currency()
+  end
+
+  @doc "Percent buffer added on top of converted amounts. Default 5."
+  @spec fx_buffer_pct() :: non_neg_integer()
+  def fx_buffer_pct do
+    paystack_config_opt(:fx_buffer_pct, 5)
+  end
+
+  @doc "Seed rate for `FxRate`, or nil if not configured."
+  @spec fx_fallback_rate() :: Decimal.t() | nil
+  def fx_fallback_rate do
+    paystack_config_opt(:fx_fallback_rate)
+  end
+
+  @doc """
+  Returns `true` when the display currency differs from
+  `settlement_currency/0` and conversion is required at payment time.
+  """
+  @spec fx_conversion_needed?() :: boolean()
+  def fx_conversion_needed? do
+    settlement_currency() != Stelgano.Monetization.currency()
+  end
+
+  @doc """
+  Supervisor child specs needed by this adapter.
+
+  Returns `[]` unless Paystack is the active provider and
+  `fx_conversion_needed?/0` is `true`; in that case returns a single
+  `FxRate` child spec wired to the configured currency pair and
+  fallback rate.
+  """
+  @spec child_specs() :: [Supervisor.child_spec() | {module(), term()}]
+  def child_specs do
+    cond do
+      not Stelgano.Monetization.enabled?() ->
+        []
+
+      Stelgano.Monetization.provider() != __MODULE__ ->
+        []
+
+      not fx_conversion_needed?() ->
+        []
+
+      true ->
+        [
+          {FxRate,
+           base: Stelgano.Monetization.currency(),
+           quote: settlement_currency(),
+           fallback: fx_fallback_rate()}
+        ]
     end
   end
 
@@ -152,6 +232,53 @@ defmodule Stelgano.Monetization.Providers.Paystack do
     :stelgano
     |> Application.get_env(__MODULE__, [])
     |> Keyword.fetch!(key)
+  end
+
+  defp paystack_config_opt(key, default \\ nil) do
+    :stelgano
+    |> Application.get_env(__MODULE__, [])
+    |> Keyword.get(key, default)
+  end
+
+  defp convert_if_needed(amount_cents, currency) do
+    if fx_conversion_needed?() do
+      settlement = settlement_currency()
+
+      case FxRate.current() do
+        {:ok, rate} ->
+          converted = apply_conversion(amount_cents, rate, fx_buffer_pct())
+
+          Logger.info(
+            "Paystack: converted #{amount_cents} #{currency} -> #{converted} #{settlement} " <>
+              "(rate=#{rate}, buffer=#{fx_buffer_pct()}%)"
+          )
+
+          {:ok, converted, settlement}
+
+        {:error, :unavailable} ->
+          Logger.error(
+            "Paystack: FX rate #{currency}->#{settlement} unavailable; refusing to initialize"
+          )
+
+          {:error, :fx_rate_unavailable}
+      end
+    else
+      {:ok, amount_cents, currency}
+    end
+  end
+
+  defp apply_conversion(amount_cents, rate, buffer_pct) do
+    buffer_mult =
+      (100 + buffer_pct)
+      |> Decimal.new()
+      |> Decimal.div(Decimal.new(100))
+
+    amount_cents
+    |> Decimal.new()
+    |> Decimal.mult(rate)
+    |> Decimal.mult(buffer_mult)
+    |> Decimal.round(0)
+    |> Decimal.to_integer()
   end
 
   # Paystack's `/transaction/initialize` requires an email and mails a

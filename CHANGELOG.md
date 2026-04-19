@@ -57,6 +57,8 @@ breaking protocol change increments the major version and requires a migration.
 - New channel detection — prompts plan selection when user enters a number that creates a new room
 - Re-enabled manual phone entry in chat for returning to existing channels
 - Raw body reader plug for webhook signature verification
+- `Stelgano.Monetization.FxRate` — in-memory GenServer caching one `base→quote` exchange rate, refreshed every 24h from Fawazahmed0's keyless public currency-api CDN. Started conditionally via `Paystack.child_specs/0` only when `PAYSTACK_SETTLEMENT_CURRENCY` differs from `PAYMENT_CURRENCY`.
+- Paystack settlement-currency conversion: UI keeps showing `PAYMENT_CURRENCY` (e.g. USD) while the adapter converts amounts to `PAYSTACK_SETTLEMENT_CURRENCY` (e.g. KES) at payment-initialize time, with a `PAYSTACK_FX_BUFFER_PCT` (default 5%) buffer to absorb FX drift and a `PAYMENT_FX_FALLBACK_RATE` seed for cold-start resilience.
 
 ### Changed
 - Replaced Heroicons with Lucide Icons (`lucide_icons` Elixir package)

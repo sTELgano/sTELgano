@@ -199,11 +199,24 @@ if config_env() == :prod do
       price_cents: String.to_integer(System.get_env("PRICE_CENTS", "200")),
       currency: System.get_env("PAYMENT_CURRENCY", "USD")
 
+    settlement_currency = System.get_env("PAYSTACK_SETTLEMENT_CURRENCY")
+    fx_buffer_pct = String.to_integer(System.get_env("PAYSTACK_FX_BUFFER_PCT", "5"))
+
+    fx_fallback_rate =
+      case System.get_env("PAYMENT_FX_FALLBACK_RATE") do
+        nil -> nil
+        "" -> nil
+        raw -> Decimal.new(raw)
+      end
+
     config :stelgano, Stelgano.Monetization.Providers.Paystack,
       secret_key: paystack_secret,
       public_key: paystack_public,
       callback_url: callback_url,
-      receipt_email_domain: receipt_email_domain
+      receipt_email_domain: receipt_email_domain,
+      settlement_currency: settlement_currency,
+      fx_buffer_pct: fx_buffer_pct,
+      fx_fallback_rate: fx_fallback_rate
   end
 end
 

@@ -17,19 +17,25 @@ defmodule Stelgano.Application do
 
   use Application
 
+  alias Stelgano.Monetization.Providers.Paystack
+
   @impl Application
   def start(_type, _args) do
-    children = [
-      StelganoWeb.Telemetry,
-      Stelgano.Repo,
-      {DNSCluster, query: Application.get_env(:stelgano, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Stelgano.PubSub},
-      # Oban — background jobs for cleanup and TTL expiry
-      {Oban, Application.fetch_env!(:stelgano, Oban)},
-      # PlugAttack ETS table for IP-based rate limiting
-      {PlugAttack.Storage.Ets, name: :stelgano_rate_limiter, clean_period: 60_000},
-      StelganoWeb.Endpoint
-    ]
+    children =
+      Enum.concat([
+        [
+          StelganoWeb.Telemetry,
+          Stelgano.Repo,
+          {DNSCluster, query: Application.get_env(:stelgano, :dns_cluster_query) || :ignore},
+          {Phoenix.PubSub, name: Stelgano.PubSub},
+          # Oban — background jobs for cleanup and TTL expiry
+          {Oban, Application.fetch_env!(:stelgano, Oban)},
+          # PlugAttack ETS table for IP-based rate limiting
+          {PlugAttack.Storage.Ets, name: :stelgano_rate_limiter, clean_period: 60_000}
+        ],
+        Paystack.child_specs(),
+        [StelganoWeb.Endpoint]
+      ])
 
     opts = [strategy: :one_for_one, name: Stelgano.Supervisor]
     Supervisor.start_link(children, opts)
