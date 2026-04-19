@@ -818,49 +818,51 @@ defmodule StelganoWeb.ChatLive do
           </p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="space-y-4 max-w-sm mx-auto">
           <%!-- Free tier --%>
           <button
             phx-click="continue_free"
-            class="glass-card p-8 text-left space-y-4 group hover:border-primary/30 transition-all duration-300 cursor-pointer"
+            class="w-full p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 text-left transition-all group flex items-center justify-between"
           >
-            <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
-              <.icon
-                name="clock"
-                class="size-6 text-slate-400 group-hover:text-primary transition-colors"
-              />
+            <div class="flex items-center gap-4">
+              <div class="size-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform">
+                <.icon
+                  name="clock"
+                  class="size-5 text-slate-300 group-hover:text-white transition-colors"
+                />
+              </div>
+              <div>
+                <h3 class="text-white font-bold text-sm">Temporary (Free)</h3>
+                <p class="text-slate-400 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
+                  Expires in {@free_ttl_days} days
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 class="text-white font-bold text-lg font-display">Temporary</h3>
-              <p class="text-slate-500 text-sm font-medium mt-1">
-                {@free_ttl_days} days, then recycled
-              </p>
-            </div>
-            <div class="text-2xl font-extrabold text-white font-display">Free</div>
+            <.icon name="arrow_right" class="size-4 text-slate-500 group-hover:translate-x-1 group-hover:text-white transition-all" />
           </button>
 
           <%!-- Paid tier --%>
           <button
             phx-click="choose_paid"
-            class="glass-card p-8 text-left space-y-4 group hover:border-primary/30 transition-all duration-300 cursor-pointer border-primary/10 bg-primary/2"
+            class="w-full p-5 rounded-2xl bg-primary/10 border border-primary/20 hover:border-primary/40 hover:bg-primary/20 text-left transition-all group flex items-center justify-between shadow-[0_0_20px_rgba(0,255,163,0.1)]"
           >
-            <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
-              <.icon name="shield_check" class="size-6 text-primary" />
+            <div class="flex items-center gap-4">
+              <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 group-hover:scale-110 transition-transform">
+                <.icon name="shield_check" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h3 class="text-primary font-bold text-sm">Dedicated Tier</h3>
+                <p class="text-primary/80 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
+                  1 Year &mdash; {format_price(@price_cents, @currency)}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 class="text-white font-bold text-lg font-display">Dedicated</h3>
-              <p class="text-slate-500 text-sm font-medium mt-1">
-                {@paid_ttl_days} days, your number
-              </p>
-            </div>
-            <div class="text-2xl font-extrabold text-primary font-display">
-              {format_price(@price_cents, @currency)}<span class="text-sm text-slate-500">/year</span>
-            </div>
+            <.icon name="arrow_right" class="size-4 text-primary group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
 
-        <p class="text-center text-slate-600 text-xs font-medium">
-          You can upgrade to a dedicated number at any time from the number generator page.
+        <p class="text-center text-slate-500 text-[10px] uppercase tracking-widest font-bold">
+          You can upgrade to dedicated anytime.
         </p>
       </div>
     </div>
