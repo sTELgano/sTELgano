@@ -150,6 +150,46 @@
           <img src="/images/ephemeral_identity.png" alt="Ephemeral Identity Concept" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
         </div>
       </div>
+
+      <%!-- Client-Side Cryptography --%>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="relative animate-in duration-1000 slide-in-from-left-8">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img src="/images/client_side_crypto.png" alt="Client-Side Encryption" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
+        </div>
+        
+        <div class="space-y-8 animate-in slide-in-from-right-8">
+          <div>
+            <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+              Client-Side Cryptography.
+            </h3>
+            <p class="text-slate-400 text-lg leading-relaxed mb-6">
+              The keys never leave your device. All encryption and decryption happens strictly inside your local browser via the Web Crypto API.
+            </p>
+          </div>
+          
+          <ul class="space-y-4">
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="key" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">Local Key Derivation</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">Your encryption keys are derived from your PIN and the Steg Number using 600,000 rounds of PBKDF2 directly on your CPU.</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="shield_check" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">End-to-End by Design</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">Because the payload is encrypted with AES-256-GCM before it ever hits the network, interception is mathematically impossible to decode.</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   </section>
 
