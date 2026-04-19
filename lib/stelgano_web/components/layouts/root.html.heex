@@ -5,9 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <%!-- Favicons --%>
-    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
     <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    
+    <%!-- OpenGraph & SEO --%>
+    <meta property="og:title" content="sTELgano - Zero Trace Encrypted Channels" />
+    <meta property="og:description" content="The messaging app hidden in your contacts. No accounts, no logs, end-to-end encrypted." />
+    <meta property="og:image" content="https://stelgano.com/images/og_image.png" />
+    <meta property="og:url" content="https://stelgano.com" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="sTELgano - Zero Trace Encrypted Channels" />
+    <meta name="twitter:description" content="The messaging app hidden in your contacts. No accounts, no logs, end-to-end encrypted." />
+    <meta name="twitter:image" content="https://stelgano.com/images/og_image.png" />
+
     <%!-- Minimal title — reveals nothing about the nature of the service in browser history --%>
     <.live_title default="sTELgano">
       {assigns[:page_title]}
