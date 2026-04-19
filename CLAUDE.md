@@ -70,7 +70,7 @@ PIN is NOT part of enc_key (both users need the same key but have different PINs
 
 `phone-number-generator-js` npm package — steg number generator (E.164 format, 227 countries supported via `CountryNames` enum). Installed in `assets/package.json`. Replaces the former custom `phone-gen.js`.
 
-[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks: `AnonChat` (main orchestrator; also reads `stelegano_handoff_phone` on mount), `AutoResize` (textarea), `IntersectionReader` (read receipts), `PaymentInitiator` (extension token generation + payment initiation), `PhoneGenerator` (country selector + number generation on `/steg-number` page), `CountryPersistence` (remembers last-picked country in sessionStorage), `ChannelHandoff` (phone handoff from `/steg-number` → `/chat` without touching the URL).
+[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks: `AnonChat` (main orchestrator; also reads `stelegano_handoff_phone` on mount), `AutoResize` (textarea), `IntersectionReader` (read receipts), `PaymentInitiator` (extension token generation + payment initiation), `PhoneGenerator` (country selector + number generation on `/steg-number` page), `CountryPersistence` (remembers last-picked country in sessionStorage), `IdentityHandoff` (phone handoff from `/steg-number` → `/chat` without touching the URL).
 
 ### ChatLive state machine
 
@@ -93,7 +93,7 @@ The `can_type?/1` helper enforces turn-based input: you can type when the room i
 ### LiveViews
 
 - `ChatLive` — chat UI; crypto + channel interaction happen in JS hooks, not server-side
-- `StegNumberLive` — steg number generator at `/steg-number` with country selector dropdown and "Open channel" flow (copies number to clipboard, writes it to `sessionStorage.stelegano_handoff_phone`, then navigates to `/chat`). The phone **never** appears in the URL — see the `ChannelHandoff` hook.
+- `StegNumberLive` — steg number generator at `/steg-number` with country selector dropdown and "Open channel" flow (copies number to clipboard, writes it to `sessionStorage.stelegano_handoff_phone`, then navigates to `/chat`). The phone **never** appears in the URL — see the `IdentityHandoff` hook.
 - `AdminDashboardLive` — aggregate metrics at `/admin` (HTTP Basic Auth via `AdminAuth` plug)
 
 ### Telemetry: `Stelgano.CountryMetrics` + `Stelgano.DailyMetrics`

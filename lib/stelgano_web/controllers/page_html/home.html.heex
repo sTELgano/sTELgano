@@ -6,7 +6,7 @@
         <.icon name="shield_check" class="size-4" /> Open Protocol &middot; End-to-End Encrypted
       </div>
 
-      <h1 class="text-7xl sm:text-8xl md:text-9xl font-extrabold tracking-tighter mb-4 font-display">
+      <h1 class="text-6xl sm:text-8xl md:text-9xl font-extrabold tracking-tighter mb-4 font-display leading-[0.9]">
         <span class="text-slate-500 font-light italic">s</span><span class="text-gradient">TEL</span><span class="text-white">gano</span>
       </h1>
 
@@ -21,11 +21,11 @@
         </span>
       </p>
 
-      <p class="text-slate-500 text-base sm:text-lg mb-12 max-w-xl mx-auto leading-relaxed">
+      <p class="text-slate-500 text-sm sm:text-lg mb-12 max-w-xl mx-auto leading-relaxed px-4">
         No accounts. No chat history. No metadata. Your browser encrypts everything locally with AES-256-GCM before it ever touches a server. The server only sees ciphertext.
       </p>
 
-      <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+      <div class="flex flex-col md:flex-row gap-4 justify-center items-center">
         <.link
           navigate={~p"/steg-number"}
           class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto"
@@ -51,7 +51,7 @@
   </section>
 
   <%!-- What Makes sTELgano Different --%>
-  <section class="px-6 py-32 max-w-6xl mx-auto relative">
+  <section class="px-4 sm:px-6 py-20 sm:py-32 max-w-6xl mx-auto relative">
     <div class="text-center mb-20 animate-in">
       <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">Why sTELgano</h2>
       <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display mb-6">
@@ -93,7 +93,7 @@
   </section>
 
   <%!-- How It Works --%>
-  <section class="px-6 py-32 bg-white/1 border-y border-white/5 relative">
+  <section class="px-4 sm:px-6 py-20 sm:py-32 bg-white/1 border-y border-white/5 relative">
     <div class="max-w-6xl mx-auto">
       <div class="text-center mb-20 animate-in">
         <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
@@ -136,7 +136,7 @@
   </section>
 
   <%!-- Security Model --%>
-  <section class="px-6 py-32 relative">
+  <section class="px-4 sm:px-6 py-20 sm:py-32 relative">
     <div class="max-w-4xl mx-auto">
       <div class="text-center mb-16 animate-in">
         <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
@@ -174,7 +174,7 @@
               <div class="size-1.5 rounded-full bg-primary/40 mt-2 shrink-0"></div>
               <div>
                 <span class="font-bold text-white">{item}</span>
-                <span class="text-slate-400 font-medium"> &mdash;               {detail}</span>
+                <span class="text-slate-400 font-medium"> &mdash;  {detail}</span>
               </div>
             </li>
           </ul>
@@ -205,7 +205,7 @@
               <div class="size-1.5 rounded-full bg-danger/40 mt-2 shrink-0"></div>
               <div>
                 <span class="font-bold text-white">{item}</span>
-                <span class="text-slate-400 font-medium"> &mdash;               {detail}</span>
+                <span class="text-slate-400 font-medium"> &mdash;  {detail}</span>
               </div>
             </li>
           </ul>
@@ -215,7 +215,7 @@
   </section>
 
   <%!-- Use Cases --%>
-  <section class="px-6 py-32 bg-white/1 border-y border-white/5 relative">
+  <section class="px-4 sm:px-6 py-20 sm:py-32 bg-white/1 border-y border-white/5 relative">
     <div class="max-w-6xl mx-auto">
       <div class="text-center mb-16 animate-in">
         <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">Use Cases</h2>
@@ -251,7 +251,7 @@
   </section>
 
   <%!-- Technical Highlights --%>
-  <section class="px-6 py-32 relative">
+  <section class="px-4 sm:px-6 py-20 sm:py-32 relative">
     <div class="max-w-4xl mx-auto">
       <div class="text-center mb-16 animate-in">
         <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
@@ -324,50 +324,20 @@
       <p class="text-slate-400 text-lg mb-10 max-w-lg mx-auto">
         Generate a steg number, share it with someone you trust, and open a channel that only the two of you can access.
       </p>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <.link navigate={~p"/steg-number"} class="btn-primary px-12 py-5 text-xl">
+      <div class="flex flex-col md:flex-row gap-4 justify-center px-4">
+        <.link
+          navigate={~p"/steg-number"}
+          class="btn-primary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl"
+        >
           Generate a Steg Number
         </.link>
-        <.link navigate={~p"/blog"} class="btn-secondary px-12 py-5 text-xl">
+        <.link
+          navigate={~p"/blog"}
+          class="btn-secondary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl"
+        >
           Read the Blog
         </.link>
       </div>
     </div>
   </section>
-
-  <%!-- Footer --%>
-  <footer class="px-6 py-20 border-t border-white/5 bg-slate-950/40 relative">
-    <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
-      <div class="flex flex-col items-center md:items-start gap-3">
-        <.link navigate={~p"/"} class="wordmark text-2xl">
-          <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span>gano</span>
-        </.link>
-        <p class="text-slate-500 text-sm font-medium">
-          The messaging app hidden in your contacts.
-        </p>
-        <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.25em]">
-          stel<span class="text-slate-400">·GAH·</span>no &mdash; steganography + TEL
-        </p>
-      </div>
-
-      <div class="flex flex-wrap justify-center gap-8">
-        <a
-          :for={link <- ["Security", "Privacy", "Terms", "About", "Spec", "Blog"]}
-          href={"/#{String.downcase(link)}"}
-          class="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-        >
-          {link}
-        </a>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <div class="px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-slate-500 uppercase">
-          AGPL-3.0
-        </div>
-        <div class="px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-slate-500 uppercase">
-          Build 2026.04
-        </div>
-      </div>
-    </div>
-  </footer>
 </Layouts.app>

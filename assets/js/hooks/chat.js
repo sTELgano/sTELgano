@@ -676,14 +676,14 @@ export const CountryPersistence = {
 };
 
 // ---------------------------------------------------------------------------
-// ChannelHandoff hook (steg-number page — "Enter Chat Workspace" button)
+// IdentityHandoff hook (steg-number page — "Enter Chat Workspace" button)
 //
 // Writes the phone number to sessionStorage under a transient key and then
 // navigates to /chat. Avoids placing the phone in the URL / address bar /
 // history / server logs. The /chat AnonChat hook reads and clears the key.
 // ---------------------------------------------------------------------------
 
-export const ChannelHandoff = {
+export const IdentityHandoff = {
   mounted() {
     this.el.addEventListener("click", (e) => {
       const phone = this.el.dataset.phone;
