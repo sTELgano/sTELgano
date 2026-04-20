@@ -49,12 +49,15 @@
           </.link>
         </div>
       </div>
-      
+
       <div class="relative hidden lg:block animate-in duration-1000 zoom-in-95">
         <div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full"></div>
-        <img src="/images/hero_illustration.png" alt="sTELgano End-to-End Encryption" class="relative z-10 w-full h-auto drop-shadow-[0_0_50px_rgba(16,185,129,0.3)] floating" />
+        <img
+          src="/images/hero_illustration.png"
+          alt="sTELgano End-to-End Encryption"
+          class="relative z-10 w-full h-auto drop-shadow-[0_0_50px_rgba(16,185,129,0.3)] floating"
+        />
       </div>
-    </div>
     </div>
   </section>
 
@@ -64,10 +67,24 @@
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em]">
         <.icon name="play_circle" class="size-3" /> 15-Second Overview
       </div>
-      
+
       <div class="relative rounded-3xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(16,185,129,0.15)] bg-slate-950 aspect-video flex items-center justify-center group cursor-pointer">
-        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10 pointer-events-none"></div>
-        <img src="/images/sTELgano_promo.webp" alt="sTELgano Platform Overview Video" class="w-full h-full object-cover relative z-0 transition-transform duration-700 group-hover:scale-105" />
+        <div class="absolute inset-0 bg-linear-to-t from-black/60 to-transparent z-10 pointer-events-none">
+        </div>
+        <video
+          src="/videos/sTELgano_promo.mp4"
+          poster="/images/sTELgano_promo.webp"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="auto"
+          aria-label="sTELgano Platform Overview Video"
+          class="w-full h-full object-cover relative z-0 transition-transform duration-700 group-hover:scale-105"
+        >
+          <source src="/videos/sTELgano_promo.webm" type="video/webm" />
+          <source src="/videos/sTELgano_promo.mp4" type="video/mp4" />
+        </video>
       </div>
     </div>
   </section>
@@ -90,9 +107,13 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
         <div class="relative animate-in duration-1000 slide-in-from-left-8">
           <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
-          <img src="/images/zero_knowledge_server.png" alt="Zero-Knowledge Architecture" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
+          <img
+            src="/images/zero_knowledge_server.png"
+            alt="Zero-Knowledge Architecture"
+            class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10"
+          />
         </div>
-        
+
         <div class="space-y-8 animate-in slide-in-from-right-8">
           <div>
             <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
@@ -102,7 +123,7 @@
               The server is entirely blind. It acts only as a dumb relay for hashes and ciphertext, knowing absolutely nothing about you or your data.
             </p>
           </div>
-          
+
           <ul class="space-y-4">
             <li class="flex items-start gap-4">
               <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
@@ -110,7 +131,9 @@
               </div>
               <div>
                 <h4 class="text-white font-bold font-display mb-1">Opaque by Default</h4>
-                <p class="text-slate-500 text-sm leading-relaxed">No plaintext ever touches the backend. Even a full database breach reveals nothing but uncrackable hashes and AES-256-GCM ciphertext.</p>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  No plaintext ever touches the backend. Even a full database breach reveals nothing but uncrackable hashes and AES-256-GCM ciphertext.
+                </p>
               </div>
             </li>
             <li class="flex items-start gap-4">
@@ -119,7 +142,9 @@
               </div>
               <div>
                 <h4 class="text-white font-bold font-display mb-1">Untrusted Backend</h4>
-                <p class="text-slate-500 text-sm leading-relaxed">The protocol is designed so you don't even have to trust us. The cryptography guarantees your privacy strictly on the client side.</p>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  The protocol is designed so you don't even have to trust us. The cryptography guarantees your privacy strictly on the client side.
+                </p>
               </div>
             </li>
           </ul>
@@ -137,7 +162,7 @@
               No accounts. No signups. No traces. Your identity is generated strictly on-the-fly and vanishes the moment you close the tab.
             </p>
           </div>
-          
+
           <ul class="space-y-4">
             <li class="flex items-start gap-4">
               <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
@@ -145,7 +170,9 @@
               </div>
               <div>
                 <h4 class="text-white font-bold font-display mb-1">No Email, No Phone</h4>
-                <p class="text-slate-500 text-sm leading-relaxed">We don't want to know who you are. The system is designed to prevent us from ever tying a session to a real-world identity.</p>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  We don't want to know who you are. The system is designed to prevent us from ever tying a session to a real-world identity.
+                </p>
               </div>
             </li>
             <li class="flex items-start gap-4">
@@ -154,7 +181,9 @@
               </div>
               <div>
                 <h4 class="text-white font-bold font-display mb-1">Memory-Only Sessions</h4>
-                <p class="text-slate-500 text-sm leading-relaxed">Session keys are kept strictly in volatile memory. Close the browser, and the encryption keys are wiped from existence forever.</p>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  Session keys are kept strictly in volatile memory. Close the browser, and the encryption keys are wiped from existence forever.
+                </p>
               </div>
             </li>
           </ul>
@@ -162,7 +191,11 @@
 
         <div class="order-1 lg:order-2 relative animate-in duration-1000 slide-in-from-right-8">
           <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
-          <img src="/images/ephemeral_identity.png" alt="Ephemeral Identity Concept" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
+          <img
+            src="/images/ephemeral_identity.png"
+            alt="Ephemeral Identity Concept"
+            class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10"
+          />
         </div>
       </div>
 
@@ -170,9 +203,13 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
         <div class="relative animate-in duration-1000 slide-in-from-left-8">
           <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
-          <img src="/images/client_side_crypto.png" alt="Client-Side Encryption" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
+          <img
+            src="/images/client_side_crypto.png"
+            alt="Client-Side Encryption"
+            class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10"
+          />
         </div>
-        
+
         <div class="space-y-8 animate-in slide-in-from-right-8">
           <div>
             <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
@@ -182,7 +219,7 @@
               The keys never leave your device. All encryption and decryption happens strictly inside your local browser via the Web Crypto API.
             </p>
           </div>
-          
+
           <ul class="space-y-4">
             <li class="flex items-start gap-4">
               <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
@@ -190,7 +227,9 @@
               </div>
               <div>
                 <h4 class="text-white font-bold font-display mb-1">Local Key Derivation</h4>
-                <p class="text-slate-500 text-sm leading-relaxed">Your encryption keys are derived from your PIN and the Steg Number using 600,000 rounds of PBKDF2 directly on your CPU.</p>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  Your encryption keys are derived from your PIN and the Steg Number using 600,000 rounds of PBKDF2 directly on your CPU.
+                </p>
               </div>
             </li>
             <li class="flex items-start gap-4">
@@ -199,7 +238,9 @@
               </div>
               <div>
                 <h4 class="text-white font-bold font-display mb-1">End-to-End by Design</h4>
-                <p class="text-slate-500 text-sm leading-relaxed">Because the payload is encrypted with AES-256-GCM before it ever hits the network, interception is mathematically impossible to decode.</p>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  Because the payload is encrypted with AES-256-GCM before it ever hits the network, interception is mathematically impossible to decode.
+                </p>
               </div>
             </li>
           </ul>
@@ -223,9 +264,13 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
         <div class="order-2 lg:order-1 relative animate-in duration-1000 slide-in-from-left-8">
           <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
-          <img src="/images/contact_steg.png" alt="Contact-Layer Steganography Concept" class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10" />
+          <img
+            src="/images/contact_steg.png"
+            alt="Contact-Layer Steganography Concept"
+            class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10"
+          />
         </div>
-        
+
         <div class="order-1 lg:order-2 space-y-6">
           <div
             :for={
@@ -260,8 +305,6 @@
         </div>
       </div>
     </div>
-      </div>
-    </div>
   </section>
 
   <%!-- The N=1 Invariant --%>
@@ -276,7 +319,8 @@
             N=1 Messaging.
           </h3>
           <p class="text-slate-400 text-lg leading-relaxed">
-            sTELgano enforces a strict <span class="text-white font-bold">N=1 invariant</span> at the database level. 
+            sTELgano enforces a strict <span class="text-white font-bold">N=1 invariant</span>
+            at the database level.
             At most, one message can exist per room at any given time.
           </p>
         </div>
@@ -310,8 +354,13 @@
       </div>
 
       <div class="relative animate-in slide-in-from-right-8 duration-1000">
-        <div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full mix-blend-screen"></div>
-        <img src="/images/n_equals_1.png" alt="N=1 Messaging - Shattering the previous message" class="relative z-10 w-full max-w-lg mx-auto h-auto floating drop-shadow-[0_0_60px_rgba(16,185,129,0.3)]" />
+        <div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full mix-blend-screen">
+        </div>
+        <img
+          src="/images/n_equals_1.png"
+          alt="N=1 Messaging - Shattering the previous message"
+          class="relative z-10 w-full max-w-lg mx-auto h-auto floating drop-shadow-[0_0_60px_rgba(16,185,129,0.3)]"
+        />
       </div>
     </div>
   </section>

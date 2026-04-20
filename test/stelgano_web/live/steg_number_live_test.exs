@@ -26,7 +26,7 @@ defmodule StelganoWeb.StegNumberLiveTest do
     test "has mode selectors", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
       assert has_element?(view, "button", "Generate New")
-      assert has_element?(view, "button", "Manual Entry")
+      assert has_element?(view, "button", "Check / Upgrade Number")
     end
   end
 
@@ -58,13 +58,13 @@ defmodule StelganoWeb.StegNumberLiveTest do
   describe "manual entry flow" do
     test "switches to manual mode", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
-      view |> element("button", "Manual Entry") |> render_click()
+      view |> element("button", "Check / Upgrade Number") |> render_click()
       assert has_element?(view, "#manual-number-input")
     end
 
     test "checks manual number availability (available)", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
-      view |> element("button", "Manual Entry") |> render_click()
+      view |> element("button", "Check / Upgrade Number") |> render_click()
 
       render_hook(view, "check_manual_number", %{
         "number" => "+447700900000",
@@ -84,7 +84,7 @@ defmodule StelganoWeb.StegNumberLiveTest do
       })
 
       {:ok, view, _html} = live(conn, ~p"/steg-number")
-      view |> element("button", "Manual Entry") |> render_click()
+      view |> element("button", "Check / Upgrade Number") |> render_click()
 
       render_hook(view, "check_manual_number", %{
         "number" => "+447700900111",
@@ -96,7 +96,7 @@ defmodule StelganoWeb.StegNumberLiveTest do
 
     test "rate-limits availability probes after 10 lookups per window", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/steg-number")
-      view |> element("button", "Manual Entry") |> render_click()
+      view |> element("button", "Check / Upgrade Number") |> render_click()
 
       hash = fn i ->
         "probe-#{i}" |> then(&:crypto.hash(:sha256, &1)) |> Base.encode16(case: :lower)

@@ -22,7 +22,7 @@ defmodule StelganoWeb do
 
   @spec static_paths() :: [String.t()]
   def static_paths,
-    do: ~w(assets fonts images favicon.ico robots.txt .well-known)
+    do: ~w(assets fonts images videos favicon.ico robots.txt .well-known)
 
   @spec router() :: Macro.t()
   def router do
