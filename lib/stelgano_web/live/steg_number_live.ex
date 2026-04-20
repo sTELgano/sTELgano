@@ -346,19 +346,22 @@ defmodule StelganoWeb.StegNumberLive do
         </div>
 
         <%!-- Header --%>
-        <div class="text-center space-y-6 pt-6">
-          <h1 class="text-4xl sm:text-6xl font-black tracking-tighter text-white font-display">
-            Channel <span class="text-gradient">Identity</span>
+        <div class="text-center space-y-4 pt-6">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-4 shadow-[0_0_15px_rgba(0,255,163,0.1)]">
+            <.icon name="key" class="size-3" /> Identity Generator
+          </div>
+          <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tighter text-white font-display leading-[0.9]">
+            Channel <span class="text-gradient">Identity.</span>
           </h1>
-          <p class="text-slate-400 text-lg font-medium max-w-xl mx-auto">
+          <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed px-4 max-w-xl mx-auto">
             Generate a new identity or join using an existing secret number.
           </p>
         </div>
 
         <%!-- Main selection and action area --%>
         <div class="space-y-10">
-          <div class="glass-card p-0.5">
-            <div class="p-4 sm:p-10 space-y-8 sm:space-y-10">
+          <.premium_card class="p-1 sm:p-1 overflow-hidden shadow-primary-glow/20">
+            <div class="p-5 sm:p-10 space-y-10">
               <%!-- Global Country Context --%>
               <div class="space-y-6">
                 <div class="space-y-4">
@@ -738,6 +741,13 @@ defmodule StelganoWeb.StegNumberLive do
                   <button
                     id="checkout-btn"
                     phx-hook="PaymentInitiator"
+                    data-phone={
+                      case {@entry_mode, @generated_number} do
+                        {:generate, %{e164: e164}} -> e164
+                        {:manual, _} when @manual_number != "" -> @manual_number
+                        _ -> ""
+                      end
+                    }
                     disabled={@payment_loading}
                     class={[
                       "w-full py-5 rounded-2xl flex items-center justify-center gap-3 bg-primary text-slate-950 font-black uppercase tracking-widest text-xs shadow-xl transition-all",
@@ -779,7 +789,7 @@ defmodule StelganoWeb.StegNumberLive do
                 <% end %>
               </div>
             </div>
-          </div>
+          </.premium_card>
 
           <%!-- Instructions --%>
           <div class="space-y-8 pt-10">
