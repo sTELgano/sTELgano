@@ -107,7 +107,6 @@ defmodule StelganoWeb.ChatLiveTest do
   describe "toggle_phone_visibility event" do
     test "reveals phone field on first toggle", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/chat")
-      render_hook(view, "prefill_phone", %{"phone" => "+12025551234"})
 
       view |> element("#phone-toggle-btn") |> render_click()
 
@@ -117,7 +116,6 @@ defmodule StelganoWeb.ChatLiveTest do
 
     test "masks phone field again on second toggle", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/chat")
-      render_hook(view, "prefill_phone", %{"phone" => "+12025551234"})
 
       view |> element("#phone-toggle-btn") |> render_click()
       view |> element("#phone-toggle-btn") |> render_click()

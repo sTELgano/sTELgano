@@ -61,7 +61,6 @@
     </div>
   </section>
 
-
   <%!-- What Makes sTELgano Different --%>
   <section class="px-4 sm:px-6 py-20 sm:py-32 max-w-6xl mx-auto relative">
     <div class="text-center mb-20 animate-in">
@@ -470,12 +469,24 @@
       <table class="w-full text-left border-collapse min-w-[800px]">
         <thead>
           <tr class="border-b border-white/10 bg-slate-900/50">
-            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-1/4">Feature</th>
-            <th class="p-6 text-sm font-bold uppercase tracking-widest text-primary w-[15%]">sTELgano</th>
-            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">Signal</th>
-            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">WhatsApp</th>
-            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">Telegram</th>
-            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">SMS</th>
+            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-1/4">
+              Feature
+            </th>
+            <th class="p-6 text-sm font-bold uppercase tracking-widest text-primary w-[15%]">
+              sTELgano
+            </th>
+            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">
+              Signal
+            </th>
+            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">
+              WhatsApp
+            </th>
+            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">
+              Telegram
+            </th>
+            <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">
+              SMS
+            </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-white/5 text-sm">
@@ -497,9 +508,13 @@
           </tr>
           <tr class="hover:bg-white/5 transition-colors">
             <td class="p-6 font-medium text-white">Chat History Retained</td>
-            <td class="p-6 text-primary"><.icon name="delete_row" class="size-5" /> N=1 (Wiped)</td>
+            <td class="p-6 text-primary">
+              <.icon name="delete_row" class="size-5" /> N=1 (Wiped)
+            </td>
             <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Local</td>
-            <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Local/Cloud</td>
+            <td class="p-6 text-slate-500">
+              <.icon name="x_circle" class="size-5" /> Local/Cloud
+            </td>
             <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Cloud</td>
             <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Provider</td>
           </tr>
@@ -525,7 +540,10 @@
   </section>
 
   <%!-- FAQ Section --%>
-  <section class="px-4 sm:px-6 py-20 sm:py-32 border-y border-white/5 bg-white/1 relative" id="faq">
+  <section
+    class="px-4 sm:px-6 py-20 sm:py-32 border-y border-white/5 bg-white/1 relative"
+    id="faq"
+  >
     <div class="max-w-4xl mx-auto">
       <div class="text-center mb-16 animate-in">
         <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
@@ -538,7 +556,9 @@
 
       <div class="space-y-6">
         <div class="glass-card p-8">
-          <h4 class="text-lg font-bold text-white mb-3">How does contact-layer steganography work?</h4>
+          <h4 class="text-lg font-bold text-white mb-3">
+            How does contact-layer steganography work?
+          </h4>
           <p class="text-slate-400 text-sm leading-relaxed">
             Unlike other apps where you have an obvious icon on your home screen, sTELgano hides in plain sight. You generate a random "Steg Number" and save it in your phone's address book under any name you choose. To an observer, it's just a normal contact. But when you enter that number into sTELgano, it derives the encryption keys and opens your secure channel.
           </p>
@@ -556,7 +576,9 @@
           </p>
         </div>
         <div class="glass-card p-8">
-          <h4 class="text-lg font-bold text-white mb-3">If there's no account, how do I log in?</h4>
+          <h4 class="text-lg font-bold text-white mb-3">
+            If there's no account, how do I log in?
+          </h4>
           <p class="text-slate-400 text-sm leading-relaxed">
             Your identity is ephemeral. You access a room by knowing the shared Steg Number and your private PIN. When you enter them, your browser mathematically derives the access hashes required to connect. No email, no password, no 2FA.
           </p>
