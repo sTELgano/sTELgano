@@ -591,7 +591,7 @@ defmodule StelganoWeb.ChatLive do
       <div
         id="chat-root"
         phx-hook="AnonChat"
-        class="h-dvh w-screen overflow-hidden bg-slate-950 text-white"
+        class="h-dvh w-screen overflow-y-auto overflow-x-hidden bg-slate-950 text-white"
       >
         {render_state(assigns)}
       </div>
@@ -664,7 +664,7 @@ defmodule StelganoWeb.ChatLive do
                 </div>
                 <div class="relative group">
                   <input
-                    id="entry-phone"
+                    id={"entry-phone-#{@phone_locked}"}
                     name="phone"
                     type={if @phone_visible or @phone_locked, do: "text", else: "password"}
                     class={[
