@@ -109,7 +109,7 @@ defmodule StelganoWeb.Layouts do
           phx-click={JS.hide(to: "#mobile-menu")}
         >
         </div>
-        <nav class="absolute top-0 right-0 bottom-0 w-64 glass-card rounded-none border-l border-white/10 p-8 flex flex-col gap-8 shadow-2xl">
+        <nav class="absolute top-0 right-0 bottom-0 w-64 bg-slate-950 border-l border-white/10 p-8 flex flex-col gap-8 shadow-2xl">
           <div class="flex items-center justify-between mb-4">
             <span class="wordmark text-lg">
               <span class="wm-symbol">s</span><span class="wm-accent">TEL</span>
