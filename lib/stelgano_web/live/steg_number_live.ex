@@ -481,17 +481,29 @@ defmodule StelganoWeb.StegNumberLive do
                           >
                             {@generated_number.display}
                             <div class="absolute -right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
-                              <.icon name={if @copied, do: "check_circle", else: "clipboard"} class={["size-5", if(@copied, do: "text-emerald-500", else: "text-slate-400 hover:text-white")]} />
+                              <.icon
+                                name={if @copied, do: "check_circle", else: "clipboard"}
+                                class={[
+                                  "size-5",
+                                  if(@copied,
+                                    do: "text-emerald-500",
+                                    else: "text-slate-400 hover:text-white"
+                                  )
+                                ]}
+                              />
                             </div>
                           </button>
-                          
+
                           <button
                             type="button"
                             phx-click="copied"
                             data-number={@generated_number.e164}
                             class="text-[10px] uppercase font-bold text-slate-500 hover:text-white transition-colors flex items-center gap-1 sm:hidden mt-2"
                           >
-                            <.icon name={if @copied, do: "check_circle", else: "clipboard"} class={["size-4", if(@copied, do: "text-emerald-500", else: "")]} />
+                            <.icon
+                              name={if @copied, do: "check_circle", else: "clipboard"}
+                              class={["size-4", if(@copied, do: "text-emerald-500", else: "")]}
+                            />
                             {if @copied, do: "Copied!", else: "Tap to copy"}
                           </button>
                         </div>
@@ -509,7 +521,8 @@ defmodule StelganoWeb.StegNumberLive do
                             class={[
                               "text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 mx-auto",
                               "text-slate-500 hover:text-primary",
-                              !@selected_country && "opacity-20 cursor-not-allowed pointer-events-none"
+                              !@selected_country &&
+                                "opacity-20 cursor-not-allowed pointer-events-none"
                             ]}
                             title="Regenerate"
                             disabled={is_nil(@selected_country) or @generating}

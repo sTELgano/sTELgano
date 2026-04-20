@@ -741,8 +741,10 @@ defmodule StelganoWeb.ChatLive do
                 navigate={~p"/steg-number"}
                 class="btn-secondary w-full py-4 sm:py-5 text-lg sm:text-xl inline-flex items-center justify-center gap-2 group"
               >
-                <.icon name="sparkles" class="size-5 text-primary group-hover:rotate-12 transition-transform" />
-                Generate New Number
+                <.icon
+                  name="sparkles"
+                  class="size-5 text-primary group-hover:rotate-12 transition-transform"
+                /> Generate New Number
               </.link>
             </div>
           </div>
@@ -838,7 +840,10 @@ defmodule StelganoWeb.ChatLive do
                 </p>
               </div>
             </div>
-            <.icon name="arrow_right" class="size-4 text-slate-500 group-hover:translate-x-1 group-hover:text-white transition-all" />
+            <.icon
+              name="arrow_right"
+              class="size-4 text-slate-500 group-hover:translate-x-1 group-hover:text-white transition-all"
+            />
           </button>
 
           <%!-- Paid tier --%>
@@ -857,7 +862,10 @@ defmodule StelganoWeb.ChatLive do
                 </p>
               </div>
             </div>
-            <.icon name="arrow_right" class="size-4 text-primary group-hover:translate-x-1 transition-transform" />
+            <.icon
+              name="arrow_right"
+              class="size-4 text-primary group-hover:translate-x-1 transition-transform"
+            />
           </button>
         </div>
 

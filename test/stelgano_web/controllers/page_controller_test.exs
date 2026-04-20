@@ -14,7 +14,7 @@ defmodule StelganoWeb.PageControllerTest do
 
     test "homepage includes call to action", %{conn: conn} do
       conn = get(conn, ~p"/")
-      assert html_response(conn, 200) =~ "Start a Private Chat"
+      assert html_response(conn, 200) =~ "Open Chat"
     end
 
     test "homepage explains what the server stores", %{conn: conn} do
