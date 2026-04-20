@@ -385,7 +385,7 @@ defmodule StelganoWeb.StegNumberLive do
                             else: "Search or select country..."
                           )
                         }
-                        class="bg-slate-900/80 border-2 border-white/5 text-white font-bold focus:ring-2 focus:ring-primary/40 focus:outline-none w-full py-4 px-6 rounded-2xl pr-14 transition-all hover:bg-slate-800"
+                        class="glass-input w-full bg-slate-950/40 border-white/10 text-white font-bold text-lg sm:text-xl focus:border-primary/40 py-4 sm:py-5 px-6 rounded-2xl pr-14 transition-all tracking-wider"
                         phx-keyup="search_country"
                         phx-focus="search_country"
                         phx-value-value={@search_query}
@@ -572,7 +572,7 @@ defmodule StelganoWeb.StegNumberLive do
                         value={@manual_number}
                         placeholder="Enter phone number..."
                         class={[
-                          "glass-input w-full font-mono text-lg sm:text-xl text-center px-12",
+                          "glass-input w-full font-mono text-lg sm:text-xl text-center px-12 py-4 sm:py-5 font-bold tracking-widest bg-slate-950/40 border-white/10 focus:border-primary/40",
                           @manual_error && "border-red-500/50"
                         ]}
                       />
