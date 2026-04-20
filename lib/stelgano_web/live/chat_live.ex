@@ -124,6 +124,7 @@ defmodule StelganoWeb.ChatLive do
        socket
        |> assign(:_pending_phone, phone)
        |> assign(:preselected_tier, tier)
+       |> assign(:phone_visible, true)
        |> assign(:phone_locked, true)}
     else
       {:noreply, socket}
@@ -666,11 +667,11 @@ defmodule StelganoWeb.ChatLive do
                   <input
                     id={"entry-phone-#{@phone_locked}"}
                     name="phone"
-                    type={if @phone_visible or @phone_locked, do: "text", else: "password"}
+                    type={if @phone_visible, do: "text", else: "password"}
                     class={[
                       "glass-input w-full pr-14 font-mono text-lg sm:text-xl font-bold bg-slate-950/40",
                       @phone_locked && "opacity-80",
-                      if(@phone_visible or @phone_locked,
+                      if(@phone_visible,
                         do: "tracking-wider",
                         else: "tracking-widest"
                       )
