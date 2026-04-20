@@ -677,7 +677,7 @@ defmodule StelganoWeb.ChatLive do
                     ]}
                     value={@_pending_phone}
                     readonly={@phone_locked}
-                    placeholder="Enter number"
+                    placeholder="Enter number (e.g. +1...)"
                     inputmode="tel"
                     autocomplete="off"
                     autofocus={not @phone_locked}
@@ -1361,7 +1361,7 @@ defmodule StelganoWeb.ChatLive do
               type="password"
               inputmode="numeric"
               pattern="[0-9]*"
-              placeholder="••••"
+              placeholder="Secret PIN"
               class="text-center text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10 focus:border-primary/40"
               autofocus
             />

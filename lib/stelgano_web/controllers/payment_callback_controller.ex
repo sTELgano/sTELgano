@@ -14,9 +14,9 @@ defmodule StelganoWeb.PaymentCallbackController do
   alias Stelgano.Monetization
 
   @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def show(conn, %{"reference" => _reference}) do
+  def show(conn, %{"reference" => reference}) do
     if Monetization.enabled?() do
-      render(conn, :show, paid_ttl_days: Monetization.paid_ttl_days())
+      render(conn, :show, paid_ttl_days: Monetization.paid_ttl_days(), reference: reference)
     else
       redirect(conn, to: ~p"/")
     end

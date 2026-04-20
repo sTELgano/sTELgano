@@ -725,6 +725,13 @@ export const PaymentInitiator = {
       // Store the secret so it can be redeemed after payment
       sessionSet("stelegano_extension_secret", secret);
 
+      // Save the phone number for handoff when returning from checkout
+      const phone = this.el.dataset.phone;
+      if (phone) {
+        sessionSet("stelegano_handoff_phone", phone);
+        sessionSet("stelegano_handoff_tier", "free"); // Auto-create room as free on return
+      }
+
       // Send the hash to the server to initiate the payment flow
       this.pushEvent("initiate_payment", { token_hash: tokenHash });
     });
