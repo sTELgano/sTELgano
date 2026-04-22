@@ -4,6 +4,8 @@ This is a web application written using the Phoenix web framework.
 
 - Use `mix precommit` alias when you are done with all changes and fix any pending issues
 - Use the already included and available `:req` (`Req`) library for HTTP requests, **avoid** `:httpoison`, `:tesla`, and `:httpc`. Req is included by default and is the preferred HTTP client for Phoenix apps
+- **Never add `Co-Authored-By: Claude` or any AI/agent attribution to commit messages.** Write clean subject + body only. Past history had to be squashed to strip accumulated AI attribution; do not repeat that here.
+- **Files under `project/launch_content*.md` are gitignored by policy.** They're local planning drafts (launch strategy, objection playbooks, platform lists) kept private. Confirm any new `launch_content*.md` variant is listed in `.gitignore` before any `git add`.
 
 ### Phoenix v1.8 guidelines
 

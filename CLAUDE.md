@@ -186,6 +186,8 @@ Payment flow:
 - AGPL-3.0 licence; all source files need SPDX header: `# SPDX-License-Identifier: AGPL-3.0-only`
 - UI terminology: "steg number" (technical), "the number in your contacts" (user-facing); "channel" not "conversation"
 - "Room" is used only in internal code/DB, not user-facing copy
+- **Commit messages never include `Co-Authored-By: Claude` or any AI/agent attribution** — write clean subject + body only. Past projects had to squash many commits to strip accumulated AI attribution; we don't repeat that here.
+- **Files under `project/launch_content*.md` are gitignored by policy** — they're local planning drafts (launch strategy, objection playbooks, platform lists) kept private. Confirm any new `launch_content*.md` variant is in `.gitignore` before any `git add`.
 
 ## Database
 
