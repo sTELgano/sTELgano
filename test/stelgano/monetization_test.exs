@@ -52,7 +52,23 @@ defmodule Stelgano.MonetizationTest do
   # ---------------------------------------------------------------------------
 
   describe "configuration" do
-    test "enabled?/0 returns false by default" do
+    test "enabled?/0 returns false when configured disabled" do
+      original = Application.get_env(:stelgano, Stelgano.Monetization)
+
+      Application.put_env(
+        :stelgano,
+        Stelgano.Monetization,
+        Keyword.put(original || [], :enabled, false)
+      )
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:stelgano, Stelgano.Monetization, original)
+        else
+          Application.delete_env(:stelgano, Stelgano.Monetization)
+        end
+      end)
+
       refute Monetization.enabled?()
     end
 
@@ -81,7 +97,22 @@ defmodule Stelgano.MonetizationTest do
 
   describe "default_ttl/0" do
     test "returns nil when monetization is disabled" do
-      # Default config has enabled: false
+      original = Application.get_env(:stelgano, Stelgano.Monetization)
+
+      Application.put_env(
+        :stelgano,
+        Stelgano.Monetization,
+        Keyword.put(original || [], :enabled, false)
+      )
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:stelgano, Stelgano.Monetization, original)
+        else
+          Application.delete_env(:stelgano, Stelgano.Monetization)
+        end
+      end)
+
       assert is_nil(Monetization.default_ttl())
     end
   end

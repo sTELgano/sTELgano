@@ -40,6 +40,26 @@ defmodule StelganoWeb.PaystackWebhookControllerTest do
   end
 
   describe "POST /api/webhooks/paystack (monetization disabled)" do
+    setup do
+      original = Application.get_env(:stelgano, Stelgano.Monetization)
+
+      Application.put_env(
+        :stelgano,
+        Stelgano.Monetization,
+        Keyword.put(original || [], :enabled, false)
+      )
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:stelgano, Stelgano.Monetization, original)
+        else
+          Application.delete_env(:stelgano, Stelgano.Monetization)
+        end
+      end)
+
+      :ok
+    end
+
     test "returns 404 when monetization is disabled", %{conn: conn} do
       conn =
         conn

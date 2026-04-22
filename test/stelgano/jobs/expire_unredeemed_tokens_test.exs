@@ -51,6 +51,26 @@ defmodule Stelgano.Jobs.ExpireUnredeemedTokensTest do
   end
 
   describe "perform/1 (monetization disabled)" do
+    setup do
+      original = Application.get_env(:stelgano, Stelgano.Monetization)
+
+      Application.put_env(
+        :stelgano,
+        Stelgano.Monetization,
+        Keyword.put(original || [], :enabled, false)
+      )
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:stelgano, Stelgano.Monetization, original)
+        else
+          Application.delete_env(:stelgano, Stelgano.Monetization)
+        end
+      end)
+
+      :ok
+    end
+
     test "completes successfully without expiring tokens" do
       token = create_token("disabled-1", expires_in: -86_400)
 
