@@ -16,7 +16,7 @@
     </div>
 
     <%!-- Our Promise --%>
-    <div class="space-y-8 animate-in stagger-3 px-4">
+    <div id="our-promise" class="space-y-8 animate-in stagger-3 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Our Promise
@@ -51,7 +51,7 @@
     </div>
 
     <%!-- How Encryption Works --%>
-    <div class="space-y-8 animate-in stagger-4 px-4">
+    <div id="how-encryption-works" class="space-y-8 animate-in stagger-4 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           How Encryption Works
@@ -127,7 +127,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
     </div>
 
     <%!-- Encryption Specifications Grid --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="encryption-specifications" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Encryption Specifications
@@ -171,7 +171,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
     </div>
 
     <%!-- Threat Model --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="threat-model" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Threat Model
@@ -256,7 +256,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
     </div>
 
     <%!-- Network-layer honesty --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="what-the-network-sees" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           What the Network Sees
@@ -299,7 +299,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
     </div>
 
     <%!-- Temporal correlation honesty (payments) --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="paid-extensions" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Paid Extensions: A Residual Correlation
@@ -328,8 +328,51 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
       </div>
     </div>
 
+    <%!-- Operator Disclosure --%>
+    <div id="operator-disclosure" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Operator Disclosure
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-12 space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+        <p>
+          sTELgano's cryptographic design protects you against passive compromise of the server —
+          database dumps, backup leaks, opportunistic intrusion, and a new operator taking over
+          the service with different intentions. What is stored is hashes and ciphertext, and those
+          reveal nothing without credentials the server never sees.
+        </p>
+        <p>
+          There is one class of adversary the architecture cannot defeat on its own: an adversary
+          who can compel the operator to serve modified JavaScript. If a subpoena, court order,
+          or equivalent legal instrument requires the operator to push compromised client code to
+          a specific user, the architecture has no way to stop it &mdash; the browser trusts whatever
+          JavaScript arrives at page load.
+        </p>
+        <p>
+          <span class="text-white">
+            The operator does not pre-commit to refusing such process.
+          </span>
+          Unlike services that have publicly committed to shutting down rather than comply
+          (Lavabit in 2013 being the canonical example), the operator of
+          <code class="text-primary/80 font-mono">stelgano.com</code>
+          lacks the financial and legal resources to contest a lawful order. You should assume
+          that if this service is subpoenaed, the operator will comply. If that risk is unacceptable
+          for your use case, either self-host on infrastructure you control, or use a tool whose
+          operator has made &mdash; and can afford to keep &mdash; a stronger commitment.
+        </p>
+        <p>
+          This disclosure exists because vague privacy claims create false confidence. We would
+          rather state this limit plainly than imply a protection that only holds until the first
+          legal letter arrives.
+        </p>
+      </div>
+    </div>
+
     <%!-- The Passcode Test --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="passcode-test" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           The Passcode Test
@@ -371,7 +414,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
     </div>
 
     <%!-- Data Lifecycle --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="data-lifecycle" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Data Lifecycle
@@ -420,7 +463,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
     </div>
 
     <%!-- Zero-Trace Forensics --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="zero-trace-forensics" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Zero-Trace Forensics
@@ -477,7 +520,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
     </div>
 
     <%!-- Privacy Summary Table --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="privacy-summary" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Privacy Summary
@@ -542,7 +585,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
     </div>
 
     <%!-- Responsible Disclosure --%>
-    <div class="space-y-8 animate-in stagger-5 px-4">
+    <div id="responsible-disclosure" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
       <div class="flex items-center gap-4">
         <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
           Responsible Disclosure
