@@ -1,0 +1,510 @@
+<Layouts.app flash={@flash}>
+  <div class="max-w-5xl mx-auto space-y-20 py-12 animate-in pb-40">
+    <%!-- Hero Header --%>
+    <div class="text-center space-y-6 pt-6 sm:pt-12 px-4">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="hand" class="size-3" /> Privacy First
+      </div>
+
+      <h1 class="text-4xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.9] sm:leading-tight">
+        Privacy <span class="text-gradient">Policy.</span>
+      </h1>
+
+      <p class="text-slate-500 font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.4em] animate-in stagger-3">
+        Plain English Policy &middot; Updated April 2026
+      </p>
+    </div>
+
+    <%!-- TL;DR --%>
+    <div class="animate-in stagger-3 px-4">
+      <.premium_card class="p-0 overflow-hidden ring-1 ring-primary/20 shadow-2xl shadow-primary/5">
+        <div class="bg-slate-950/90 p-6 sm:p-12 relative">
+          <div class="absolute top-0 right-0 p-4 opacity-5">
+            <.icon name="shield_check" class="size-32 text-white" />
+          </div>
+          <div class="relative z-10 space-y-6">
+            <div class="flex items-center gap-4">
+              <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                <.icon name="zap" class="size-6 text-primary" />
+              </div>
+              <div>
+                <span class="text-[10px] font-black uppercase tracking-[0.3em] text-primary">
+                  TL;DR
+                </span>
+                <h3 class="text-2xl font-extrabold text-white font-display tracking-tight">
+                  The Short Version
+                </h3>
+              </div>
+            </div>
+            <p class="text-lg sm:text-xl text-slate-300 font-medium leading-relaxed max-w-3xl">
+              We collect <span class="text-white font-bold">almost nothing</span>.
+              We can't identify you.
+              We can't read your messages.
+              We can't recover your data.
+              <span class="text-primary font-bold">That's by design.</span>
+            </p>
+          </div>
+        </div>
+      </.premium_card>
+    </div>
+
+    <%!-- What We Collect --%>
+    <div class="space-y-8 animate-in stagger-4 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          What We Collect
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="database" class="size-6 text-primary" />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            Stored Data
+          </h3>
+        </div>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-sm">
+          <p>
+            The server stores only what is strictly necessary for the protocol to function:
+          </p>
+          <ul class="space-y-3">
+            <li
+              :for={
+                item <- [
+                  "Opaque SHA-256 hashes used as room and access identifiers — these cannot be reversed to recover your phone number or PIN",
+                  "AES-256-GCM ciphertext — encrypted on your device before transmission, unreadable without your credentials",
+                  "Room metadata — active/inactive status and optional TTL expiry timers",
+                  "Rate limiting counters — temporary, IP-based, deleted within 48 hours"
+                ]
+              }
+              class="flex items-start gap-4 group/li"
+            >
+              <.icon
+                name="check_circle"
+                class="size-5 text-primary shrink-0 mt-0.5 group-hover/li:scale-125 transition-transform"
+              />
+              <span class="text-sm text-slate-300 font-medium leading-relaxed group-hover/li:text-white transition-colors">
+                {item}
+              </span>
+            </li>
+          </ul>
+        </div>
+        <p class="text-sm text-slate-400 font-medium leading-relaxed">
+          No email addresses. No phone numbers. No names. No accounts. No profile data.
+          <span class="text-white">We do not know who you are.</span>
+        </p>
+      </div>
+    </div>
+
+    <%!-- What We Don't Collect --%>
+    <div class="space-y-8 animate-in stagger-4 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          What We Don't Collect
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-12 space-y-6 border-primary/20 bg-primary/2 group transition-all hover:bg-primary/4">
+        <div class="flex items-center gap-4 text-primary">
+          <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center">
+            <.icon name="shield_off" class="size-6" />
+          </div>
+          <h3 class="font-extrabold uppercase tracking-[0.2em] text-sm">
+            Explicitly Not Collected
+          </h3>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div
+            :for={
+              item <- [
+                "Real phone numbers",
+                "PINs or passwords",
+                "Plaintext messages",
+                "Encryption keys",
+                "User profiles or accounts",
+                "Contact lists",
+                "Location data",
+                "Device fingerprints",
+                "Browsing history",
+                "Usage analytics"
+              ]
+            }
+            class="flex items-center gap-3 group/item"
+          >
+            <.icon
+              name="x_circle"
+              class="size-4 text-primary/60 shrink-0 group-hover/item:text-primary transition-colors"
+            />
+            <span class="text-sm text-slate-300 font-medium group-hover/item:text-white transition-colors">
+              {item}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Cookies & Storage / Analytics & Tracking --%>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-4 px-4">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+          <.icon
+            name="cookie"
+            class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+          />
+        </div>
+        <div class="space-y-3">
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+            Cookies & Storage
+          </h4>
+          <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
+            <p>
+              <span class="text-white">One session cookie</span>
+              is used exclusively for CSRF protection.
+              It contains no identifying information and expires when you close your browser.
+            </p>
+            <p>
+              <span class="text-white">SessionStorage</span>
+              holds up to 6 keys during an active session: your
+              phone, room ID, room hash, sender hash, access hash, and &mdash; if paid tiers are enabled &mdash; a random extension secret used to redeem a dedicated number. Every one of these is
+              <span class="text-primary">automatically cleared</span>
+              on logout, panic (/x), or room expiry.
+            </p>
+            <p>
+              No tracking cookies. No localStorage persistence. No fingerprinting tokens.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+          <.icon
+            name="bar_chart"
+            class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+          />
+        </div>
+        <div class="space-y-3">
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+            Analytics & Tracking
+          </h4>
+          <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
+            <p>
+              <span class="text-white">Zero third-party analytics.</span>
+              No Google Analytics, no Mixpanel,
+              no Plausible, no trackers, no pixels, no external scripts of any kind.
+            </p>
+            <p>
+              Server-side aggregate metrics (total rooms created, total messages sent) are collected
+              for operational monitoring only. These metrics have
+              <span class="text-primary">no individual correlation</span>
+              &mdash; they cannot be traced
+              back to any user or session.
+            </p>
+            <p>
+              Our Content Security Policy enforces this at the browser level, blocking all external scripts.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- IP Address Handling / Third-Party Services --%>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-5 px-4">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+          <.icon
+            name="globe"
+            class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+          />
+        </div>
+        <div class="space-y-3">
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+            IP Address Handling
+          </h4>
+          <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
+            <p>
+              IP addresses are used <span class="text-white">exclusively for rate limiting</span>
+              to prevent
+              abuse and denial-of-service attacks. They are stored in an in-memory cache (ETS) and <span class="text-primary">automatically expire within 48 hours</span>.
+            </p>
+            <p>
+              IP addresses are never correlated with rooms, messages, or user activity.
+              They are never written to the database. They are never logged to disk in production.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+          <.icon
+            name="blocks"
+            class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+          />
+        </div>
+        <div class="space-y-3">
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+            Third-Party Services
+          </h4>
+          <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
+            <p>
+              <span class="text-primary">None.</span>
+              Fonts (Outfit, Inter, JetBrains Mono) are
+              <span class="text-white">self-hosted</span>
+              — they ship from the same server that serves the site, so your browser makes no
+              requests to Google, Cloudflare, jsdelivr, or any other third-party CDN on page load.
+            </p>
+            <p>
+              No external APIs, no cloud-hosted analytics (not even privacy-friendly ones), no
+              advertising networks, no error-reporting services. The only network traffic your
+              browser generates while using sTELgano is to <span class="font-mono text-xs text-slate-300">stelgano.com</span>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Data Retention --%>
+    <div class="space-y-8 animate-in stagger-5 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Data Retention
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="clock" class="size-6 text-primary" />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            Retention Schedule
+          </h3>
+        </div>
+        <div class="space-y-4">
+          <div
+            :for={
+              {label, duration, desc} <- [
+                {"Messages", "Deleted on reply",
+                 "Hard-deleted immediately when a reply is sent (N=1 invariant). The previous message row is permanently removed from the database in the same transaction. No deferred cleanup."},
+                {"Rooms", "TTL-based expiry",
+                 "Rooms expire based on their configured time-to-live. An hourly job deactivates expired rooms and, in the same transaction, hard-deletes their messages and every stored (room_hash, access_hash) record."},
+                {"IP Logs", "48 hours maximum",
+                 "Stored only in volatile memory for rate limiting. Never persisted to disk or database."},
+                {"Everything Else", "Not applicable",
+                 "Email, phone numbers, names, profiles, chat history, encryption keys — none of these are collected, so there is nothing to retain."}
+              ]
+            }
+            class="flex items-start gap-6 py-4 border-b border-white/5 last:border-0 group/item"
+          >
+            <div class="min-w-[140px]">
+              <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">
+                {label}
+              </span>
+            </div>
+            <div class="space-y-1">
+              <span class="text-sm font-mono font-bold text-white">{duration}</span>
+              <p class="text-xs text-slate-500 leading-relaxed font-medium">{desc}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Regulatory Compliance / Children's Privacy --%>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-5 px-4">
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center justify-between">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <.icon
+              name="scale"
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
+          </div>
+          <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
+            GDPR / CCPA
+          </span>
+        </div>
+        <div class="space-y-3">
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+            Regulatory Compliance
+          </h4>
+          <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
+            <p>
+              sTELgano is <span class="text-white">compliant by design</span>
+              with GDPR, CCPA, and similar
+              data protection regulations.
+            </p>
+            <p>
+              There is no personal data to request, export, or delete because <span class="text-primary">we cannot identify you</span>. No accounts exist. No user profiles
+              exist. The data we store (hashes and ciphertext) cannot be linked to any individual.
+            </p>
+            <p>
+              If you believe we hold data about you, you can contact us &mdash; but we will not be able to
+              locate it, because we have no way to associate stored hashes with a real person.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center justify-between">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <.icon
+              name="baby"
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
+          </div>
+          <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
+            COPPA
+          </span>
+        </div>
+        <div class="space-y-3">
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+            Children's Privacy
+          </h4>
+          <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
+            <p>
+              sTELgano is <span class="text-white">not directed at children under 13</span>.
+              We do not knowingly collect information from children.
+            </p>
+            <p>
+              Because no accounts exist and no personal information is collected, there is no age verification
+              mechanism. However, the service is designed for adults who need private communication.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Changes to This Policy --%>
+    <div class="space-y-8 animate-in stagger-5 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Policy Changes
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <.icon
+              name="git_branch"
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            Changes to This Policy
+          </h3>
+        </div>
+        <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
+          <p>
+            Because sTELgano has no accounts and no way to contact users, policy changes are
+            communicated through the <span class="text-white">public git repository</span>.
+          </p>
+          <p>
+            Every change to this policy is tracked as a commit with a clear description of what changed
+            and why. You can review the full history of this document at any time.
+          </p>
+          <p>
+            Continued use of the service after changes are published constitutes acceptance of the updated policy.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Contact --%>
+    <div class="space-y-8 animate-in stagger-5 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Contact
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <.link
+          href="mailto:wycliffogembo.dev@gmail.com"
+          class="premium_card p-1 group overflow-hidden"
+        >
+          <div class="bg-slate-950/60 p-8 flex items-center justify-between hover:bg-slate-900/60 transition-all">
+            <div class="space-y-3">
+              <span class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 group-hover:text-primary transition-colors">
+                Email
+              </span>
+              <div class="text-lg font-black text-white font-display">Privacy Questions</div>
+              <div class="text-xs font-mono text-slate-500">wycliffogembo.dev@gmail.com</div>
+            </div>
+            <div class="size-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+              <.icon
+                name="mail"
+                class="size-6 text-slate-500 group-hover:text-primary"
+              />
+            </div>
+          </div>
+        </.link>
+
+        <.link
+          href="https://github.com/stelgano/stelgano"
+          class="premium_card p-1 group overflow-hidden"
+        >
+          <div class="bg-slate-950/60 p-8 flex items-center justify-between hover:bg-slate-900/60 transition-all">
+            <div class="space-y-3">
+              <span class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 group-hover:text-primary transition-colors">
+                Source Code
+              </span>
+              <div class="text-lg font-black text-white font-display">View on GitHub</div>
+              <div class="text-xs font-mono text-slate-500">Policy change history</div>
+            </div>
+            <div class="size-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+              <.icon
+                name="arrow_up_right"
+                class="size-6 text-slate-500 group-hover:text-primary"
+              />
+            </div>
+          </div>
+        </.link>
+      </div>
+    </div>
+
+    <%!-- Payments (shown when monetization is configured) --%>
+    <%= if Stelgano.Monetization.enabled?() do %>
+      <div class="space-y-8 animate-in stagger-5">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Payments
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-6 sm:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500 px-4 sm:px-12">
+          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name="credit_card" class="size-7 text-primary" />
+          </div>
+          <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+            <p>
+              If you choose to purchase a dedicated number, your payment is processed by a <span class="text-white">third-party payment provider</span>. Your email address is
+              entered directly on the provider's hosted checkout page &mdash; we never see or store it.
+            </p>
+            <p>
+              Our server stores only a <span class="text-white">cryptographic token hash</span>
+              (SHA-256 of a random secret) associated with the payment. This token has <span class="text-primary font-semibold">no link to your room, your number, or your identity</span>.
+              The payment provider knows you paid; our server knows a token was paid. Neither can
+              connect the two.
+            </p>
+            <p>
+              No card details, billing addresses, or payment metadata are stored in the sTELgano
+              database. The payment provider's own privacy policy governs the data they collect.
+            </p>
+          </div>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</Layouts.app>

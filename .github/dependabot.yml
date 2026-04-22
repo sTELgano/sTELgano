@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Elixir / Mix dependencies
+  - package-ecosystem: mix
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Nairobi
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - elixir
+    ignore:
+      # Major version bumps require manual review — they may be breaking
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Nairobi
+    labels:
+      - dependencies
+      - github-actions

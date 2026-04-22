@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>sTELgano Ad</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #020617; /* slate-950 */
+      color: white;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    
+    .scene {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 5vw;
+      font-weight: 900;
+      letter-spacing: -0.05em;
+      margin: 0;
+      line-height: 1;
+    }
+    
+    h2 {
+      font-size: 3vw;
+      color: #10B981; /* emerald-500 */
+      margin-top: 1rem;
+    }
+
+    img {
+      max-width: 50vw;
+      max-height: 50vh;
+      object-fit: contain;
+      border-radius: 2rem;
+      box-shadow: 0 0 50px rgba(16, 185, 129, 0.2);
+      margin-bottom: 2rem;
+    }
+
+    /* Animation Timelines */
+    .scene-1 { animation: playScene 3s ease-in-out 1s forwards; }
+    .scene-2 { animation: playScene 3.5s ease-in-out 4s forwards; }
+    .scene-3 { animation: playScene 3.5s ease-in-out 7.5s forwards; }
+    .scene-4 { animation: playScene 3.5s ease-in-out 11s forwards; }
+    .scene-5 { animation: playFinal 5s ease-in-out 14.5s forwards; }
+
+    @keyframes playScene {
+      0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+      15% { opacity: 1; transform: scale(1) translateY(0); }
+      85% { opacity: 1; transform: scale(1) translateY(0); }
+      100% { opacity: 0; transform: scale(1.1) translateY(-20px); }
+    }
+
+    @keyframes playFinal {
+      0% { opacity: 0; transform: scale(0.9); }
+      20% { opacity: 1; transform: scale(1); }
+      100% { opacity: 1; transform: scale(1.05); }
+    }
+
+    .glow-text {
+      text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+    }
+    
+    .bg-glow {
+      position: absolute;
+      width: 50vw;
+      height: 50vw;
+      background: radial-gradient(circle, rgba(16,185,129,0.15) 0%, rgba(2,6,23,0) 70%);
+      z-index: -1;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-glow"></div>
+
+  <!-- Scene 1: The Hook -->
+  <div class="scene scene-1">
+    <img src="images/hero_illustration.png" alt="Hero">
+    <h1>Privacy that doesn't</h1>
+    <h1 class="glow-text text-[#10B981]">advertise itself.</h1>
+  </div>
+
+  <!-- Scene 2: Contact Steg -->
+  <div class="scene scene-2">
+    <img src="images/contact_steg.png" alt="Contact Steg">
+    <h1>Hide your channel inside</h1>
+    <h2>a regular phone contact.</h2>
+  </div>
+
+  <!-- Scene 3: N=1 Messaging -->
+  <div class="scene scene-3">
+    <img src="images/n_equals_1.png" alt="N=1 Messaging">
+    <h1>N=1 Messaging.</h1>
+    <h2>The moment you reply, the past is destroyed.</h2>
+  </div>
+
+  <!-- Scene 4: Zero Knowledge -->
+  <div class="scene scene-4">
+    <img src="images/zero_knowledge_server.png" alt="Zero Knowledge">
+    <h1>Zero-Knowledge Server.</h1>
+    <h2>We know nothing. And we like it that way.</h2>
+  </div>
+
+  <!-- Scene 5: Outro -->
+  <div class="scene scene-5">
+    <img src="images/logo.png" alt="sTELgano Logo" style="box-shadow: none; border-radius: 0; max-width: 200px;">
+    <h1>sTELgano</h1>
+    <h2 style="font-size: 1.5vw; color: #94A3B8; letter-spacing: 0.5em; text-transform: uppercase;">The Contact-Layer Protocol</h2>
+  </div>
+
+  <div id="status" style="display: none;">playing</div>
+  <script>
+    setTimeout(() => {
+      document.getElementById('status').innerText = 'FINISHED';
+    }, 20000);
+  </script>
+</body>
+</html>

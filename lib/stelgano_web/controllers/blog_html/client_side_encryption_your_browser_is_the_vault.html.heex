@@ -1,0 +1,304 @@
+<Layouts.app flash={@flash}>
+  <article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+    <%!-- Hero --%>
+    <header class="text-center space-y-8 pt-12">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="cpu" class="size-3" /> {@post.category}
+      </div>
+
+      <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+        Client-Side Encryption: <span class="text-gradient">Your Browser Is the Vault.</span>
+      </h1>
+
+      <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+        <span class="flex items-center gap-1.5">
+          <.icon name="calendar" class="size-3" /> {@post.date}
+        </span>
+        <span class="flex items-center gap-1.5">
+          <.icon name="clock" class="size-3" /> {@post.reading_time}
+        </span>
+      </div>
+    </header>
+
+    <%!-- Article Content --%>
+    <div class="space-y-16 animate-in stagger-4">
+      <%!-- The Trust Problem --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Trust Problem
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+          <p class="text-slate-300 leading-relaxed font-medium">
+            If the server encrypts your messages, you have to trust the server. You have to trust that it uses the algorithm it claims. That it doesn't log plaintext before encrypting. That it doesn't keep a copy of the key. That its employees can't access your data. That it won't be compelled to add a backdoor.
+          </p>
+          <p class="text-slate-400 leading-relaxed font-medium">
+            That's a lot of trust. And if the server is compromised&mdash;by a breach, a rogue employee, or a legal order&mdash;your messages are compromised with it. Server-side encryption means the server is the single point of failure.
+          </p>
+        </div>
+      </section>
+
+      <%!-- Moving Encryption to the Client --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Moving Encryption to the Client
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <.premium_card class="p-6 sm:p-8 md:p-10 space-y-6">
+          <p class="text-slate-300 leading-relaxed font-medium">
+            sTELgano uses the Web Crypto API to perform all encryption and decryption in your browser. The server never sees plaintext. It never sees your encryption key. It never sees your phone number or PIN.
+          </p>
+          <p class="text-slate-300 leading-relaxed font-medium">
+            The server is a <span class="text-white font-bold">blind relay.</span>
+            It stores ciphertext and forwards it to the other party. It cannot read what it stores. It cannot decrypt what it relays. Even under subpoena, the data it holds is cryptographically useless.
+          </p>
+        </.premium_card>
+      </section>
+
+      <%!-- The Web Crypto API --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Web Crypto API
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+          <p class="text-slate-300 leading-relaxed font-medium">
+            The Web Crypto API is built into every modern browser. It's not a library you download&mdash;it's part of the browser itself, maintained by the browser vendors and audited by security researchers worldwide.
+          </p>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div
+              :for={
+                {label, value} <- [
+                  {"Encryption", "AES-256-GCM"},
+                  {"Key Derivation", "PBKDF2"},
+                  {"Hashing", "SHA-256"},
+                  {"Randomness", "crypto.getRandomValues"}
+                ]
+              }
+              class="p-4 rounded-2xl bg-white/2 border border-white/5 text-center group hover:border-primary/30 transition-all"
+            >
+              <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 group-hover:text-primary transition-colors">
+                {label}
+              </div>
+              <div class="text-xs font-mono font-bold text-white">{value}</div>
+            </div>
+          </div>
+
+          <p class="text-slate-400 leading-relaxed font-medium">
+            No external libraries needed. No npm packages for cryptography. No supply chain attacks through compromised dependencies. The browser provides everything.
+          </p>
+        </div>
+      </section>
+
+      <%!-- Key Derivation --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Key Derivation
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+          <p class="text-slate-300 leading-relaxed font-medium">
+            Your encryption key is derived from the steg number and room ID using PBKDF2 with <span class="text-white font-bold">600,000 iterations</span>. This is the OWASP 2023 recommendation for PBKDF2-HMAC-SHA256.
+          </p>
+          <p class="text-slate-400 leading-relaxed font-medium">
+            This happens entirely in your browser. The derivation takes approximately 2 seconds on a modern device&mdash;a minor inconvenience for you, but a massive barrier for an attacker trying to brute-force keys.
+          </p>
+
+          <div class="p-6 rounded-2xl bg-slate-950/60 border border-white/5 space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                PBKDF2 Iterations
+              </span>
+              <span class="text-[10px] font-mono font-bold text-primary">600,000</span>
+            </div>
+            <div class="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/5">
+              <div class="h-full bg-linear-to-r from-primary to-emerald-400 animate-progress w-full">
+              </div>
+            </div>
+            <p class="text-[10px] text-slate-500 font-medium">
+              Each attempt to guess a key requires 600,000 hash operations. At scale, brute-force becomes computationally infeasible.
+            </p>
+          </div>
+
+          <p class="text-slate-400 leading-relaxed font-medium">
+            The derived key is a 256-bit AES key. It is never transmitted over the network. It is never stored on disk. It exists only in browser memory for the duration of the session, and is discarded when you close the tab.
+          </p>
+        </div>
+      </section>
+
+      <%!-- Why the PIN Isn't Part of the Key --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Why the PIN Isn't Part of the Key
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6 border-primary/20 bg-primary/2">
+          <p class="text-slate-300 leading-relaxed font-medium">
+            This is a design decision that often surprises people. If the PIN were part of the encryption key, each user would derive a different key&mdash;because they have different PINs. They wouldn't be able to decrypt each other's messages.
+          </p>
+          <p class="text-slate-300 leading-relaxed font-medium">
+            Both parties need the <span class="text-white font-bold">same encryption key</span>
+            to communicate. Since they share the same steg number but have different PINs, the PIN must be excluded from key derivation.
+          </p>
+          <p class="text-slate-400 leading-relaxed font-medium">
+            Instead, the PIN is used for <span class="text-white font-bold">access control</span>. It's hashed into the access_hash, which proves you have the right to join the room. Think of it as the lock on the door&mdash;the encryption key is what's inside the vault.
+          </p>
+        </div>
+      </section>
+
+      <%!-- The Encryption Flow --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            The Encryption Flow
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="space-y-4">
+          <div
+            :for={
+              {step, label, desc} <- [
+                {"01", "Plaintext",
+                 "You type a message in the chat input. It exists only in browser memory."},
+                {"02", "Web Crypto API",
+                 "The browser's built-in AES-256-GCM encrypt function is called with your derived key and a random 96-bit IV."},
+                {"03", "Ciphertext + IV",
+                 "The encrypted output and the IV are base64-encoded. The plaintext is discarded from memory."},
+                {"04", "WebSocket Transit",
+                 "The base64-encoded ciphertext and IV are sent over the WebSocket connection (already TLS-encrypted in transit)."},
+                {"05", "Server Storage",
+                 "The server stores the ciphertext and IV. It cannot decrypt them. It doesn't have the key."},
+                {"06", "Recipient Decryption",
+                 "The recipient's browser receives the ciphertext, decrypts it with the same derived key, and displays the plaintext."}
+              ]
+            }
+            class="glass-card p-6 flex items-start gap-5 group hover:border-primary/30 transition-all duration-500"
+          >
+            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0 group-hover:scale-110 transition-transform">
+              <span class="text-xs font-black text-primary font-mono">{step}</span>
+            </div>
+            <div class="space-y-1">
+              <h4 class="text-sm font-bold text-white font-display">{label}</h4>
+              <p class="text-xs text-slate-400 leading-relaxed font-medium">{desc}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <%!-- What the Server Sees --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            What the Server Sees
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <.premium_card class="p-0 overflow-hidden shadow-2xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-white/2 border-b border-white/5">
+                  <th class="p-6 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 font-mono">
+                    Data
+                  </th>
+                  <th class="p-6 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 font-mono">
+                    What the Server Has
+                  </th>
+                  <th class="p-6 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 font-mono">
+                    Useful?
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5">
+                <tr
+                  :for={
+                    {data, has, useful} <- [
+                      {"Phone Number", "SHA-256 hash only", "No"},
+                      {"PIN", "SHA-256 hash (in access_hash)", "No"},
+                      {"Messages", "AES-256-GCM ciphertext", "No"},
+                      {"Encryption Key", "Nothing", "N/A"},
+                      {"Sender Identity", "SHA-256 hash only", "No"},
+                      {"IVs", "96-bit random nonces", "No"}
+                    ]
+                  }
+                  class="group hover:bg-white/3 transition-all"
+                >
+                  <td class="p-6 font-mono text-xs font-bold text-white">{data}</td>
+                  <td class="p-6 text-xs text-slate-400 font-medium">{has}</td>
+                  <td class="p-6">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-white/5 text-[10px] font-bold text-slate-500">
+                      <div class="size-1 bg-slate-700 rounded-full"></div>
+                      {useful}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </.premium_card>
+
+        <p class="text-slate-400 leading-relaxed font-medium px-2">
+          Even under subpoena, a full database dump reveals hashes and ciphertext. Without the client-side key&mdash;which was never transmitted and doesn't exist on the server&mdash;the data is cryptographically inert.
+        </p>
+      </section>
+
+      <%!-- Zero External Dependencies --%>
+      <section class="space-y-6">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+            Zero External Dependencies
+          </h2>
+          <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+        </div>
+
+        <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+          <p class="text-slate-300 leading-relaxed font-medium">
+            The entire cryptographic module is a single JavaScript file with no imports. No CryptoJS. No tweetnacl. No libsodium-wrappers. Just the Web Crypto API that ships with your browser.
+          </p>
+          <p class="text-slate-400 leading-relaxed font-medium">
+            Every external dependency is an attack vector. A compromised npm package, a malicious update, a supply chain injection&mdash;any of these could silently exfiltrate keys or plaintext. By depending on zero external cryptographic libraries, we eliminate this entire class of attack.
+          </p>
+
+          <.premium_card class="p-6 text-center">
+            <p class="font-mono text-sm text-primary font-bold">
+              assets/js/crypto/anon.js
+            </p>
+            <p class="text-slate-500 text-xs font-medium mt-2">
+              Single file. Zero imports. Complete crypto module.
+            </p>
+          </.premium_card>
+        </div>
+      </section>
+    </div>
+
+    <%!-- Footer Navigation --%>
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-white/5">
+      <.link navigate={~p"/blog"} class="btn-ghost px-6 py-3 text-sm group">
+        <.icon name="arrow_left" class="size-4 group-hover:-translate-x-1 transition-transform" />
+        Back to Blog
+      </.link>
+      <.link navigate={~p"/chat"} class="btn-primary px-8 py-3 text-sm group">
+        Open Chat
+        <.icon name="arrow_right" class="size-4 group-hover:translate-x-1 transition-transform" />
+      </.link>
+    </div>
+  </article>
+</Layouts.app>

@@ -1,0 +1,19 @@
+[
+  version: "1.0",
+  # Paths to scan
+  root: ".",
+  # Router module for route analysis
+  router: "lib/stelgano_web/router.ex",
+  # Ignore false positives in specific modules/files
+  ignore: [
+    # The admin pipeline uses Plug.BasicAuth which Sobelow may flag as
+    # "cleartext" — this is expected; credentials come from env vars in prod
+    "Stelgano.Repo.Migrations.CreateRateLimitStorage"
+  ],
+  # Exit with non-zero on any finding (used in CI)
+  exit_on_high: true,
+  # Format for CI output
+  format: "txt",
+  # Checks to run (all by default)
+  skip: []
+]

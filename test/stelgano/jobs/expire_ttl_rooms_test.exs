@@ -1,0 +1,82 @@
+# SPDX-FileCopyrightText: 2026 sTELgano Contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+defmodule Stelgano.Jobs.ExpireTtlRoomsTest do
+  @moduledoc "Tests for the ExpireTtlRooms Oban job."
+
+  use Stelgano.DataCase, async: true
+
+  alias Stelgano.DailyMetrics
+  alias Stelgano.Jobs.ExpireTtlRooms
+  alias Stelgano.Rooms
+  alias Stelgano.Rooms.Room
+
+  defp hex64(seed) do
+    hash = :crypto.hash(:sha256, "ttl-test-#{seed}")
+    Base.encode16(hash, case: :lower)
+  end
+
+  describe "perform/1" do
+    test "expires rooms whose TTL has passed" do
+      rh = hex64(1)
+
+      # Create a room with a TTL in the past
+      {:ok, room} =
+        %{room_hash: rh, ttl_expires_at: DateTime.add(DateTime.utc_now(), -3600, :second)}
+        |> Room.create_changeset()
+        |> Repo.insert()
+
+      assert :ok = ExpireTtlRooms.perform(%Oban.Job{args: %{}})
+
+      reloaded = Repo.get!(Room, room.id)
+      refute reloaded.is_active
+    end
+
+    test "does not expire rooms whose TTL is in the future" do
+      rh = hex64(10)
+
+      {:ok, room} =
+        %{room_hash: rh, ttl_expires_at: DateTime.add(DateTime.utc_now(), 3600, :second)}
+        |> Room.create_changeset()
+        |> Repo.insert()
+
+      assert :ok = ExpireTtlRooms.perform(%Oban.Job{args: %{}})
+
+      reloaded = Repo.get!(Room, room.id)
+      assert reloaded.is_active
+    end
+
+    test "does not expire rooms with no TTL" do
+      rh = hex64(20)
+      {:ok, room} = Rooms.create_room(rh, "free")
+
+      assert :ok = ExpireTtlRooms.perform(%Oban.Job{args: %{}})
+
+      reloaded = Repo.get!(Room, room.id)
+      assert reloaded.is_active
+    end
+
+    test "bumps DailyMetrics.free_expired / paid_expired per tier" do
+      past = DateTime.add(DateTime.utc_now(), -3600, :second)
+
+      {:ok, _free_room} =
+        %{room_hash: hex64(30), ttl_expires_at: past}
+        |> Room.create_changeset()
+        |> Repo.insert()
+
+      {:ok, paid_room} =
+        %{room_hash: hex64(31), ttl_expires_at: past}
+        |> Room.create_changeset()
+        |> Repo.insert()
+
+      # Mark the second as paid before it expires
+      paid_room |> Ecto.Changeset.change(tier: "paid") |> Repo.update!()
+
+      assert :ok = ExpireTtlRooms.perform(%Oban.Job{args: %{}})
+
+      [%{free_expired: free, paid_expired: paid}] = DailyMetrics.list_recent(1)
+      assert free >= 1
+      assert paid >= 1
+    end
+  end
+end

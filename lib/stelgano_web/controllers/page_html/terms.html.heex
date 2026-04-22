@@ -1,0 +1,347 @@
+<Layouts.app flash={@flash}>
+  <div class="max-w-5xl mx-auto space-y-16 py-12 animate-in pb-40">
+    <%!-- Hero Header --%>
+    <div class="text-center space-y-6 pt-6 sm:pt-12 px-4">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+        <.icon name="scale" class="size-3" /> Legal
+      </div>
+
+      <h1 class="text-4xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.9] sm:leading-tight">
+        Terms of <span class="text-gradient">Service.</span>
+      </h1>
+
+      <p class="text-slate-500 font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.4em] animate-in stagger-3">
+        Effective April 2026 · Plain English
+      </p>
+    </div>
+
+    <%!-- Acceptance --%>
+    <div class="space-y-8 animate-in stagger-3 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Acceptance
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <.icon name="check_circle" class="size-6 text-primary" />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            By Using sTELgano, You Accept These Terms
+          </h3>
+        </div>
+        <p class="text-sm text-slate-400 leading-relaxed font-medium">
+          By accessing or using sTELgano, you agree to be bound by these Terms of Service. If you do not agree to these terms, do not use the platform. These terms are written in plain English because we believe legal documents should be understandable by the people they affect.
+        </p>
+      </div>
+    </div>
+
+    <%!-- What sTELgano Is --%>
+    <div class="space-y-8 animate-in stagger-4 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          What sTELgano Is
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="flex items-center gap-4">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <.icon name="message_circle" class="size-6 text-primary" />
+          </div>
+          <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">
+            Service Description
+          </h3>
+        </div>
+        <div class="space-y-4 text-sm text-slate-400 leading-relaxed font-medium">
+          <p>
+            sTELgano is an open-source, end-to-end encrypted messaging platform that uses contact-layer steganography. Two people share a "steg number" -- a random phone number saved in each other's contacts -- and each picks a PIN. All cryptography happens client-side in your browser. The server only ever sees SHA-256 hashes and AES-256-GCM ciphertext.
+          </p>
+          <p>
+            sTELgano is <span class="text-white">not a replacement for professional security tools</span>. It is designed to protect against intimate-access attackers -- someone who picks up your unlocked phone. It does not protect against governments, law enforcement, or targeted malware. We are honest about this throughout the product.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Terms Sections --%>
+    <div class="space-y-8 animate-in stagger-4 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Terms & Conditions
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <%!-- Open Source License --%>
+        <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+          <div class="flex items-center justify-between">
+            <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+              <.icon
+                name="code"
+                class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+              />
+            </div>
+            <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
+              AGPL-3.0
+            </span>
+          </div>
+          <div class="space-y-4">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              Open Source License
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              sTELgano is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). You are free to fork, modify, and self-host this software. Any improvements or modifications you make must be shared back under the same license. The full license text is available in the <.link
+                href="https://github.com/stelgano/stelgano/blob/main/LICENSE"
+                class="text-primary hover:underline"
+              >project repository</.link>.
+            </p>
+          </div>
+        </div>
+
+        <%!-- No Warranty --%>
+        <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+          <div class="flex items-center justify-between">
+            <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+              <.icon
+                name="shield_off"
+                class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+              />
+            </div>
+            <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
+              Disclaimer
+            </span>
+          </div>
+          <div class="space-y-4">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              No Warranty
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              This software is provided <span class="text-white">"as is"</span>, without warranty of any kind, express or implied. There are no guarantees of uptime, availability, or suitability for any particular purpose. The protocol may contain bugs. Use it at your own risk and with full awareness of the stated threat model.
+            </p>
+          </div>
+        </div>
+
+        <%!-- Limitation of Liability --%>
+        <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+          <div class="flex items-center justify-between">
+            <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+              <.icon
+                name="ban"
+                class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+              />
+            </div>
+            <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
+              Liability
+            </span>
+          </div>
+          <div class="space-y-4">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              Limitation of Liability
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              In no event shall the contributors, maintainers, or operators of sTELgano be liable for any direct, indirect, incidental, special, consequential, or exemplary damages arising from the use or inability to use this software. This includes, but is not limited to, damages for loss of data, privacy breaches, or service interruptions.
+            </p>
+          </div>
+        </div>
+
+        <%!-- Modifications --%>
+        <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500">
+          <div class="flex items-center justify-between">
+            <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+              <.icon
+                name="git_branch"
+                class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+              />
+            </div>
+            <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">
+              Updates
+            </span>
+          </div>
+          <div class="space-y-4">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              Modifications to Terms
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              These terms may be updated from time to time. All changes are tracked in the public
+              <.link
+                href="https://github.com/stelgano/stelgano"
+                class="text-primary hover:underline"
+              >
+                git repository
+              </.link>
+              with full version history. Continued use of sTELgano after changes constitutes acceptance of the updated terms. We encourage you to review the commit history for transparency.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Your Responsibilities --%>
+    <div class="space-y-8 animate-in stagger-5 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Your Responsibilities
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-10 space-y-8 border-danger/20 bg-danger/2 group transition-all hover:bg-danger/4">
+        <div class="flex items-center gap-4 text-danger">
+          <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center">
+            <.icon name="alert_triangle" class="size-6" />
+          </div>
+          <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">
+            Critical: Read This Carefully
+          </h4>
+        </div>
+        <ul class="space-y-4">
+          <li
+            :for={
+              item <- [
+                "You are responsible for your PIN and steg number. If lost, they are unrecoverable. We cannot help -- the server never sees your plaintext credentials.",
+                "You must comply with the laws of your local jurisdiction when using sTELgano.",
+                "You must not use the platform for any illegal activity, including but not limited to harassment, threats, or distribution of illegal content.",
+                "You are responsible for securing your own device. sTELgano protects your messages, not your phone."
+              ]
+            }
+            class="flex items-start gap-4 group/li"
+          >
+            <div class="size-5 flex items-center justify-center shrink-0 mt-0.5">
+              <div class="size-1.5 rounded-full bg-danger animate-pulse"></div>
+            </div>
+            <span class="text-sm text-slate-300 font-medium leading-relaxed group-hover/li:text-white transition-colors">
+              {item}
+            </span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <%!-- Acceptable Use --%>
+    <div class="space-y-8 animate-in stagger-5 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Acceptable Use
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="glass-card p-6 sm:p-10 space-y-8 border-primary/20 bg-primary/2 group transition-all hover:bg-primary/4">
+          <div class="flex items-center gap-4 text-primary">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center">
+              <.icon name="check_circle" class="size-6" />
+            </div>
+            <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">
+              Permitted Use
+            </h4>
+          </div>
+          <ul class="space-y-4">
+            <li
+              :for={
+                item <- [
+                  "Legitimate personal privacy and anonymous communication",
+                  "Protecting sensitive conversations from casual device snooping",
+                  "Journalism, whistleblowing, and activist communication",
+                  "Testing, auditing, and contributing to the open-source project"
+                ]
+              }
+              class="flex items-start gap-4 group/li"
+            >
+              <.icon
+                name="check_circle"
+                class="size-5 text-primary shrink-0 group-hover/li:scale-125 transition-transform"
+              />
+              <span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">
+                {item}
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="glass-card p-6 sm:p-10 space-y-8 border-danger/20 bg-danger/2 group transition-all hover:bg-danger/4">
+          <div class="flex items-center gap-4 text-danger">
+            <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center">
+              <.icon name="x_circle" class="size-6" />
+            </div>
+            <h4 class="font-extrabold uppercase tracking-[0.2em] text-sm">
+              Prohibited Use
+            </h4>
+          </div>
+          <ul class="space-y-4">
+            <li
+              :for={
+                item <- [
+                  "Harassment, stalking, threats, or intimidation of any kind",
+                  "Distribution of illegal content or materials",
+                  "Attempts to compromise, reverse-engineer, or attack the platform",
+                  "Any activity that violates the laws of your jurisdiction"
+                ]
+              }
+              class="flex items-start gap-4 group/li"
+            >
+              <div class="size-5 flex items-center justify-center shrink-0">
+                <div class="size-1.5 rounded-full bg-danger animate-pulse"></div>
+              </div>
+              <span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">
+                {item}
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Account Termination & Governing Law --%>
+    <div class="space-y-8 animate-in stagger-5 px-4">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+          Additional Terms
+        </h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <.icon
+              name="user_x"
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              Account Termination
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              There are no accounts to terminate. sTELgano has no registration, no login, and no user profiles. Rooms expire automatically based on their TTL. You can instantly destroy your session at any time by visiting the panic route (<span class="font-mono text-white">/x</span>), which clears all local data including session storage and caches.
+            </p>
+          </div>
+        </div>
+
+        <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <.icon
+              name="globe"
+              class="size-6 text-slate-500 group-hover:text-primary transition-colors"
+            />
+          </div>
+          <div class="space-y-3">
+            <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">
+              Governing Law
+            </h4>
+            <p class="text-sm text-slate-400 leading-relaxed font-medium">
+              These terms are governed by the laws applicable to the jurisdiction in which the service operator resides. For self-hosted instances, the operator's local laws apply. sTELgano is an open-source tool -- legal responsibility for its deployment rests with whoever hosts the instance you are using.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layouts.app>

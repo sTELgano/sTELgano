@@ -1,0 +1,243 @@
+# SPDX-FileCopyrightText: 2026 sTELgano Contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+
+defmodule StelganoWeb.Data.Countries do
+  @moduledoc """
+  Comprehensive list of countries with ISO2 codes for sTELgano identity context.
+  """
+
+  @countries [
+    {"Afghanistan", "AF"},
+    {"Albania", "AL"},
+    {"Algeria", "DZ"},
+    {"Andorra", "AD"},
+    {"Angola", "AO"},
+    {"Antigua and Barbuda", "AG"},
+    {"Argentina", "AR"},
+    {"Armenia", "AM"},
+    {"Australia", "AU"},
+    {"Austria", "AT"},
+    {"Azerbaijan", "AZ"},
+    {"Bahamas", "BS"},
+    {"Bahrain", "BH"},
+    {"Bangladesh", "BD"},
+    {"Barbados", "BB"},
+    {"Belarus", "BY"},
+    {"Belgium", "BE"},
+    {"Belize", "BZ"},
+    {"Benin", "BJ"},
+    {"Bhutan", "BT"},
+    {"Bolivia", "BO"},
+    {"Bosnia and Herzegovina", "BA"},
+    {"Botswana", "BW"},
+    {"Brazil", "BR"},
+    {"Brunei", "BN"},
+    {"Bulgaria", "BG"},
+    {"Burkina Faso", "BF"},
+    {"Burundi", "BI"},
+    {"Cambodia", "KH"},
+    {"Cameroon", "CM"},
+    {"Canada", "CA"},
+    {"Cape Verde", "CV"},
+    {"Central African Republic", "CF"},
+    {"Chad", "TD"},
+    {"Chile", "CL"},
+    {"China", "CN"},
+    {"Colombia", "CO"},
+    {"Comoros", "KM"},
+    {"Congo", "CG"},
+    {"Costa Rica", "CR"},
+    {"Croatia", "HR"},
+    {"Cuba", "CU"},
+    {"Cyprus", "CY"},
+    {"Czech Republic", "CZ"},
+    {"Denmark", "DK"},
+    {"Djibouti", "DJ"},
+    {"Dominica", "DM"},
+    {"Dominican Republic", "DO"},
+    {"Ecuador", "EC"},
+    {"Egypt", "EG"},
+    {"El Salvador", "SV"},
+    {"Equatorial Guinea", "GQ"},
+    {"Eritrea", "ER"},
+    {"Estonia", "EE"},
+    {"Ethiopia", "ET"},
+    {"Fiji", "FJ"},
+    {"Finland", "FI"},
+    {"France", "FR"},
+    {"Gabon", "GA"},
+    {"Gambia", "GM"},
+    {"Georgia", "GE"},
+    {"Germany", "DE"},
+    {"Ghana", "GH"},
+    {"Greece", "GR"},
+    {"Grenada", "GD"},
+    {"Guatemala", "GT"},
+    {"Guinea", "GN"},
+    {"Guinea-Bissau", "GW"},
+    {"Guyana", "GY"},
+    {"Haiti", "HT"},
+    {"Honduras", "HN"},
+    {"Hungary", "HU"},
+    {"Iceland", "IS"},
+    {"India", "IN"},
+    {"Indonesia", "ID"},
+    {"Iran", "IR"},
+    {"Iraq", "IQ"},
+    {"Ireland", "IE"},
+    {"Israel", "IL"},
+    {"Italy", "IT"},
+    {"Jamaica", "JM"},
+    {"Japan", "JP"},
+    {"Jordan", "JO"},
+    {"Kazakhstan", "KZ"},
+    {"Kenya", "KE"},
+    {"Kiribati", "KI"},
+    {"North Korea", "KP"},
+    {"South Korea", "KR"},
+    {"Kuwait", "KW"},
+    {"Kyrgyzstan", "KG"},
+    {"Laos", "LA"},
+    {"Latvia", "LV"},
+    {"Lebanon", "LB"},
+    {"Lesotho", "LS"},
+    {"Liberia", "LR"},
+    {"Libya", "LY"},
+    {"Liechtenstein", "LI"},
+    {"Lithuania", "LT"},
+    {"Luxembourg", "LU"},
+    {"Madagascar", "MG"},
+    {"Malawi", "MW"},
+    {"Malaysia", "MY"},
+    {"Maldives", "MV"},
+    {"Mali", "ML"},
+    {"Malta", "MT"},
+    {"Marshall Islands", "MH"},
+    {"Mauritania", "MR"},
+    {"Mauritius", "MU"},
+    {"Mexico", "MX"},
+    {"Micronesia", "FM"},
+    {"Moldova", "MD"},
+    {"Monaco", "MC"},
+    {"Mongolia", "MN"},
+    {"Montenegro", "ME"},
+    {"Morocco", "MA"},
+    {"Mozambique", "MZ"},
+    {"Myanmar", "MM"},
+    {"Namibia", "NA"},
+    {"Nauru", "NR"},
+    {"Nepal", "NP"},
+    {"Netherlands", "NL"},
+    {"New Zealand", "NZ"},
+    {"Nicaragua", "NI"},
+    {"Niger", "NE"},
+    {"Nigeria", "NG"},
+    {"North Macedonia", "MK"},
+    {"Norway", "NO"},
+    {"Oman", "OM"},
+    {"Pakistan", "PK"},
+    {"Palau", "PW"},
+    {"Panama", "PA"},
+    {"Papua New Guinea", "PG"},
+    {"Paraguay", "PY"},
+    {"Peru", "PE"},
+    {"Philippines", "PH"},
+    {"Poland", "PL"},
+    {"Portugal", "PT"},
+    {"Qatar", "QA"},
+    {"Romania", "RO"},
+    {"Russia", "RU"},
+    {"Rwanda", "RW"},
+    {"Saint Kitts and Nevis", "KN"},
+    {"Saint Lucia", "LC"},
+    {"Saint Vincent and the Grenadines", "VC"},
+    {"Samoa", "WS"},
+    {"San Marino", "SM"},
+    {"Sao Tome and Principe", "ST"},
+    {"Saudi Arabia", "SA"},
+    {"Senegal", "SN"},
+    {"Serbia", "RS"},
+    {"Seychelles", "SC"},
+    {"Sierra Leone", "SL"},
+    {"Singapore", "SG"},
+    {"Slovakia", "SK"},
+    {"Slovenia", "SI"},
+    {"Solomon Islands", "SB"},
+    {"Somalia", "SO"},
+    {"South Africa", "ZA"},
+    {"South Sudan", "SS"},
+    {"Spain", "ES"},
+    {"Sri Lanka", "LK"},
+    {"Sudan", "SD"},
+    {"Suriname", "SR"},
+    {"Sweden", "SE"},
+    {"Switzerland", "CH"},
+    {"Syria", "SY"},
+    {"Taiwan", "TW"},
+    {"Tajikistan", "TJ"},
+    {"Tanzania", "TZ"},
+    {"Thailand", "TH"},
+    {"Timor-Leste", "TL"},
+    {"Togo", "TG"},
+    {"Tonga", "TO"},
+    {"Trinidad and Tobago", "TT"},
+    {"Tunisia", "TN"},
+    {"Turkey", "TR"},
+    {"Turkmenistan", "TM"},
+    {"Tuvalu", "TV"},
+    {"Uganda", "UG"},
+    {"Ukraine", "UA"},
+    {"United Arab Emirates", "AE"},
+    {"United Kingdom", "GB"},
+    {"United States", "US"},
+    {"Uruguay", "UY"},
+    {"Uzbekistan", "UZ"},
+    {"Vanuatu", "VU"},
+    {"Vatican City", "VA"},
+    {"Venezuela", "VE"},
+    {"Vietnam", "VN"},
+    {"Yemen", "YE"},
+    {"Zambia", "ZM"},
+    {"Zimbabwe", "ZW"}
+  ]
+
+  @doc """
+  Returns a list of all countries formatted for the searchable selector.
+  """
+  @spec list() :: [{String.t(), String.t(), String.t()}]
+  def list do
+    Enum.map(@countries, fn {name, code} ->
+      # generator_val is name with spaces as underscores
+      {name, String.replace(name, " ", "_"), code}
+    end)
+  end
+
+  @doc """
+  Returns the country name for a given ISO2 code.
+  """
+  @spec get_name_by_iso(String.t()) :: String.t() | nil
+  def get_name_by_iso(iso) do
+    iso = String.upcase(iso)
+
+    case Enum.find(@countries, fn {_name, code} -> code == iso end) do
+      {name, _code} -> name
+      _other -> nil
+    end
+  end
+
+  @doc """
+  Filters a list of `{name, val, iso}` triples by case-insensitive name match.
+  Empty query returns an empty list (the selector closes when the search box is cleared).
+  """
+  @spec filter([{String.t(), String.t(), String.t()}], String.t()) ::
+          [{String.t(), String.t(), String.t()}]
+  def filter(_countries, ""), do: []
+
+  def filter(countries, query) do
+    needle = String.downcase(query)
+
+    Enum.filter(countries, fn {name, _val, _iso} ->
+      String.contains?(String.downcase(name), needle)
+    end)
+  end
+end

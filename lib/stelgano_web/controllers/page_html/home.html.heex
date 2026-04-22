@@ -1,0 +1,728 @@
+<Layouts.app flash={@flash}>
+  <%!-- Hero Section --%>
+  <section class="relative min-h-[90vh] flex flex-col items-center justify-center px-6 py-24 text-center overflow-hidden">
+    <div class="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center max-w-7xl mx-auto w-full relative z-10 animate-in stagger-1">
+      <div class="text-left space-y-8">
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+          <.icon name="shield_check" class="size-4" /> Open Protocol &middot; End-to-End Encrypted
+        </div>
+
+        <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter font-display leading-[0.9]">
+          <span class="text-slate-500 font-light italic">s</span><span class="text-gradient">TEL</span><span class="text-white">gano</span>
+        </h1>
+
+        <p class="text-[10px] sm:text-xs font-mono uppercase tracking-[0.35em] text-slate-500">
+          stel<span class="text-primary">·GAH·</span>no
+        </p>
+
+        <p class="text-xl sm:text-2xl md:text-3xl text-slate-300 font-medium tracking-tight leading-tight">
+          The messaging app hidden in<br />
+          <span class="text-white italic underline decoration-primary decoration-4 underline-offset-8">
+            your contacts.
+          </span>
+        </p>
+
+        <p class="text-slate-500 text-sm sm:text-lg leading-relaxed max-w-lg">
+          No accounts. No chat history. No metadata. Your browser encrypts everything locally with AES-256-GCM before it ever touches a server. The server only sees ciphertext.
+        </p>
+
+        <div class="flex flex-col sm:flex-row gap-4 pt-4">
+          <.link
+            navigate={~p"/chat"}
+            class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto"
+          >
+            Open Chat
+            <.icon
+              name="sparkles"
+              class="size-6 group-hover:rotate-12 transition-transform"
+            />
+          </.link>
+          <.link
+            navigate={~p"/spec"}
+            class="btn-secondary px-10 py-4 text-xl w-full sm:w-auto group"
+          >
+            Read the Spec
+            <.icon
+              name="arrow_right"
+              class="size-6 group-hover:translate-x-1 transition-transform"
+            />
+          </.link>
+        </div>
+        <p class="text-[10px] text-slate-500 font-medium flex items-center gap-2 px-1">
+          <.icon name="eye_off" class="size-3 text-primary" />
+          Incognito Mode recommended for maximum discretion.
+        </p>
+      </div>
+
+      <div class="relative hidden lg:block animate-in duration-1000 zoom-in-95">
+        <div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full"></div>
+        <img
+          src="/images/hero_visual.jpg"
+          alt="sTELgano Secure Messaging"
+          class="relative z-10 w-full h-auto drop-shadow-[0_0_50px_rgba(16,185,129,0.3)] floating"
+        />
+      </div>
+    </div>
+  </section>
+
+  <%!-- What Makes sTELgano Different --%>
+  <section class="px-4 sm:px-6 py-20 sm:py-32 max-w-6xl mx-auto relative">
+    <div class="text-center mb-20 animate-in">
+      <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">Why sTELgano</h2>
+      <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display mb-6">
+        Privacy that doesn't advertise itself.
+      </h3>
+      <p class="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed">
+        Most privacy apps scream "I have something to hide." sTELgano takes a different approach&mdash;starting with the name itself, which is designed to mean nothing to a casual observer.
+        Your encrypted channel lives inside a phone number saved in your contacts&mdash;invisible to anyone who picks up your phone.
+      </p>
+    </div>
+
+    <div class="space-y-32">
+      <%!-- Zero Knowledge --%>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="relative animate-in duration-1000 slide-in-from-left-8">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img
+            src="/images/zero_knowledge_server.png"
+            alt="Zero-Knowledge Architecture"
+            class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10"
+          />
+        </div>
+
+        <div class="space-y-8 animate-in slide-in-from-right-8">
+          <div>
+            <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+              Zero-Knowledge Architecture.
+            </h3>
+            <p class="text-slate-400 text-lg leading-relaxed mb-6">
+              The server is entirely blind. It acts only as a dumb relay for hashes and ciphertext, knowing absolutely nothing about you or your data.
+            </p>
+          </div>
+
+          <ul class="space-y-4">
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="lock_closed" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">Opaque by Default</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  No plaintext ever touches the backend. Even a full database breach reveals nothing but uncrackable hashes and AES-256-GCM ciphertext.
+                </p>
+              </div>
+            </li>
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="server" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">Untrusted Backend</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  The protocol is designed so you don't even have to trust us. The cryptography guarantees your privacy strictly on the client side.
+                </p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <%!-- Ephemeral Identity --%>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="order-2 lg:order-1 space-y-8 animate-in slide-in-from-left-8">
+          <div>
+            <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+              Ephemeral Identity.
+            </h3>
+            <p class="text-slate-400 text-lg leading-relaxed mb-6">
+              No accounts. No signups. No traces. Your identity is generated strictly on-the-fly and vanishes the moment you close the tab.
+            </p>
+          </div>
+
+          <ul class="space-y-4">
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="user_minus" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">No Email, No Phone</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  We don't want to know who you are. The system is designed to prevent us from ever tying a session to a real-world identity.
+                </p>
+              </div>
+            </li>
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="sparkles" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">Memory-Only Sessions</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  Session keys are kept strictly in volatile memory. Close the browser, and the encryption keys are wiped from existence forever.
+                </p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="order-1 lg:order-2 relative animate-in duration-1000 slide-in-from-right-8">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img
+            src="/images/ephemeral_identity.png"
+            alt="Ephemeral Identity Concept"
+            class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10"
+          />
+        </div>
+      </div>
+
+      <%!-- Client-Side Cryptography --%>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="relative animate-in duration-1000 slide-in-from-left-8">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img
+            src="/images/client_side_crypto.png"
+            alt="Client-Side Encryption"
+            class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10"
+          />
+        </div>
+
+        <div class="space-y-8 animate-in slide-in-from-right-8">
+          <div>
+            <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+              Client-Side Cryptography.
+            </h3>
+            <p class="text-slate-400 text-lg leading-relaxed mb-6">
+              The keys never leave your device. All encryption and decryption happens strictly inside your local browser via the Web Crypto API.
+            </p>
+          </div>
+
+          <ul class="space-y-4">
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="key" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">Local Key Derivation</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  Your encryption keys are derived from your PIN and the Steg Number using 600,000 rounds of PBKDF2 directly on your CPU.
+                </p>
+              </div>
+            </li>
+            <li class="flex items-start gap-4">
+              <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                <.icon name="shield_check" class="size-5 text-primary" />
+              </div>
+              <div>
+                <h4 class="text-white font-bold font-display mb-1">End-to-End by Design</h4>
+                <p class="text-slate-500 text-sm leading-relaxed">
+                  Because the payload is encrypted with AES-256-GCM before it ever hits the network, interception is mathematically impossible to decode.
+                </p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Comparisons --%>
+  <section class="px-4 sm:px-6 py-20 sm:py-32 relative overflow-hidden bg-white/[0.02] border-y border-white/5">
+    <div class="max-w-7xl mx-auto">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-20 animate-in">
+        <div class="space-y-6 text-left">
+          <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary">
+            Feature Comparison
+          </h2>
+          <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display">
+            How we stack up <span class="text-gradient">against the rest.</span>
+          </h3>
+          <p class="text-slate-400 text-lg leading-relaxed">
+            sTELgano isn't meant to replace your daily messenger. It is built for a specific threat model: when the mere existence of the conversation is what you need to hide. Traditional apps focus on usability; we focus on invisibility.
+          </p>
+        </div>
+        <div class="relative hidden lg:block">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img
+            src="/images/comparison_visual.jpg"
+            alt="sTELgano vs Traditional Messaging Apps"
+            class="relative z-10 w-full h-auto rounded-3xl border border-white/10 drop-shadow-[0_0_50px_rgba(16,185,129,0.2)]"
+          />
+        </div>
+      </div>
+
+      <div class="glass-card overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr class="border-b border-white/10 bg-slate-900/50">
+              <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-1/4">
+                Feature
+              </th>
+              <th class="p-6 text-sm font-bold uppercase tracking-widest text-primary w-[15%]">
+                sTELgano
+              </th>
+              <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">
+                Signal
+              </th>
+              <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">
+                WhatsApp
+              </th>
+              <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">
+                Telegram
+              </th>
+              <th class="p-6 text-sm font-bold uppercase tracking-widest text-slate-400 w-[15%]">
+                SMS
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5 text-sm">
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="p-6 font-medium text-white">Appears as Chat App</td>
+              <td class="p-6 text-primary">
+                <.icon name="shield_check" class="size-5" /> Hidden
+              </td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Yes</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Yes</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Yes</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Yes</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="p-6 font-medium text-white">Requires Phone / Account</td>
+              <td class="p-6 text-primary"><.icon name="check_circle" class="size-5" /> None</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Phone</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Phone</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Phone</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Phone</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="p-6 font-medium text-white">Chat History Retained</td>
+              <td class="p-6 text-primary">
+                <.icon name="delete_row" class="size-5" /> N=1 (Wiped)
+              </td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Local</td>
+              <td class="p-6 text-slate-500">
+                <.icon name="x_circle" class="size-5" /> Local/Cloud
+              </td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> Cloud</td>
+              <td class="p-6 text-slate-500">
+                <.icon name="x_circle" class="size-5" /> Provider
+              </td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="p-6 font-medium text-white">E2E Encrypted Default</td>
+              <td class="p-6 text-primary"><.icon name="check_circle" class="size-5" /> Yes</td>
+              <td class="p-6 text-emerald-500">
+                <.icon name="check_circle" class="size-5" /> Yes
+              </td>
+              <td class="p-6 text-emerald-500">
+                <.icon name="check_circle" class="size-5" /> Yes
+              </td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> No</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> No</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="p-6 font-medium text-white">Zero-Knowledge Server</td>
+              <td class="p-6 text-primary"><.icon name="check_circle" class="size-5" /> Yes</td>
+              <td class="p-6 text-emerald-500">
+                <.icon name="check_circle" class="size-5" /> Yes
+              </td>
+              <td class="p-6 text-slate-500">
+                <.icon name="x_circle" class="size-5" /> Metadata
+              </td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> No</td>
+              <td class="p-6 text-slate-500"><.icon name="x_circle" class="size-5" /> No</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <%!-- How It Works --%>
+  <section class="px-4 sm:px-6 py-20 sm:py-32 bg-white/1 border-y border-white/5 relative">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-20 animate-in">
+        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
+          How it Works
+        </h2>
+        <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display">
+          Three steps. Under a minute.
+        </h3>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="order-2 lg:order-1 relative animate-in duration-1000 slide-in-from-left-8">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img
+            src="/images/contact_steg.png"
+            alt="Contact-Layer Steganography Concept"
+            class="relative z-10 w-full max-w-md mx-auto h-auto drop-shadow-[0_0_40px_rgba(16,185,129,0.2)] rounded-3xl border border-white/10"
+          />
+        </div>
+
+        <div class="order-1 lg:order-2 space-y-6">
+          <div
+            :for={
+              {{title, desc}, i} <-
+                Enum.with_index([
+                  {"Generate a Steg Number",
+                   "Use our generator to create a random phone number for any country. Save it in your partner's phone as a normal contact. That's your secret handshake."},
+                  {"Choose Your PIN",
+                   "Each person picks their own PIN. This PIN never leaves your device—it's hashed locally and used to prove you have the right to access the room."},
+                  {"Open the Channel",
+                   "Enter the steg number and your PIN. Your browser derives the encryption key, connects to the room, and you're chatting with end-to-end encryption."}
+                ])
+            }
+            class="glass-card p-6 group relative overflow-hidden animate-in"
+            style={"animation-delay: #{i * 0.1}s"}
+          >
+            <div class="absolute -right-4 -bottom-4 text-8xl font-black text-white/2 group-hover:text-white/4 transition-colors italic pointer-events-none">
+              {i + 1}
+            </div>
+            <div class="flex items-start gap-5">
+              <div class="size-12 rounded-2xl bg-primary/10 flex shrink-0 items-center justify-center text-primary font-black text-xl shadow-inner ring-1 ring-primary/20">
+                {i + 1}
+              </div>
+              <div>
+                <h4 class="text-lg font-bold text-white mb-2 font-display">{title}</h4>
+                <p class="text-slate-400 leading-relaxed font-medium text-sm">
+                  {desc}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%!-- The N=1 Invariant --%>
+  <section class="px-4 sm:px-6 py-20 sm:py-32 max-w-7xl mx-auto relative overflow-hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <div class="space-y-8 animate-in slide-in-from-left-8">
+        <div>
+          <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
+            The Core Invariant
+          </h2>
+          <h3 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-display mb-6">
+            N=1 Messaging.
+          </h3>
+          <p class="text-slate-400 text-lg leading-relaxed">
+            sTELgano enforces a strict <span class="text-white font-bold">N=1 invariant</span>
+            at the database level.
+            At most, one message can exist per room at any given time.
+          </p>
+        </div>
+
+        <ul class="space-y-6">
+          <li
+            :for={
+              {title, desc, icon} <- [
+                {"Instant Annihilation",
+                 "The moment a reply is sent, the previous message is atomically wiped from the database in a single transaction.",
+                 "zap"},
+                {"No Chat History",
+                 "Because old messages are actively destroyed to make room for new ones, there is no scrollback. No logs. No history to recover.",
+                 "delete_row"},
+                {"Zero Long-Term Liability",
+                 "Even if a server is physically seized or fully compromised, there is nothing to extract except the single current ciphertext.",
+                 "shield_x"}
+              ]
+            }
+            class="flex items-start gap-4"
+          >
+            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+              <.icon name={icon} class="size-5 text-primary" />
+            </div>
+            <div>
+              <h4 class="text-white font-bold font-display mb-1">{title}</h4>
+              <p class="text-slate-500 text-sm leading-relaxed">{desc}</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="relative animate-in slide-in-from-right-8 duration-1000">
+        <div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full mix-blend-screen">
+        </div>
+        <img
+          src="/images/n_equals_1.png"
+          alt="N=1 Messaging - Shattering the previous message"
+          class="relative z-10 w-full max-w-lg mx-auto h-auto floating drop-shadow-[0_0_60px_rgba(16,185,129,0.3)]"
+        />
+      </div>
+    </div>
+  </section>
+  <%!-- Security Model --%>
+  <section class="px-4 sm:px-6 py-20 sm:py-32 relative overflow-hidden">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16 animate-in">
+        <div class="text-left space-y-6">
+          <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary">
+            Security Model
+          </h2>
+          <h3 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight font-display">
+            Transparent about what we store.
+          </h3>
+          <p class="text-slate-400 text-lg leading-relaxed">
+            We believe you should know exactly what data touches our servers.
+            Here's the full picture&mdash;no fine print, no exceptions.
+          </p>
+        </div>
+        <div class="relative hidden lg:block">
+          <div class="absolute inset-0 bg-primary/10 blur-[80px] rounded-full"></div>
+          <img
+            src="/images/hero_illustration.png"
+            alt="sTELgano Security Architecture"
+            class="relative z-10 w-full max-w-sm ml-auto h-auto drop-shadow-[0_0_30px_rgba(16,185,129,0.2)] floating"
+          />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <.premium_card class="border-primary/10">
+          <h4 class="text-xs font-bold uppercase tracking-[0.2em] text-primary mb-6 flex items-center gap-2">
+            <.icon name="check_circle" class="size-4" /> What the server stores
+          </h4>
+          <ul class="space-y-4">
+            <li
+              :for={
+                {item, detail} <- [
+                  {"Room hash",
+                   "SHA-256 of the steg number. Cannot be reversed to the original number."},
+                  {"Access hash",
+                   "SHA-256 of number + PIN. Proves access rights without revealing the PIN."},
+                  {"Encrypted messages",
+                   "AES-256-GCM ciphertext. Unreadable without the client-side key."},
+                  {"TTL expiry timer", "Optional room self-destruct timestamp. Nothing else."}
+                ]
+              }
+              class="flex items-start gap-3 text-sm"
+            >
+              <div class="size-1.5 rounded-full bg-primary/40 mt-2 shrink-0"></div>
+              <div>
+                <span class="font-bold text-white">{item}</span>
+                <span class="text-slate-400 font-medium">&mdash; {detail}</span>
+              </div>
+            </li>
+          </ul>
+        </.premium_card>
+
+        <.premium_card class="border-danger/10">
+          <h4 class="text-xs font-bold uppercase tracking-[0.2em] text-danger mb-6 flex items-center gap-2">
+            <.icon name="x_circle" class="size-4" /> What the server never sees
+          </h4>
+          <ul class="space-y-4">
+            <li
+              :for={
+                {item, detail} <- [
+                  {"Phone numbers",
+                   "Only hashes. The server cannot determine the original steg number."},
+                  {"PINs",
+                   "Hashed client-side before transmission. Never stored or logged in any form."},
+                  {"Plaintext messages",
+                   "Encrypted in your browser before sending. Decrypted only on the recipient's device."},
+                  {"Encryption keys",
+                   "Derived via PBKDF2 in your browser. Never transmitted. Never stored."},
+                  {"IP addresses",
+                   "Stripped from logs within 48 hours. Never correlated with rooms."}
+                ]
+              }
+              class="flex items-start gap-3 text-sm"
+            >
+              <div class="size-1.5 rounded-full bg-danger/40 mt-2 shrink-0"></div>
+              <div>
+                <span class="font-bold text-white">{item}</span>
+                <span class="text-slate-400 font-medium">&mdash; {detail}</span>
+              </div>
+            </li>
+          </ul>
+        </.premium_card>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Use Cases --%>
+  <section class="px-4 sm:px-6 py-20 sm:py-32 bg-white/1 border-y border-white/5 relative">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 animate-in">
+        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">Use Cases</h2>
+        <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+          Built for people who need real discretion.
+        </h3>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div
+          :for={
+            {icon, title, desc} <- [
+              {"heart", "Personal Privacy",
+               "Communicate with a trusted person without leaving any trace on your device. No app to delete. No chat history to clear."},
+              {"briefcase", "Confidential Sources",
+               "Journalists and researchers can receive tips through an untraceable channel. No account links the source to the conversation."},
+              {"users", "Sensitive Coordination",
+               "Activists, whistleblowers, and human rights workers can coordinate without creating a digital trail that can be subpoenaed."},
+              {"globe", "Cross-Border Communication",
+               "Works from any browser in any country. No app store download required. No phone number verification. Just a URL."}
+            ]
+          }
+          class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500"
+        >
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <.icon name={icon} class="size-6 text-primary" />
+          </div>
+          <h4 class="text-lg font-bold text-white font-display">{title}</h4>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium">{desc}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%!-- FAQ Section --%>
+  <section
+    class="px-4 sm:px-6 py-20 sm:py-32 border-y border-white/5 bg-white/1 relative"
+    id="faq"
+  >
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center mb-16 animate-in">
+        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
+          FAQ
+        </h2>
+        <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+          Frequently Asked Questions.
+        </h3>
+      </div>
+
+      <div class="space-y-6">
+        <div class="glass-card p-8">
+          <h4 class="text-lg font-bold text-white mb-3">
+            How does contact-layer steganography work?
+          </h4>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            Unlike other apps where you have an obvious icon on your home screen, sTELgano hides in plain sight. You generate a random "Steg Number" and save it in your phone's address book under any name you choose. To an observer, it's just a normal contact. But when you enter that number into sTELgano, it derives the encryption keys and opens your secure channel.
+          </p>
+        </div>
+        <div class="glass-card p-8">
+          <h4 class="text-lg font-bold text-white mb-3">What happens to my messages?</h4>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            sTELgano strictly enforces an N=1 invariant. This means only one message can exist per room at any given time. The moment a reply is sent, the previous message is atomically wiped from the database. There is no chat history to delete, because history is never retained.
+          </p>
+        </div>
+        <div class="glass-card p-8">
+          <h4 class="text-lg font-bold text-white mb-3">Can the server read my messages?</h4>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            No. All encryption happens client-side in your browser using the Web Crypto API. The payload is encrypted with AES-256-GCM before it ever leaves your device. The server only sees ciphertext and cannot decipher it because it never receives your keys or PIN.
+          </p>
+        </div>
+        <div class="glass-card p-8">
+          <h4 class="text-lg font-bold text-white mb-3">
+            If there's no account, how do I log in?
+          </h4>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            Your identity is ephemeral. You access a room by knowing the shared Steg Number and your private PIN. When you enter them, your browser mathematically derives the access hashes required to connect. No email, no password, no 2FA.
+          </p>
+        </div>
+        <div class="glass-card p-8">
+          <h4 class="text-lg font-bold text-white mb-3">What happens if I forget my PIN?</h4>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            You lose access to the room forever. Because sTELgano is a zero-knowledge system, we don't know your PIN and have no way to reset it. You will need to coordinate with your contact to generate a new Steg Number and start a new room.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Technical Highlights --%>
+  <section class="px-4 sm:px-6 py-20 sm:py-32 relative">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center mb-16 animate-in">
+        <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">
+          Under the Hood
+        </h2>
+        <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display mb-4">
+          Serious cryptography. Simple interface.
+        </h3>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div
+          :for={
+            {label, value} <- [
+              {"Encryption", "AES-256-GCM"},
+              {"Key Derivation", "PBKDF2"},
+              {"Iterations", "600,000"},
+              {"Hashing", "SHA-256"},
+              {"Key Size", "256-bit"},
+              {"Nonce", "96-bit random"},
+              {"Auth Tag", "128-bit MAC"},
+              {"Protocol", "sTELgano-std-1"}
+            ]
+          }
+          class="glass-card p-6 text-center group hover:border-primary/30 transition-all"
+        >
+          <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 group-hover:text-primary transition-colors">
+            {label}
+          </div>
+          <div class="text-sm font-mono font-bold text-white">{value}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Open Source Banner --%>
+  <section class="px-6 py-20 bg-white/1 border-y border-white/5 relative">
+    <div class="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-8">
+      <div class="flex-1 space-y-4">
+        <h3 class="text-2xl sm:text-3xl font-extrabold text-white font-display">
+          Open source. Auditable. Forkable.
+        </h3>
+        <p class="text-slate-400 leading-relaxed font-medium">
+          sTELgano is licensed under AGPL-3.0. Every line of code&mdash;server, client, and cryptographic logic&mdash;is
+          publicly available for audit. Don't trust us. Read the source. Run your own instance.
+          Privacy software you can't inspect is privacy software you can't trust.
+        </p>
+      </div>
+      <.link
+        href="https://github.com/stelgano/stelgano"
+        class="btn-secondary px-8 py-4 text-base shrink-0 group"
+      >
+        View on GitHub
+        <.icon
+          name="arrow_up_right"
+          class="size-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"
+        />
+      </.link>
+    </div>
+  </section>
+
+  <%!-- Call to Action --%>
+  <section class="px-6 py-40 text-center relative overflow-hidden">
+    <div class="orb orb-1 opacity-20 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px]! h-[300px]! sm:w-[600px]! sm:h-[600px]!">
+    </div>
+    <div class="relative z-10 animate-in">
+      <h3 class="text-3xl sm:text-5xl md:text-6xl font-extrabold text-white font-display mb-6 tracking-tighter">
+        Ready to chat <span class="text-gradient">privately?</span>
+      </h3>
+      <p class="text-slate-400 text-lg mb-10 max-w-lg mx-auto">
+        Generate a steg number, share it with someone you trust, and open a channel that only the two of you can access.
+      </p>
+      <div class="flex flex-col md:flex-row gap-4 justify-center px-4">
+        <.link
+          navigate={~p"/chat"}
+          class="btn-primary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl"
+        >
+          Open Chat
+        </.link>
+        <.link
+          navigate={~p"/blog"}
+          class="btn-secondary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl"
+        >
+          Read the Blog
+        </.link>
+      </div>
+      <p class="text-xs text-slate-500 font-medium mt-6 flex items-center justify-center gap-2">
+        <.icon name="eye_off" class="size-4 text-primary" />
+        Pro Tip: Use Incognito/Private Mode to ensure no local traces remain.
+      </p>
+    </div>
+  </section>
+</Layouts.app>

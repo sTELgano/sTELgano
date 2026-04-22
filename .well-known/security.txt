@@ -1,0 +1,7 @@
+Contact: mailto:security@stelgano.com
+Contact: https://github.com/stelgano/stelgano/security/advisories/new
+Expires: 2027-01-01T00:00:00.000Z
+Encryption: https://stelgano.com/.well-known/security-pgp.asc
+Preferred-Languages: en
+Policy: https://stelgano.com/security#disclosure
+Canonical: https://stelgano.com/.well-known/security.txt
