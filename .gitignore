@@ -73,3 +73,5 @@ Thumbs.db
 # Private project files (not for public repo)
 /project/launch_content*.md
 /project/design-system.css
+/project/feedback/
+/project/TODOs.md

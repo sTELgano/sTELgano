@@ -371,6 +371,22 @@ defmodule StelganoWeb.AnonRoomChannelTest do
 
   describe "redeem_extension" do
     test "returns monetization_disabled when monetization is off" do
+      original = Application.get_env(:stelgano, Stelgano.Monetization)
+
+      Application.put_env(
+        :stelgano,
+        Stelgano.Monetization,
+        Keyword.put(original || [], :enabled, false)
+      )
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:stelgano, Stelgano.Monetization, original)
+        else
+          Application.delete_env(:stelgano, Stelgano.Monetization)
+        end
+      end)
+
       rh = hex64(200 + 2000)
       socket = connect_and_join(rh, hex64(201 + 2000), hex64(202 + 2000))
 
