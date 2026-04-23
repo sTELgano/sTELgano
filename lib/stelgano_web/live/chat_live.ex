@@ -1074,12 +1074,13 @@ defmodule StelganoWeb.ChatLive do
         </div>
 
         <div class="space-y-3">
-          <h3 class="text-2xl font-bold text-white font-display">Connecting</h3>
-          <p class="text-slate-400 font-medium">Linking with your private chat space…</p>
+          <h3 class="text-2xl font-bold text-white font-display">Deriving key</h3>
+          <p class="text-slate-400 font-medium">Stretching your phone into an AES-256 key…</p>
         </div>
 
-        <div class="px-6 py-3 rounded-2xl bg-slate-950/60 border border-white/5 font-mono text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">
-          Status: Opening Secure Link
+        <div class="px-6 py-3 rounded-2xl bg-slate-950/60 border border-white/5 font-mono text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] flex items-center justify-center gap-2">
+          <span>PBKDF2 · 600k iter ·</span>
+          <span id="key-deriv-progress" phx-update="ignore" class="text-primary">0%</span>
         </div>
       </div>
     </div>

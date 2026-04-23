@@ -192,7 +192,7 @@ export const AnonChat = {
 
   async joinChannel({ room_id, sender_hash, room_hash, phone }) {
     this.pushEvent("key_derivation_start", {});
-    encKey = await AnonCrypto.deriveKey(phone, room_id);
+    encKey = await AnonCrypto.deriveKeyInWorker(phone, room_id, updateKeyDerivationProgress);
     this.pushEvent("key_derivation_complete", {});
 
     // Persist to sessionStorage for lock-screen re-auth
@@ -420,7 +420,7 @@ export const AnonChat = {
       return;
     }
 
-    encKey = await AnonCrypto.deriveKey(phone, roomId);
+    encKey = await AnonCrypto.deriveKeyInWorker(phone, roomId, updateKeyDerivationProgress);
     this.pushEvent("rederive_success", {});
   },
 
@@ -649,6 +649,17 @@ function sessionGet(key) {
   } catch (_) {
     return null;
   }
+}
+
+/**
+ * Updates the key-derivation progress readout in place. The DOM element is
+ * rendered by ChatLive only while `@state` is `:connecting`; writing to it
+ * from the worker progress callback avoids a LiveView round-trip per tick
+ * (would be ~20 network messages over the ~2s derivation).
+ */
+function updateKeyDerivationProgress(percent) {
+  const el = document.getElementById("key-deriv-progress");
+  if (el) el.textContent = `${percent}%`;
 }
 
 /**

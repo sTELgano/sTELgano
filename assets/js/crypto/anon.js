@@ -196,6 +196,81 @@ async function deriveKey(phone, roomId) {
 }
 
 /**
+ * URL of the bundled PBKDF2 worker. Served from `priv/static/assets/js/`
+ * by Plug.Static at `/assets/`. See `config/config.exs` for the esbuild
+ * entry point that produces this file.
+ */
+const PBKDF2_WORKER_URL = "/assets/js/workers/pbkdf2_worker.js";
+
+/**
+ * Derives the AES-256-GCM encryption key in a Web Worker so the 600,000-
+ * iteration PBKDF2 does not freeze the main thread for ~1.5–2.5s at login.
+ *
+ * Cryptographically identical to `deriveKey` — same inputs, same salt,
+ * same iteration count, same output `CryptoKey` (extractable: false).
+ * `CryptoKey` is structured-cloneable, so the derived key travels back
+ * over `postMessage` without ever being serialised as bytes.
+ *
+ * The worker emits synthetic progress events (~10/s) because Web Crypto's
+ * deriveKey is atomic and does not report real progress. The caller's
+ * `onProgress` callback receives percentages in [0, 100].
+ *
+ * Falls back to main-thread `deriveKey` if the worker cannot be created
+ * or raises a script-level error — functional correctness over UI smoothness.
+ *
+ * @param {string}   phone      - Normalised phone number.
+ * @param {string}   roomId     - Server-generated UUID returned on join.
+ * @param {function} onProgress - Optional callback(percent: number).
+ * @returns {Promise<CryptoKey>} AES-256-GCM CryptoKey (extractable: false).
+ */
+function deriveKeyInWorker(phone, roomId, onProgress) {
+  return new Promise((resolve, reject) => {
+    let worker;
+    try {
+      worker = new Worker(PBKDF2_WORKER_URL);
+    } catch (err) {
+      // Worker creation failed (unsupported browser, CSP, offline SW cache
+      // miss). Degrade to main-thread derivation so login still works.
+      deriveKey(phone, roomId).then(resolve, reject);
+      return;
+    }
+
+    const cleanup = () => {
+      try { worker.terminate(); } catch (_) {}
+    };
+
+    worker.addEventListener("message", (e) => {
+      const data = e.data;
+      if (!data) return;
+      if (data.type === "progress") {
+        if (typeof onProgress === "function") {
+          try { onProgress(data.percent); } catch (_) {}
+        }
+      } else if (data.type === "done") {
+        cleanup();
+        resolve(data.key);
+      } else if (data.type === "error") {
+        cleanup();
+        reject(new Error(data.message || "PBKDF2 worker failed"));
+      }
+    });
+
+    worker.addEventListener("error", (err) => {
+      cleanup();
+      // Last-chance fallback: any uncaught worker error bounces back to
+      // the main thread so the user can still log in.
+      deriveKey(phone, roomId).then(resolve, reject);
+    });
+
+    worker.postMessage({
+      type: "derive",
+      phone: normalise(phone),
+      roomId,
+    });
+  });
+}
+
+/**
  * Encrypts a plaintext string with AES-256-GCM.
  *
  * Generates a cryptographically random 96-bit (12-byte) nonce per message.
@@ -302,6 +377,7 @@ export const AnonCrypto = {
   accessHash,
   senderHash,
   deriveKey,
+  deriveKeyInWorker,
   encrypt,
   decrypt,
   toBase64,
