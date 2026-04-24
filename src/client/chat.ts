@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Chat client entry point.
+// Chat client entry point — faithful port of the v1 chat_live.ex
+// render functions.
 //
-// Instantiates the ChatState machine and renders a different DOM
-// subtree for each state into #chat-root. Event delegation via
-// data-action attributes keeps listener management to a single
-// root-level capture per event type — no per-render re-binding.
+// Instantiates the ChatState machine and renders one render_* block
+// per state into #chat-root. Event delegation via data-action
+// attributes dispatches UI events to ChatState methods; single
+// root-level listener per event type, no per-render re-binding.
 //
-// The render functions here are deliberately minimal UI — enough to
-// exercise every state transition from the v1 state machine. Visual
-// polish (animations, header controls, generator drawer, payment
-// flow) lands in subsequent phases (5e / 6 / 7).
+// Generator drawer is a separate Phase 6 port and NOT rendered here
+// (v1 wraps render_generator_drawer in the chat shell too — that's
+// deferred).
+//
+// Visual parity target: the classes, copy, and icons in this file
+// are intentionally verbatim from
+// elixir/lib/stelgano_web/live/chat_live.ex so that nothing in the
+// shipped HTML drifts from what designers signed off on in v1.
 
 import { ChatState, type State, type PlainMessage } from "./state";
 
 const root = document.getElementById("chat-root");
-if (!root) {
-  throw new Error("chat-root element missing");
-}
+if (!root) throw new Error("chat-root element missing");
 
 const state = new ChatState();
 
-// Re-render the whole subtree on every state change. Cheap for a
-// single-surface app; the O(1) pending message + two-form UI doesn't
-// benefit from diffing.
 state.onStateChange((s) => {
   root.innerHTML = render(s);
   focusFirstField();
@@ -42,21 +42,12 @@ root.addEventListener("submit", (e) => {
   const form = new FormData(target);
 
   if (action === "submit-entry") {
-    const phone = String(form.get("phone") ?? "");
-    const pin = String(form.get("pin") ?? "");
+    const phone = String(form.get("s_num") ?? "");
+    const pin = String(form.get("s_key") ?? "");
     void state.submit(phone, pin);
   } else if (action === "submit-locked") {
-    const pin = String(form.get("pin") ?? "");
+    const pin = String(form.get("s_key") ?? "");
     void state.reauthenticate(pin);
-  } else if (action === "submit-message") {
-    const text = String(form.get("text") ?? "");
-    if (text.trim()) {
-      void state.sendMessage(text);
-      target.reset();
-    }
-  } else if (action === "submit-edit") {
-    const text = String(form.get("text") ?? "");
-    void state.editCurrent(text);
   }
 });
 
@@ -66,46 +57,100 @@ root.addEventListener("click", (e) => {
   const action = target.dataset.action;
   if (!action) return;
 
-  if (action === "continue-free") {
-    void state.continueFree();
-  } else if (action === "logout") {
-    state.logout();
-  } else if (action === "expire-room") {
-    if (confirm("End this conversation? The current message will be destroyed.")) {
-      void state.expireRoom();
+  switch (action) {
+    case "toggle-phone-visibility":
+      state.togglePhoneVisibility();
+      break;
+    case "continue-free":
+      void state.continueFree();
+      break;
+    case "send-message": {
+      const ta = root.querySelector<HTMLTextAreaElement>("#chat-textarea");
+      if (ta && ta.value.trim()) {
+        void state.sendMessage(ta.value);
+        ta.value = "";
+        updateCharCount(0);
+      }
+      break;
     }
-  } else if (action === "mark-read") {
-    state.markCurrentRead();
-  } else if (action === "delete-message") {
-    void state.deleteCurrent();
-  } else if (action === "toggle-edit") {
-    // Phase 5d doesn't polish this — just toggle a css class on the
-    // container. A richer edit flow is a future polish.
-    const container = root.querySelector("#current-message-container");
-    container?.classList.toggle("is-editing");
-  } else if (action === "restart") {
-    // From :expired — route back to entry via full reload so session
-    // and any stale WS state is fully flushed.
-    location.reload();
+    case "start-edit":
+      state.startEdit();
+      break;
+    case "cancel-edit":
+      state.cancelEdit();
+      break;
+    case "save-edit": {
+      const ta = root.querySelector<HTMLTextAreaElement>("#chat-textarea");
+      if (ta) void state.saveEdit(ta.value);
+      break;
+    }
+    case "delete-mine":
+      void state.deleteCurrent();
+      break;
+    case "lock-chat":
+      state.lockChat();
+      break;
+    case "leave-chat":
+      state.logout();
+      break;
+    case "confirm-expire":
+      state.confirmExpireShow();
+      break;
+    case "cancel-expire":
+      state.confirmExpireHide();
+      break;
+    case "expire-room":
+      void state.expireRoom();
+      break;
+    case "clear-session":
+      state.clearSession();
+      break;
+    case "back-to-entry":
+      location.reload();
+      break;
   }
 });
 
-// Typing: emit on each input keystroke in the message field.
-// Throttle on the server side of things isn't needed; the DO broadcasts
-// to both sockets and the opposite side auto-clears after 3s.
+// Textarea char counter + typing indicator + auto-resize. We update
+// these in-place (no re-render) so focus stays on the textarea.
 root.addEventListener(
   "input",
   (e) => {
-    const target = e.target as HTMLInputElement;
-    if (target?.dataset.field === "message-text") {
+    const target = e.target as HTMLElement;
+    if (target instanceof HTMLTextAreaElement && target.id === "chat-textarea") {
       state.typing();
+      updateCharCount(target.value.length);
+      autoResize(target);
     }
   },
   true,
 );
 
-// When a received message scrolls into view, mark it read. We use an
-// IntersectionObserver so reads are fired exactly once per bubble.
+// Send on Enter (without Shift) in the chat textarea. Mirrors v1's
+// AutoResize hook behaviour.
+root.addEventListener("keydown", (e) => {
+  const target = e.target as HTMLElement;
+  if (!(target instanceof HTMLTextAreaElement) || target.id !== "chat-textarea") return;
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    const s = state.getState();
+    if (s.kind !== "chat") return;
+    if (s.editing) {
+      void state.saveEdit(target.value);
+    } else if (target.value.trim()) {
+      void state.sendMessage(target.value);
+      target.value = "";
+      updateCharCount(0);
+      autoResize(target);
+    }
+  } else if (e.key === "Escape") {
+    const s = state.getState();
+    if (s.kind === "chat" && s.editing) state.cancelEdit();
+  }
+});
+
+// IntersectionObserver: fire markCurrentRead() when the received
+// bubble is visible. Re-armed on every render.
 let ioObserver: IntersectionObserver | null = null;
 function armReadObserver() {
   ioObserver?.disconnect();
@@ -126,12 +171,15 @@ function armReadObserver() {
   ioObserver.observe(el);
 }
 
-// Re-arm after every render.
 state.onStateChange(() => armReadObserver());
 
 // -----------------------------------------------------------------------------
-// Utilities
+// Helpers
 // -----------------------------------------------------------------------------
+
+const MAX_CHARS = 4000;
+const COUNTER_WARN_AT = 3500;
+const COUNTER_DANGER_AT = 3900;
 
 function focusFirstField() {
   requestAnimationFrame(() => {
@@ -153,12 +201,22 @@ function icon(name: string, cls = "size-4"): string {
   return `<svg class="${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
 }
 
-function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "";
+function updateCharCount(n: number) {
+  const el = root?.querySelector<HTMLElement>("#char-counter");
+  if (!el) return;
+  if (n < COUNTER_WARN_AT) {
+    el.classList.add("hidden");
+    return;
   }
+  el.classList.remove("hidden");
+  const colour = n >= COUNTER_DANGER_AT ? "text-danger" : "text-warning";
+  el.className = `hidden sm:flex flex-col items-end mr-2 ${colour}`;
+  el.innerHTML = `<span class="text-[10px] font-mono font-bold tracking-widest">${n}<span class="text-slate-600">/</span>${MAX_CHARS}</span>`;
+}
+
+function autoResize(ta: HTMLTextAreaElement) {
+  ta.style.height = "auto";
+  ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`;
 }
 
 // -----------------------------------------------------------------------------
@@ -168,292 +226,682 @@ function formatTime(iso: string): string {
 function render(s: State): string {
   switch (s.kind) {
     case "entry":
-      return renderEntry(s.phone, s.phoneLocked);
+      return renderEntry(s);
     case "deriving":
-      return renderDeriving(s.progress);
+      return renderDeriving();
     case "new_channel":
       return renderNewChannel();
     case "connecting":
       return renderConnecting();
     case "chat":
-      return renderChat(s.phone, s.senderHash, s.current, s.counterpartyTyping);
+      return renderChat(s);
     case "locked":
-      return renderLocked(s.reason, s.attemptsRemaining);
+      return renderLocked(s);
     case "expired":
       return renderExpired();
   }
 }
 
-function renderEntry(phone: string, phoneLocked: boolean): string {
-  const phoneAttrs = phoneLocked
-    ? `value="${escapeHtml(phone)}" readonly class="glass-input w-full font-mono opacity-70 cursor-not-allowed"`
-    : `value="${escapeHtml(phone)}" class="glass-input w-full font-mono" data-autofocus`;
-  return `
-    <section class="max-w-md mx-auto my-24 px-6 entry-card">
-      <div class="glass-card p-8 sm:p-10 space-y-6">
-        <h1 class="wordmark text-3xl justify-center">
-          <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
-        </h1>
-        <form data-action="submit-entry" class="space-y-4" autocomplete="off" spellcheck="false">
-          <div class="space-y-2">
-            <label for="phone" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Number</label>
-            <input
-              id="phone"
-              name="phone"
-              type="tel"
-              inputmode="tel"
-              autocomplete="one-time-code"
-              placeholder="+1 555 012 3456"
-              ${phoneAttrs}
-            >
-          </div>
-          <div class="space-y-2">
-            <label for="pin" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">PIN</label>
-            <input
-              id="pin"
-              name="pin"
-              type="password"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              placeholder="••••"
-              class="glass-input w-full font-mono tracking-widest"
-              ${phoneLocked ? 'data-autofocus' : ""}
-            >
-          </div>
-          <button type="submit" class="btn-primary w-full py-4 text-base">
-            Enter
-            ${icon("arrow_right", "size-5")}
-          </button>
-        </form>
-        <p class="text-[10px] text-slate-600 text-center leading-relaxed">
-          Your number and PIN are hashed locally. They never reach the server.
-        </p>
-      </div>
-    </section>
-  `;
-}
+// -------------------------------- :entry --------------------------------
 
-function renderDeriving(progress: number): string {
-  const pct = Math.max(0, Math.min(100, Math.round(progress)));
-  return `
-    <section class="max-w-md mx-auto my-24 px-6">
-      <div class="glass-card p-8 sm:p-10 space-y-6 text-center">
-        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 mx-auto">
-          ${icon("key_round", "size-7 text-primary")}
-        </div>
-        <h2 class="text-xl font-extrabold text-white font-display">Deriving encryption key…</h2>
-        <p class="text-slate-400 text-sm leading-relaxed">
-          600,000 PBKDF2 iterations. This takes 1–2 seconds on purpose — it's what makes your PIN unfeasible to brute force.
-        </p>
-        <div class="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/5">
-          <div class="h-full bg-linear-to-r from-primary to-emerald-400 transition-[width] duration-100" style="width: ${pct}%"></div>
-        </div>
-        <p class="text-[10px] font-mono text-slate-500 tracking-widest">${pct}%</p>
-      </div>
-    </section>
-  `;
-}
+function renderEntry(s: Extract<State, { kind: "entry" }>): string {
+  const phoneType = s.phoneVisible ? "text" : "password";
+  const phoneTrackClass = s.phoneVisible ? "tracking-wider" : "tracking-widest";
+  const phoneLockedOpacity = s.phoneLocked ? "opacity-80" : "";
+  const phoneReadonly = s.phoneLocked ? "readonly" : "";
+  const phoneAutofocus = !s.phoneLocked ? "data-autofocus" : "";
+  const pinAutofocus = s.phoneLocked ? "data-autofocus" : "";
 
-function renderNewChannel(): string {
-  return `
-    <section class="max-w-lg mx-auto my-24 px-6">
-      <div class="glass-card p-8 sm:p-10 space-y-8">
-        <div class="text-center space-y-2">
-          <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 mx-auto">
-            ${icon("sparkles", "size-7 text-primary")}
-          </div>
-          <h2 class="text-2xl font-extrabold text-white font-display">New channel</h2>
-          <p class="text-slate-400 text-sm leading-relaxed">
-            This steg number hasn't been used before. Pick how long it lives.
-          </p>
-        </div>
-        <div class="grid grid-cols-1 gap-4">
-          <button data-action="continue-free" class="glass-card p-6 text-left space-y-2 group hover:border-primary/40 transition-all">
-            <div class="flex items-center justify-between">
-              <span class="text-lg font-extrabold text-white font-display">Free</span>
-              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">7 days</span>
-            </div>
-            <p class="text-sm text-slate-400 leading-relaxed">Same encryption. Temporary number. Great for a one-off conversation.</p>
-          </button>
-          <button disabled class="glass-card p-6 text-left space-y-2 opacity-50 cursor-not-allowed">
-            <div class="flex items-center justify-between">
-              <span class="text-lg font-extrabold text-white font-display">Paid — $2/year</span>
-              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">365 days</span>
-            </div>
-            <p class="text-sm text-slate-400 leading-relaxed">(Not yet wired in the v2 rewrite — Phase 7.)</p>
-          </button>
+  const errorBanner = s.error
+    ? `
+      <div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
+        ${icon("alert_circle", "size-6 text-danger shrink-0")}
+        <div class="space-y-1">
+          <p class="text-sm font-bold text-danger">${escapeHtml(s.error)}</p>
+          ${
+            s.attemptsRemaining !== null && s.attemptsRemaining !== undefined
+              ? `<p class="text-[10px] text-danger/60 font-mono uppercase tracking-widest font-black">
+                   Security Lock: ${s.attemptsRemaining} ${s.attemptsRemaining === 1 ? "attempt" : "attempts"} remaining
+                 </p>`
+              : ""
+          }
         </div>
       </div>
-    </section>
-  `;
-}
+    `
+    : "";
 
-function renderConnecting(): string {
-  return `
-    <section class="max-w-md mx-auto my-24 px-6">
-      <div class="glass-card p-8 sm:p-10 space-y-6 text-center">
-        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 mx-auto animate-pulse-glow">
-          ${icon("radio", "size-7 text-primary")}
-        </div>
-        <h2 class="text-xl font-extrabold text-white font-display">Connecting…</h2>
-        <p class="text-slate-400 text-sm leading-relaxed">
-          Opening the channel.
-        </p>
-      </div>
-    </section>
-  `;
-}
-
-function renderChat(
-  _phone: string,
-  senderHash: string,
-  current: PlainMessage | null,
-  counterpartyTyping: boolean,
-): string {
-  const canType = !current || current.senderHash !== senderHash;
-  const bubble = current ? renderBubble(current, senderHash) : renderEmpty();
-  const typingIndicator = counterpartyTyping
-    ? `<div class="px-6 py-2 text-[10px] font-mono text-slate-500 uppercase tracking-widest animate-in">they're typing…</div>`
+  const lockedBadge = s.phoneLocked
+    ? `<span class="text-[10px] font-mono text-primary font-bold">LOCKED</span>`
     : "";
 
   return `
-    <div class="chat-layout flex-1 flex flex-col min-h-0">
-      <header class="px-6 py-4 border-b border-white/5 backdrop-blur-xl bg-slate-950/40 flex items-center justify-between">
-        <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">Channel active</span>
-        <div class="flex items-center gap-2">
-          <button data-action="expire-room" class="btn-icon" title="End conversation" aria-label="End conversation">
-            ${icon("trash_2", "size-4")}
-          </button>
-          <button data-action="logout" class="btn-icon" title="Logout" aria-label="Logout">
-            ${icon("power", "size-4")}
-          </button>
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] animate-in">
+      <div class="w-full max-w-xl space-y-12">
+        <!-- Branding -->
+        <div class="text-center space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-4 shadow-[0_0_15px_rgba(0,255,163,0.1)]">
+            ${icon("ban", "size-3")} Secure Chat Session
+          </div>
+          <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tighter text-white font-display leading-[0.9]">
+            Open <span class="text-gradient">Chat.</span>
+          </h1>
+          <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed px-4">
+            Enter your details below to secure your connection.
+          </p>
+          <div class="flex items-center justify-center gap-2 text-[10px] font-bold text-primary/60 uppercase tracking-widest">
+            ${icon("eye_off", "size-4 text-primary")} Incognito Mode recommended
+          </div>
         </div>
-      </header>
 
-      <div class="flex-1 overflow-y-auto flex flex-col justify-end px-4 py-6">
-        <div id="current-message-container" class="flex flex-col gap-3">
-          ${bubble}
+        <div class="glass-card-premium p-1 sm:p-1 animate-in overflow-hidden">
+          <div class="p-5 sm:p-10 space-y-10">
+            ${errorBanner}
+
+            <form data-action="submit-entry" autocomplete="off" class="space-y-8 sm:space-y-10">
+              <!-- Phone Field -->
+              <div class="space-y-4">
+                <div class="flex items-center justify-between px-1">
+                  <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.3em] text-slate-500">
+                    Secret Number
+                  </label>
+                  ${lockedBadge}
+                </div>
+                <div class="relative group">
+                  <input
+                    name="s_num"
+                    type="${phoneType}"
+                    class="glass-input w-full pr-14 font-mono text-lg sm:text-xl font-bold bg-slate-950/40 ${phoneLockedOpacity} ${phoneTrackClass}"
+                    value="${escapeHtml(s.phone)}"
+                    ${phoneReadonly}
+                    placeholder="e.g. +254..."
+                    inputmode="tel"
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    ${phoneAutofocus}
+                  >
+                  <button
+                    type="button"
+                    data-action="toggle-phone-visibility"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                    tabindex="-1"
+                  >
+                    ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5 sm:size-6")}
+                  </button>
+                </div>
+              </div>
+
+              <!-- PIN Input -->
+              <div class="space-y-4">
+                <div class="flex items-center justify-between px-1">
+                  <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.3em] text-slate-500">
+                    Private PIN
+                  </label>
+                  <span class="text-[9px] sm:text-[10px] font-mono text-slate-500 font-bold whitespace-nowrap">
+                    SECURED LOCALLY
+                  </span>
+                </div>
+                <input
+                  name="s_key"
+                  type="password"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Secret PIN"
+                  autocomplete="one-time-code"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  class="glass-input w-full text-center text-xl sm:text-4xl tracking-[0.2em] sm:tracking-[0.6em] font-mono py-4 sm:py-6 bg-slate-950/40 border-white/10"
+                  ${pinAutofocus}
+                >
+              </div>
+
+              <button
+                type="submit"
+                class="btn-primary w-full py-4 sm:py-5 text-lg sm:text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+              >
+                Open Chat
+                ${icon("zap", "size-5 sm:size-6 group-hover:scale-125 transition-transform")}
+              </button>
+            </form>
+
+            <div class="pt-8 border-t border-white/5 flex flex-col items-center gap-5 text-center">
+              <p class="text-slate-400 text-sm font-medium">
+                Don't have a secret number yet?
+              </p>
+              <button
+                type="button"
+                disabled
+                class="btn-secondary w-full py-4 sm:py-5 text-lg sm:text-xl inline-flex items-center justify-center gap-2 group opacity-60 cursor-not-allowed"
+                title="Generator drawer — Phase 6"
+              >
+                ${icon("sparkles", "size-5 text-primary group-hover:rotate-12 transition-transform")}
+                Generate New Number
+              </button>
+            </div>
+          </div>
         </div>
-        ${typingIndicator}
       </div>
-
-      <form data-action="submit-message" class="command-bar" autocomplete="off">
-        <input
-          name="text"
-          type="text"
-          data-field="message-text"
-          data-autofocus
-          placeholder="${canType ? "Type a message…" : "Their turn."}"
-          class="glass-input flex-1 font-sans"
-          ${canType ? "" : "disabled"}
-          maxlength="4000"
-        >
-        <button type="submit" class="btn-primary py-3 px-5" ${canType ? "" : "disabled"}>
-          ${icon("arrow_right", "size-5")}
-        </button>
-      </form>
     </div>
   `;
 }
 
-function renderBubble(m: PlainMessage, senderHash: string): string {
-  const sent = m.senderHash === senderHash;
-  const sideClass = sent ? "bubble sent" : "bubble received";
-  const dataAttr = sent ? "" : "data-received-message";
-  const readIndicator =
-    sent && m.readAt
-      ? `<span class="text-[10px] text-slate-400/60">read ${formatTime(m.readAt)}</span>`
-      : "";
-  const ownerControls = sent && !m.readAt
-    ? `<div class="flex items-center gap-2 mt-2">
-        <button data-action="delete-message" class="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-danger transition-colors">Unsend</button>
-      </div>`
-    : "";
+// ------------------------------ :deriving -------------------------------
+
+function renderDeriving(): string {
   return `
-    <div class="chat-bubble ${sideClass}" ${dataAttr}>
-      <p class="whitespace-pre-wrap break-words">${escapeHtml(m.plaintext)}</p>
-      <div class="flex items-center justify-end gap-2 mt-2">
-        <span class="text-[10px] text-slate-400/60">${formatTime(m.insertedAt)}</span>
-        ${readIndicator}
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 animate-in">
+      <div class="w-full max-w-sm text-center space-y-16">
+        <div class="relative size-48 mx-auto">
+          <div class="absolute inset-0 rounded-full border-2 border-primary/5 border-t-primary animate-spin duration-1000"></div>
+          <div class="absolute inset-4 rounded-full border-2 border-primary/5 border-r-primary animate-spin-reverse duration-2000"></div>
+          <div class="absolute inset-8 rounded-full border-2 border-primary/5 border-l-primary animate-spin duration-3000"></div>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <div class="size-24 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center shadow-2xl">
+              ${icon("cpu", "size-12 text-primary animate-pulse drop-shadow-[0_0_15px_var(--color-primary-glow)]")}
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-6">
+          <h3 class="text-4xl font-extrabold text-white font-display tracking-tight uppercase">
+            Securing <span class="text-gradient">Chat.</span>
+          </h3>
+          <p class="text-slate-500 font-medium leading-relaxed">
+            Your browser is securing your private connection.
+          </p>
+        </div>
+
+        <div class="flex justify-center items-center gap-3">
+          <div class="size-1.5 rounded-full bg-primary animate-ping"></div>
+          <div class="size-1.5 rounded-full bg-primary animate-ping [animation-delay:0.3s]"></div>
+          <div class="size-1.5 rounded-full bg-primary animate-ping [animation-delay:0.6s]"></div>
+        </div>
       </div>
+    </div>
+  `;
+}
+
+// ----------------------------- :new_channel -----------------------------
+
+function renderNewChannel(): string {
+  return `
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 animate-in">
+      <div class="w-full max-w-lg space-y-10">
+        <div class="text-center space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(0,255,163,0.1)]">
+            ${icon("sparkles", "size-3")} New Channel Detected
+          </div>
+          <h2 class="text-3xl sm:text-4xl font-extrabold text-white font-display tracking-tight">
+            This is a new channel.
+          </h2>
+          <p class="text-slate-400 font-medium leading-relaxed max-w-sm mx-auto">
+            Choose how long you want to keep this number active.
+          </p>
+        </div>
+
+        <div class="space-y-4 max-w-sm mx-auto">
+          <!-- Free tier -->
+          <button
+            data-action="continue-free"
+            class="w-full p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 text-left transition-all group flex items-center justify-between"
+          >
+            <div class="flex items-center gap-4">
+              <div class="size-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform">
+                ${icon("clock", "size-5 text-slate-300 group-hover:text-white transition-colors")}
+              </div>
+              <div>
+                <h3 class="text-white font-bold text-sm">Temporary (Free)</h3>
+                <p class="text-slate-400 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
+                  Expires in 7 days
+                </p>
+              </div>
+            </div>
+            ${icon("arrow_right", "size-4 text-slate-500 group-hover:translate-x-1 group-hover:text-white transition-all")}
+          </button>
+
+          <!-- Paid tier — wired in Phase 7 -->
+          <button
+            type="button"
+            disabled
+            class="w-full p-5 rounded-2xl bg-primary/10 border border-primary/20 text-left transition-all group flex items-center justify-between shadow-[0_0_20px_rgba(0,255,163,0.1)] opacity-50 cursor-not-allowed"
+            title="Dedicated tier — Phase 7"
+          >
+            <div class="flex items-center gap-4">
+              <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30">
+                ${icon("shield_check", "size-5 text-primary")}
+              </div>
+              <div>
+                <h3 class="text-primary font-bold text-sm">Dedicated Tier</h3>
+                <p class="text-primary/80 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
+                  1 Year &mdash; $2.00
+                </p>
+              </div>
+            </div>
+            ${icon("arrow_right", "size-4 text-primary")}
+          </button>
+        </div>
+
+        <p class="text-center text-slate-500 text-[10px] uppercase tracking-widest font-bold">
+          You can upgrade to dedicated anytime.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+// ----------------------------- :connecting ------------------------------
+
+function renderConnecting(): string {
+  return `
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6">
+      <div class="w-full max-w-sm text-center space-y-10 animate-in">
+        <div class="size-24 rounded-[2.5rem] bg-primary/5 flex items-center justify-center mx-auto shadow-inner ring-1 ring-primary/20 animate-pulse">
+          ${icon("globe", "size-12 text-primary")}
+        </div>
+
+        <div class="space-y-3">
+          <h3 class="text-2xl font-bold text-white font-display">Connecting</h3>
+          <p class="text-slate-400 font-medium">Joining your encrypted channel…</p>
+        </div>
+
+        <div class="px-6 py-3 rounded-2xl bg-slate-950/60 border border-white/5 font-mono text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] flex items-center justify-center gap-2">
+          <span>PBKDF2 · 600k iter · OK</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// -------------------------------- :chat ---------------------------------
+
+function renderChat(s: Extract<State, { kind: "chat" }>): string {
+  const canType = !s.current || s.current.senderHash !== s.senderHash;
+  const msgArea = s.current
+    ? renderMessageBubble(s.current, s.senderHash)
+    : renderEmptyBuffer();
+
+  const interactionZone = s.editing
+    ? renderInputArea({ editing: true, value: s.current?.plaintext ?? "" })
+    : canType
+      ? renderInputArea({ editing: false, value: "" })
+      : renderWaitingArea(s.current, s.senderHash, s.counterpartyTyping);
+
+  const destructionModal = s.confirmExpire ? renderDestructionModal() : "";
+
+  return `
+    <div class="h-full w-full flex flex-col">
+      <!-- Navigation Header -->
+      <div class="px-4 sm:px-6 py-3 sm:py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl sticky top-0 z-50">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <a href="/" class="wordmark text-lg sm:text-2xl leading-tight group">
+            <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
+          </a>
+          <div class="hidden sm:block h-6 w-px bg-white/20"></div>
+          <span class="hidden lg:inline text-[9px] font-bold uppercase tracking-[0.3em] text-primary">
+            WORKSPACE SECURED
+          </span>
+        </div>
+
+        <!-- Session Controls -->
+        <div class="flex items-center gap-1.5 sm:gap-4">
+          <button
+            data-action="lock-chat"
+            title="Lock session"
+            class="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
+          >
+            ${icon("lock", "size-5 sm:size-6")}
+          </button>
+          <button
+            data-action="confirm-expire"
+            title="Erase all"
+            class="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-danger/10 hover:bg-danger/20 text-danger transition-all flex items-center justify-center border border-danger/20 shadow-lg shadow-danger/5"
+          >
+            ${icon("flame", "size-5 sm:size-6")}
+          </button>
+          <div class="w-px h-6 bg-white/20 mx-0.5 sm:mx-1"></div>
+          <button
+            data-action="leave-chat"
+            title="Exit Chat"
+            class="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
+          >
+            ${icon("power", "size-5 sm:size-6 text-danger")}
+          </button>
+        </div>
+      </div>
+
+      <!-- TTL (Session Entropy) Bar -->
+      <div class="h-1 w-full bg-slate-900 border-b border-white/5 overflow-hidden">
+        <div
+          class="h-full bg-linear-to-r from-primary via-emerald-400 to-primary/40 transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(0,255,163,0.5)]"
+          style="width: 100%;"
+        ></div>
+      </div>
+
+      <!-- Workspace Message Area -->
+      <div
+        class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-10 scrollbar-hide"
+        role="log"
+        aria-live="polite"
+      >
+        ${msgArea}
+      </div>
+
+      <!-- User Interaction Zone -->
+      <div class="p-4 sm:p-8 pb-10">
+        ${interactionZone}
+      </div>
+
+      ${destructionModal}
+    </div>
+  `;
+}
+
+function renderMessageBubble(msg: PlainMessage, senderHash: string): string {
+  const isMine = msg.senderHash === senderHash;
+  const justify = isMine ? "justify-end" : "justify-start";
+  const flex = isMine ? "flex flex-col items-end" : "flex flex-col items-start";
+  const bubbleStyle = isMine
+    ? "bg-linear-to-br from-primary/10 to-emerald-500/5 border-primary/20 rounded-tr-none text-white shadow-[0_10px_30px_-10px_rgba(0,255,163,0.1)]"
+    : "bg-slate-900/50 backdrop-blur-xl border-white/5 rounded-tl-none text-slate-200 shadow-inner";
+  const dataAttr = !isMine && !msg.readAt ? "data-received-message" : "";
+
+  const readBadge = isMine
+    ? msg.readAt
+      ? `
+        <span class="flex items-center gap-1 py-0.5 px-1.5 rounded-md bg-primary/5 border border-primary/10">
+          ${icon("badge_check", "size-2.5 text-primary")}
+          <span class="text-[8px] font-black uppercase tracking-widest text-primary/80">Read</span>
+        </span>`
+      : `
+        <span class="flex items-center gap-1 py-0.5 px-1.5 rounded-md bg-white/5 border border-white/5">
+          <div class="size-1 rounded-full bg-slate-600 animate-pulse"></div>
+          <span class="text-[8px] font-black uppercase tracking-widest text-slate-500">Delivered</span>
+        </span>`
+    : "";
+
+  return `
+    <div class="flex w-full animate-in ${justify}" ${dataAttr}>
+      <div class="max-w-[85%] sm:max-w-[80%] group space-y-3 ${flex}">
+        <div class="relative p-4 sm:p-8 rounded-2xl sm:rounded-4xl transition-all duration-500 border overflow-hidden ${bubbleStyle}">
+          <p class="relative z-10 whitespace-pre-wrap text-sm sm:text-lg leading-relaxed font-medium tracking-tight">${escapeHtml(msg.plaintext)}</p>
+        </div>
+        <div class="flex items-center gap-4 px-2 mt-1">
+          ${isMine ? `<div class="flex items-center gap-2">${readBadge}</div>` : ""}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderEmptyBuffer(): string {
+  return `
+    <div class="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto animate-in space-y-8">
+      <div class="relative size-24">
+        <div class="absolute inset-0 rounded-3xl bg-white/2 border border-white/5 rotate-6"></div>
+        <div class="absolute inset-0 rounded-3xl bg-white/2 border border-white/5 -rotate-3"></div>
+        <div class="absolute inset-0 rounded-3xl bg-slate-900 border border-white/10 flex items-center justify-center">
+          ${icon("shield_check", "size-12 text-slate-700")}
+        </div>
+      </div>
+      <div class="space-y-3">
+        <h4 class="text-2xl font-bold text-white font-display">Zero Trace Channel</h4>
+        <p class="text-slate-500 font-medium leading-relaxed">
+          The buffer is currently empty. This workspace adheres to a strict single-message protocol for maximum plausible deniability.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function renderInputArea(opts: { editing: boolean; value: string }): string {
+  const glowClass = opts.editing
+    ? "bg-linear-to-r from-amber-500/20 via-orange-400/20 to-amber-500/20"
+    : "bg-linear-to-r from-primary/20 via-emerald-400/20 to-primary/20";
+  const borderClass = opts.editing
+    ? "border-amber-500/30 group-focus-within:border-amber-500/50"
+    : "border-white/10 group-focus-within:border-primary/50 group-focus-within:bg-slate-950";
+  const placeholder = opts.editing ? "Revise message..." : "Construct secure message…";
+
+  const actionButtons = opts.editing
+    ? `
+      <button
+        data-action="cancel-edit"
+        aria-label="Cancel Edit"
+        class="size-12 sm:size-16 rounded-xl sm:rounded-[1.75rem] bg-white/5 text-slate-400 flex items-center justify-center hover:bg-white/10 transition-all border border-white/10"
+      >
+        ${icon("x", "size-5 sm:size-6")}
+      </button>
+      <button
+        data-action="save-edit"
+        aria-label="Update Message"
+        class="size-12 sm:size-16 rounded-xl sm:rounded-[1.75rem] bg-amber-500 text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.3)] hover:scale-110 active:scale-95 transition-all"
+      >
+        ${icon("check", "size-6 sm:size-8 text-slate-950")}
+      </button>`
+    : `
+      <button
+        data-action="send-message"
+        aria-label="Encrypt &amp; Broadcast"
+        class="size-12 sm:size-16 rounded-xl sm:rounded-[1.75rem] bg-primary text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,163,0.3)] hover:scale-110 active:scale-95 transition-all group"
+      >
+        ${icon("arrow_right", "size-6 sm:size-8 -rotate-12 group-hover:rotate-0 transition-transform text-slate-950")}
+      </button>`;
+
+  return `
+    <div class="relative group">
+      <!-- Glow focus effect -->
+      <div class="absolute -inset-1 rounded-[2.5rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700 ${glowClass}"></div>
+
+      <div class="relative flex items-end gap-2 sm:gap-3 p-2 sm:p-5 rounded-2xl sm:rounded-4xl bg-slate-900 border-2 transition-all duration-300 shadow-2xl z-50 ${borderClass}">
+        <textarea
+          id="chat-textarea"
+          data-autofocus
+          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 focus:outline-none py-2 sm:py-4 px-2 resize-none max-h-60 min-h-12 sm:min-h-14 scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
+          placeholder="${placeholder}"
+          rows="1"
+          maxlength="${MAX_CHARS}"
+        >${escapeHtml(opts.value)}</textarea>
+
+        <div class="flex items-center gap-2 sm:gap-4 pr-1 pb-1">
+          <div id="char-counter" class="hidden sm:flex flex-col items-end mr-2"></div>
+          ${actionButtons}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderWaitingArea(
+  current: PlainMessage | null,
+  senderHash: string,
+  typing: boolean,
+): string {
+  const glowClass = typing
+    ? "border-primary/40 shadow-[0_0_40px_-5px_var(--color-primary-glow)]"
+    : "border-white/5";
+  const primaryDot = typing ? "bg-primary" : "bg-primary/60";
+  const labelTransform = typing ? "text-primary scale-105 origin-left" : "text-slate-400 group-hover:text-primary";
+  const label = typing ? "Node is typing..." : "Waiting for Reply";
+  const subtitle = typing ? "Processing incoming sequence..." : "Identity artifacts are locked";
+
+  const ownerControls =
+    current && current.senderHash === senderHash && !current.readAt
+      ? `
+        <div class="flex items-center gap-2 sm:gap-3 z-10 w-full sm:w-auto">
+          <button
+            data-action="start-edit"
+            class="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2"
+          >
+            ${icon("edit_3", "size-3")} Edit
+          </button>
+          <button
+            data-action="delete-mine"
+            class="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-danger/10 hover:bg-danger/20 text-danger text-[9px] sm:text-[10px] font-bold uppercase tracking-widest transition-all border border-danger/20 flex items-center justify-center gap-2"
+          >
+            ${icon("trash_2", "size-3")} Delete
+          </button>
+        </div>`
+      : "";
+
+  return `
+    <div class="glass-card p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-6 transition-all duration-700 animate-in relative overflow-hidden group ${glowClass}">
+      <div class="absolute inset-0 bg-linear-to-r from-primary/0 via-primary/5 to-primary/0 -translate-x-full group-hover:translate-x-full transition-transform duration-2000 ease-in-out pointer-events-none"></div>
+
+      <div class="flex items-center gap-4 sm:gap-6 z-10 w-full sm:w-auto">
+        <div class="relative flex items-center justify-center size-10 sm:size-12 shrink-0">
+          <div class="absolute inset-0 rounded-xl blur-lg animate-pulse ${typing ? "bg-primary/40" : "bg-primary/20"}"></div>
+          <div class="relative flex gap-1.5 items-center">
+            <div class="size-1.5 sm:size-2 rounded-full animate-bounce ${primaryDot}"></div>
+            <div class="size-1.5 sm:size-2 rounded-full animate-bounce [animation-delay:0.2s] ${primaryDot}"></div>
+            <div class="size-1.5 sm:size-2 rounded-full animate-bounce [animation-delay:0.4s] ${primaryDot}"></div>
+          </div>
+        </div>
+        <div class="space-y-1">
+          <p class="text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] sm:tracking-[0.3em] transition-all duration-500 ${labelTransform}">
+            ${label}
+          </p>
+          <p class="text-[8px] sm:text-[10px] text-slate-500 font-medium uppercase tracking-widest">
+            ${subtitle}
+          </p>
+        </div>
+      </div>
+
       ${ownerControls}
     </div>
   `;
 }
 
-function renderEmpty(): string {
+function renderDestructionModal(): string {
   return `
-    <div class="text-center px-6 py-16 space-y-4">
-      <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 mx-auto">
-        ${icon("message_circle", "size-6 text-slate-500")}
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-3xl animate-in duration-300">
+      <div class="w-full max-w-sm glass-card p-10 border-danger/40 relative overflow-hidden">
+        <div class="absolute -right-10 -bottom-10 size-40 bg-danger/5 rounded-full blur-3xl"></div>
+
+        <div class="size-20 rounded-4xl bg-danger/10 flex items-center justify-center mb-8 border border-danger/20">
+          ${icon("flame", "size-10 text-danger")}
+        </div>
+
+        <h3 class="text-3xl font-extrabold text-white mb-4 font-display">Nuclear Wipe?</h3>
+        <p class="text-slate-400 mb-10 leading-relaxed font-medium">
+          This will permanently purge the current artifact and end the sequence for both nodes. This action is
+          <span class="text-white">irreversible.</span>
+        </p>
+
+        <div class="flex flex-col gap-3">
+          <button
+            data-action="expire-room"
+            class="w-full py-4 rounded-2xl bg-danger text-white font-black uppercase tracking-widest shadow-xl shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            Initialize Purge
+          </button>
+          <button
+            data-action="cancel-expire"
+            class="w-full py-4 rounded-2xl bg-white/5 text-slate-400 font-bold uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5"
+          >
+            Abort
+          </button>
+        </div>
       </div>
-      <p class="text-slate-500 text-sm font-medium">Channel is open. Send the first message.</p>
     </div>
   `;
 }
 
-function renderLocked(reason: "unauthorized" | "locked", attemptsRemaining?: number): string {
-  const headline = reason === "locked" ? "Locked" : "Wrong PIN";
-  const message =
-    reason === "locked"
-      ? "Too many failed attempts. Try again in 30 minutes."
-      : attemptsRemaining !== undefined
-        ? `${attemptsRemaining} attempt${attemptsRemaining === 1 ? "" : "s"} remaining before a 30-minute lockout.`
-        : "The PIN didn't match. Try again.";
-  const formDisabled = reason === "locked" ? "disabled" : "";
+// -------------------------------- :locked --------------------------------
+
+function renderLocked(s: Extract<State, { kind: "locked" }>): string {
+  const pips = Array.from({ length: s.lockAttempts }, () => `<div class="size-1 rounded-full bg-primary/40"></div>`).join("");
+  const errorBlock = s.lockError
+    ? `<div class="p-3 rounded-xl bg-danger/10 border border-danger/20 text-xs font-bold text-danger animate-bounce uppercase tracking-widest">${escapeHtml(s.lockError)}</div>`
+    : "";
 
   return `
-    <section class="max-w-md mx-auto my-24 px-6">
-      <div class="lock-overlay glass-card p-8 sm:p-10 space-y-6">
-        <div class="text-center space-y-3">
-          <div class="size-14 rounded-2xl bg-danger/10 flex items-center justify-center border border-danger/20 mx-auto">
-            ${icon("lock", "size-7 text-danger")}
+    <div class="fixed inset-0 z-100 flex items-center justify-center p-6 bg-slate-950/95 backdrop-blur-3xl animate-in">
+      <div class="w-full max-w-sm text-center space-y-12">
+        <div class="relative size-24 mx-auto">
+          <div class="absolute -inset-4 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
+          <div class="relative size-24 rounded-4xl bg-slate-900 border border-primary/20 flex items-center justify-center shadow-inner">
+            ${icon("lock", "size-12 text-primary drop-shadow-[0_0_10px_var(--color-primary-glow)]")}
           </div>
-          <h2 class="text-2xl font-extrabold text-white font-display">${headline}</h2>
-          <p class="text-slate-400 text-sm leading-relaxed">${message}</p>
         </div>
-        <form data-action="submit-locked" class="space-y-4" autocomplete="off" spellcheck="false">
-          <div class="space-y-2">
-            <label for="pin" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">PIN</label>
+
+        <div class="space-y-4">
+          <h1 class="text-4xl font-extrabold text-white font-display tracking-tight uppercase">
+            Workspace <span class="text-gradient">Locked.</span>
+          </h1>
+          <p class="text-slate-500 font-medium text-sm leading-relaxed max-w-[280px] mx-auto">
+            Encryption artifacts are suspended. Re-derive the key matrix to restore the link.
+          </p>
+        </div>
+
+        <form data-action="submit-locked" autocomplete="off" class="space-y-8">
+          <div class="space-y-4">
+            <div class="flex items-center justify-between px-1">
+              <label class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
+                Local PIN Verification
+              </label>
+              <div class="flex gap-1">${pips}</div>
+            </div>
             <input
-              id="pin"
-              name="pin"
+              name="s_key"
               type="password"
               inputmode="numeric"
+              pattern="[0-9]*"
+              placeholder="Secret PIN"
               autocomplete="one-time-code"
-              placeholder="••••"
-              class="glass-input w-full font-mono tracking-widest"
-              ${formDisabled}
-              ${formDisabled ? "" : "data-autofocus"}
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              class="glass-input w-full text-center text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10 focus:border-primary/40"
+              data-autofocus
             >
+            ${errorBlock}
           </div>
-          <button type="submit" class="btn-primary w-full py-4 text-base" ${formDisabled}>
-            Retry
+
+          <button
+            type="submit"
+            class="btn-primary w-full py-5 text-xl shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+          >
+            Reconnect Chat
           </button>
         </form>
-        <button data-action="logout" class="btn-ghost w-full py-3 text-xs">
-          Back to start
+
+        <button
+          data-action="clear-session"
+          class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 hover:text-white transition-colors flex items-center gap-2 mx-auto py-2 px-4 rounded-xl hover:bg-white/5"
+        >
+          ${icon("trash_2", "size-3")} Erase All Session Data
         </button>
       </div>
-    </section>
+    </div>
   `;
 }
 
+// ------------------------------- :expired -------------------------------
+
 function renderExpired(): string {
   return `
-    <section class="max-w-md mx-auto my-24 px-6">
-      <div class="glass-card p-8 sm:p-10 space-y-6 text-center">
-        <div class="size-14 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 mx-auto">
-          ${icon("timer", "size-7 text-slate-500")}
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-2xl">
+      <div class="glass-card-premium max-w-md w-full text-center border-danger/20 animate-in p-10">
+        <div class="size-20 rounded-3xl bg-danger/10 flex items-center justify-center mx-auto mb-8 border border-danger/20">
+          ${icon("trash_2", "size-10 text-danger")}
         </div>
-        <h2 class="text-2xl font-extrabold text-white font-display">Channel expired</h2>
-        <p class="text-slate-400 text-sm leading-relaxed">
-          This conversation has ended. Nothing was stored.
+
+        <h3 class="text-3xl font-extrabold text-white font-display mb-4">Chat Ended</h3>
+
+        <p class="text-slate-400 font-medium leading-relaxed mb-10">
+          The chat session has been permanently closed.
+          All messages have been erased and cannot be recovered.
         </p>
-        <button data-action="restart" class="btn-primary w-full py-4 text-base">
-          Start a new one
+
+        <button
+          data-action="back-to-entry"
+          class="btn-primary w-full py-4 text-lg"
+        >
+          Start New Chat
         </button>
       </div>
-    </section>
+    </div>
   `;
 }

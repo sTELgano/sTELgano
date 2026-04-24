@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  Chat-page layout. Same HTML shell as _layout.html but with the
+  nav and footer removed and <main> sized to the full viewport —
+  equivalent to v1's `<Layouts.app active_chat={true}>` path.
+  Used only by src/client/pages/chat.html via `layout: chat`
+  metadata.
+-->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+
+  <meta property="og:title" content="sTELgano - Zero Trace Encrypted Channels">
+  <meta property="og:description" content="The messaging app hidden in your contacts. No accounts, no logs, end-to-end encrypted.">
+  <meta property="og:image" content="/images/og_image.jpg">
+  <meta property="og:type" content="website">
+
+  <title>{{TITLE}}</title>
+
+  <link rel="stylesheet" href="/assets/app.css">
+
+  <!-- Same bootstrap cleanup as _layout.html (panic clear, SW
+       cleanup, history masking). Byte-identical across pages so
+       Phase 8 can SHA-pin once. -->
+  <script>
+    try {
+      var url = new URL(window.location.href);
+      if (url.searchParams.get("p") === "1") {
+        sessionStorage.clear();
+        url.searchParams.delete("p");
+        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      }
+    } catch (e) {}
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        for (var i = 0; i < rs.length; i++) rs[i].unregister();
+      });
+      if ("caches" in window) {
+        caches.keys().then(function (names) {
+          for (var i = 0; i < names.length; i++) caches.delete(names[i]);
+        });
+      }
+    }
+
+    (function () {
+      function maskHistory() {
+        if (window.location.pathname !== "/") {
+          window.history.replaceState(null, "", "/");
+        }
+      }
+      window.addEventListener("load", maskHistory);
+      window.addEventListener("popstate", maskHistory);
+    })();
+  </script>
+</head>
+<body class="antialiased">
+  <div class="bg-grid-container">
+    <div class="bg-grid"></div>
+    <div class="bg-orbs">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="noise-overlay"></div>
+  </div>
+
+  <main class="h-dvh w-full flex flex-col overflow-hidden">
+    {{CONTENT}}
+  </main>
+</body>
+</html>

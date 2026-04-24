@@ -63,6 +63,15 @@ export type State =
       phoneLocked: boolean;
       /** Pre-populated phone, or "" when blank. */
       phone: string;
+      /** Eye-toggle state for the phone field. v1 default: false
+       *  (password-style masking). */
+      phoneVisible: boolean;
+      /** Error banner copy (e.g. "Wrong PIN") — null means no
+       *  banner. Cleared on next submit. */
+      error: string | null;
+      /** When error is a failed-auth, how many attempts remain
+       *  before the 30-minute lockout. */
+      attemptsRemaining: number | null;
     }
   /** PBKDF2 in flight. The 600k iterations take ~1.5–2.5s. */
   | {
@@ -96,10 +105,28 @@ export type State =
       /** True iff the OTHER party is composing. UI shows the
        *  indicator; resets on next state change. */
       counterpartyTyping: boolean;
+      /** Inline edit of own message. The edit textarea is
+       *  uncontrolled — the initial value comes from
+       *  current.plaintext at the moment startEdit() is called, and
+       *  saveEdit(text) reads the textarea's DOM value directly.
+       *  Keeps the textarea focus stable across renders. */
+      editing: boolean;
+      /** Destruction modal: renders over the chat when true. */
+      confirmExpire: boolean;
     }
-  /** Wrong PIN or 10-attempt lockout. PIN re-entry only — phone
-   *  stays the same. */
-  | { kind: "locked"; phone: string; reason: "unauthorized" | "locked"; attemptsRemaining?: number }
+  /** Wrong PIN OR 30-min lockout. PIN re-entry only — phone stays
+   *  the same. Splits from v1 into two sub-flows keyed by `reason`. */
+  | {
+      kind: "locked";
+      phone: string;
+      reason: "unauthorized" | "locked";
+      attemptsRemaining?: number;
+      /** Error copy for a failed unlock attempt, e.g. "Wrong PIN". */
+      lockError: string | null;
+      /** Number of pips shown in v1's corner — how many failed
+       *  attempts so far in this lock session. */
+      lockAttempts: number;
+    }
   /** Terminal. Room TTL hit, expire_room fired, or connection
    *  bounced after expiry. */
   | { kind: "expired" };
@@ -161,9 +188,25 @@ export class ChatState {
     // user is returning from Paystack and we pre-populate the phone
     // (and lock the field) so they don't retype it.
     const handoff = readHandoffPhone();
-    this.state = handoff
-      ? { kind: "entry", phoneLocked: true, phone: handoff }
-      : { kind: "entry", phoneLocked: false, phone: "" };
+    this.state = {
+      kind: "entry",
+      phoneLocked: !!handoff,
+      phone: handoff,
+      phoneVisible: false,
+      error: null,
+      attemptsRemaining: null,
+    };
+  }
+
+  private initialEntry(phone = "", phoneLocked = false): Extract<State, { kind: "entry" }> {
+    return {
+      kind: "entry",
+      phoneLocked,
+      phone,
+      phoneVisible: false,
+      error: null,
+      attemptsRemaining: null,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -241,7 +284,7 @@ export class ChatState {
     } catch {
       // Crypto failure — usually means the browser blocks Web Crypto
       // (very old browsers). Drop back to entry.
-      this.setState({ kind: "entry", phoneLocked: false, phone });
+      this.setState(this.initialEntry(phone, false));
       return;
     }
 
@@ -371,7 +414,77 @@ export class ChatState {
     this.key = null;
     this.cachedHashes = null;
     clearSession();
-    this.setState({ kind: "entry", phoneLocked: false, phone: "" });
+    this.setState(this.initialEntry());
+  }
+
+  /** Lock the chat without destroying session data. Drops the
+   *  encryption key from memory (re-derived on unlock) but keeps
+   *  the phone + hashes + socket so unlock is fast. v1
+   *  `lock_chat`. */
+  lockChat(): void {
+    if (this.state.kind !== "chat") return;
+    const phone = this.state.phone;
+    this.key = null;
+    this.client?.close(1000, "lock");
+    this.client = null;
+    this.setState({
+      kind: "locked",
+      phone,
+      reason: "unauthorized",
+      attemptsRemaining: undefined,
+      lockError: null,
+      lockAttempts: 0,
+    });
+  }
+
+  /** Wipe all session data and return to the blank entry form.
+   *  v1 `clear_session`. Used from the locked screen's "Erase All"
+   *  button. */
+  clearSession(): void {
+    this.logout();
+  }
+
+  /** Toggle password-masking of the phone field on entry. */
+  togglePhoneVisibility(): void {
+    if (this.state.kind !== "entry") return;
+    this.setState({ ...this.state, phoneVisible: !this.state.phoneVisible });
+  }
+
+  /** Enter inline-edit mode for the current (own, unread) message. */
+  startEdit(): void {
+    if (this.state.kind !== "chat") return;
+    const m = this.state.current;
+    if (!m || m.senderHash !== this.state.senderHash || m.readAt) return;
+    this.setState({ ...this.state, editing: true });
+  }
+
+  /** Cancel inline edit. */
+  cancelEdit(): void {
+    if (this.state.kind !== "chat") return;
+    this.setState({ ...this.state, editing: false });
+  }
+
+  /** Save the edited message. The caller reads the textarea's DOM
+   *  value and passes it in. Clears editing regardless of success
+   *  (matches v1 — the edit form dismisses even if the send fails;
+   *  the server's broadcast is the source of truth for the final
+   *  text). */
+  async saveEdit(text: string): Promise<void> {
+    if (this.state.kind !== "chat" || !this.state.editing) return;
+    this.setState({ ...this.state, editing: false });
+    await this.editCurrent(text);
+  }
+
+  /** Show the "nuclear wipe" confirmation modal. */
+  confirmExpireShow(): void {
+    if (this.state.kind !== "chat") return;
+    this.setState({ ...this.state, confirmExpire: true });
+  }
+
+  /** Dismiss the "nuclear wipe" confirmation modal. */
+  confirmExpireHide(): void {
+    if (this.state.kind !== "chat") return;
+    this.setState({ ...this.state, confirmExpire: false });
   }
 
   // -------------------------------------------------------------------------
@@ -404,7 +517,7 @@ export class ChatState {
       // Couldn't open WS — drop to entry. (Phase 5d UI may show an
       // error toast.)
       this.client = null;
-      this.setState({ kind: "entry", phoneLocked: false, phone });
+      this.setState(this.initialEntry(phone, false));
       return;
     }
 
@@ -414,18 +527,32 @@ export class ChatState {
     } catch (err) {
       const e = err as RoomClientError;
       if (e.reason === "locked" || e.reason === "unauthorized") {
+        // If we came from :locked state already, preserve
+        // lockAttempts + bump it. Otherwise start at 1.
+        const prevAttempts = this.state.kind === "locked" ? this.state.lockAttempts : 0;
         this.setState({
           kind: "locked",
           phone,
           reason: e.reason,
           attemptsRemaining: e.attempts_remaining,
+          lockError:
+            e.reason === "locked"
+              ? "LOCKOUT ACTIVE · 30 MIN"
+              : "INVALID PIN",
+          lockAttempts: prevAttempts + 1,
         });
         return;
       }
-      // not_found / invalid_* / internal_error → drop to entry
+      // not_found / invalid_* / internal_error → back to entry with
+      // an error banner so the user sees what happened.
       this.client?.close();
       this.client = null;
-      this.setState({ kind: "entry", phoneLocked: false, phone });
+      const entry = this.initialEntry(phone, false);
+      entry.error =
+        e.reason === "not_found"
+          ? "No active channel for that number."
+          : "Connection failed. Try again.";
+      this.setState(entry);
       return;
     }
 
@@ -451,6 +578,8 @@ export class ChatState {
       senderHash,
       current,
       counterpartyTyping: false,
+      editing: false,
+      confirmExpire: false,
     });
   }
 
@@ -530,11 +659,9 @@ export class ChatState {
     // Unclean close — drop to entry. User can retry.
     if (this.state.kind === "chat" || this.state.kind === "connecting") {
       this.client = null;
-      this.setState({
-        kind: "entry",
-        phoneLocked: false,
-        phone: this.cachedHashes?.phone ?? "",
-      });
+      const entry = this.initialEntry(this.cachedHashes?.phone ?? "", false);
+      entry.error = "Connection lost. Reconnect to continue.";
+      this.setState(entry);
     }
   }
 

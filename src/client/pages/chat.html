@@ -1,17 +1,18 @@
 <!--
   title: sTELgano
+  layout: chat
 
-  Chat page — the only interactive route. Most rendering happens in
-  src/client/chat.ts; this file just establishes the container and
-  loads the bundled client script.
+  Uses _chat_layout.html (no nav / no footer / full-viewport main)
+  to match v1's `<Layouts.app active_chat={true}>` behaviour. Title
+  stays the bare "sTELgano" — browser tab reveals nothing about the
+  current surface. Passcode-test rule.
 
-  The title is deliberately the bare "sTELgano" (same as the
-  homepage) so the browser tab reveals nothing about the current
-  surface. Passcode-test rule: if the attacker reads the tab title,
-  they should learn nothing about chat usage.
+  All rendering happens in src/client/chat.ts; this file just
+  establishes the #chat-root container and loads the bundled
+  client.
 -->
 
-<main id="chat-root" class="chat-container w-full flex-1 flex flex-col">
+<div id="chat-root" class="chat-container relative overflow-hidden h-full w-full flex flex-col">
   <noscript>
     <div class="max-w-md mx-auto my-24 px-6 text-center">
       <div class="glass-card p-8 space-y-4">
@@ -24,6 +25,6 @@
       </div>
     </div>
   </noscript>
-</main>
+</div>
 
 <script type="module" src="/assets/chat.js"></script>

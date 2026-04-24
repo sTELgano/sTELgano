@@ -23,9 +23,19 @@ import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const LAYOUT_PATH = join(ROOT, "src/client/templates/_layout.html");
+const TEMPLATES_DIR = join(ROOT, "src/client/templates");
+const DEFAULT_LAYOUT = "_layout";
 const PAGES_DIR = join(ROOT, "src/client/pages");
 const OUT_DIR = join(ROOT, "public");
+
+const layoutCache = new Map();
+async function loadLayout(name) {
+  if (!layoutCache.has(name)) {
+    const path = join(TEMPLATES_DIR, `${name}.html`);
+    layoutCache.set(name, await readFile(path, "utf8"));
+  }
+  return layoutCache.get(name);
+}
 
 const META_RE = /^\s*<!--([\s\S]*?)-->/;
 const META_LINE_RE = /^\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*(.+?)\s*$/gm;
@@ -68,7 +78,6 @@ async function collectPages(dir) {
 }
 
 async function build() {
-  const layout = await readFile(LAYOUT_PATH, "utf8");
   await mkdir(OUT_DIR, { recursive: true });
 
   const pagePaths = await collectPages(PAGES_DIR);
@@ -81,6 +90,15 @@ async function build() {
     const source = await readFile(sourcePath, "utf8");
     const { meta, body } = extractMetadata(source);
 
+    // Page can pick a non-default layout via `layout:` metadata.
+    // e.g. `layout: chat` → src/client/templates/_chat_layout.html.
+    // Unknown layout names fail loudly.
+    const layoutName =
+      typeof meta.layout === "string" && meta.layout.trim()
+        ? `_${meta.layout.trim()}_layout`
+        : DEFAULT_LAYOUT;
+    const layout = await loadLayout(layoutName);
+
     const html = layout
       .replace(/\{\{TITLE\}\}/g, escapeHtml(meta.title))
       .replace(/\{\{CONTENT\}\}/g, body);
@@ -90,7 +108,7 @@ async function build() {
     const outFile = join(OUT_DIR, relPath);
     await mkdir(dirname(outFile), { recursive: true });
     await writeFile(outFile, html, "utf8");
-    console.log(`build-html: ${relPath.split(sep).join("/")} → public/${relPath.split(sep).join("/")} (${html.length} bytes)`);
+    console.log(`build-html: ${relPath.split(sep).join("/")} → public/${relPath.split(sep).join("/")} (${html.length} bytes, layout=${layoutName})`);
   }
 }
 
