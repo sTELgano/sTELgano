@@ -21,6 +21,7 @@
 // handle_event clause and produces 0+ setState() calls before
 // resolving.
 
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 import type { JoinReply, MessagePayload } from "../protocol";
 import {
   decrypt,
@@ -340,8 +341,27 @@ export class ChatState {
    *  Routes to new_channel/connecting/chat/locked based on the join
    *  reply. */
   async submit(phone: string, pin: string): Promise<void> {
+    // Validate before hashing. parsePhoneNumberFromString understands
+    // every country's numbering plan; anything it rejects is junk.
+    const parsed = parsePhoneNumberFromString(phone);
+    if (!parsed?.isValid()) {
+      if (this.state.kind === "entry") {
+        this.setState({
+          ...this.state,
+          error:
+            "That doesn't look like a valid steg number. Use the generator drawer to make one.",
+        });
+      }
+      return;
+    }
+
     const normalisedPhone = normalise(phone);
-    if (!normalisedPhone || !pin) return; // silently ignore — UI validates first
+    if (!pin) {
+      if (this.state.kind === "entry") {
+        this.setState({ ...this.state, error: "Enter your PIN." });
+      }
+      return;
+    }
 
     // Phase 1: derive identifiers (instant — three SHA-256 calls).
     // room_hash and access_hash can derive in parallel; sender_hash
