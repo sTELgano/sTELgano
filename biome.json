@@ -17,7 +17,8 @@
       "!project",
       "!src/client/templates",
       "!src/client/pages",
-      "!src/client/app.css"
+      "!src/client/app.css",
+      "!worker-configuration.d.ts"
     ]
   },
   "formatter": {

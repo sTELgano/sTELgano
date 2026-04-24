@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["@cloudflare/workers-types", "vitest/globals"],
+    "types": ["vitest/globals"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -18,6 +18,6 @@
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx"
   },
-  "include": ["_worker.ts", "src/**/*.ts", "test/**/*.ts"],
+  "include": ["worker-configuration.d.ts", "_worker.ts", "src/**/*.ts", "test/**/*.ts"],
   "exclude": ["node_modules", "dist", ".wrangler", "elixir"]
 }
