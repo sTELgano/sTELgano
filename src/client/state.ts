@@ -28,6 +28,7 @@ import {
   deriveKeyInWorker,
   encrypt,
   fromBase64,
+  generateExtensionToken,
   normalise,
   roomHash as deriveRoomHash,
   senderHash as deriveSenderHash,
@@ -111,6 +112,12 @@ export type State =
       roomHash: string;
       accessHash: string;
       senderHash: string;
+      /** True while the paid-tier button is in flight (token
+       *  generation + POST /api/payment/initiate + redirect). */
+      paymentLoading: boolean;
+      /** Error banner copy after a failed payment init, null
+       *  otherwise. Cleared when the user clicks a tier again. */
+      paymentError: string | null;
     }
   /** Opening the WebSocket and joining. Brief — under a second
    *  typically. */
@@ -193,6 +200,21 @@ function clearSession() {
     for (const k of STORAGE_KEYS) sessionStorage.removeItem(k);
   } catch {
     // sessionStorage may be disabled
+  }
+}
+
+function paymentErrorCopy(code: string): string {
+  switch (code) {
+    case "monetization_disabled":
+      return "Paid tiers are not available on this instance.";
+    case "paystack_not_configured":
+      return "Checkout is not configured yet. Try Free for now.";
+    case "invalid_token_hash":
+      return "Token generation failed. Try again.";
+    case "create_token_failed":
+      return "Could not create payment token. Try again.";
+    default:
+      return "Payment could not start. Try again.";
   }
 }
 
@@ -352,6 +374,94 @@ export class ChatState {
     if (this.state.kind !== "new_channel") return;
     const { phone, roomHash, accessHash, senderHash } = this.state;
     await this.connectAndJoin(phone, roomHash, accessHash, senderHash);
+  }
+
+  // -------------------------------------------------------------------------
+  // Action: paid-tier checkout (new_channel)
+  //
+  // Generates a fresh extension secret + its SHA-256 hash, stashes
+  // the secret + phone in sessionStorage so the client can redeem
+  // after returning from Paystack, POSTs the hash to the server to
+  // create the extension_tokens row, and redirects to the returned
+  // Paystack URL.
+  //
+  // The server endpoint is /api/payment/initiate. Phase 7 wires the
+  // actual Paystack.initialize call; for now the endpoint returns
+  // 501 when monetization is on but Paystack isn't configured, and
+  // 503 when monetization is off entirely.
+  // -------------------------------------------------------------------------
+
+  async initiatePayment(): Promise<void> {
+    if (this.state.kind !== "new_channel" || this.state.paymentLoading) return;
+    this.setState({ ...this.state, paymentLoading: true, paymentError: null });
+
+    const { secret, tokenHash } = await generateExtensionToken();
+
+    // Stash for post-Paystack return — the chat entry form reads
+    // stelegano_handoff_phone on mount and pre-fills the phone
+    // field, and the redeem flow reads stelegano_extension_secret
+    // when the channel joins.
+    try {
+      sessionStorage.setItem("stelegano_extension_secret", secret);
+      sessionStorage.setItem("stelegano_handoff_phone", this.state.phone);
+      // v1 also stashed handoff_tier=free so the return path
+      // auto-creates the room as free (the extension upgrades it
+      // on redeem). Match.
+      sessionStorage.setItem("stelegano_handoff_tier", "free");
+    } catch {
+      // sessionStorage disabled — unlikely but not fatal. The
+      // redeem will silently fail later. Continue to checkout
+      // anyway so the user sees the flow.
+    }
+
+    let response: Response;
+    try {
+      response = await fetch("/api/payment/initiate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token_hash: tokenHash }),
+      });
+    } catch {
+      if (this.state.kind !== "new_channel") return;
+      this.setState({
+        ...this.state,
+        paymentLoading: false,
+        paymentError: "Network error. Check your connection and try again.",
+      });
+      return;
+    }
+
+    type InitiateResponse =
+      | { checkout_url: string }
+      | { error: string; detail?: string };
+    let parsed: InitiateResponse;
+    try {
+      parsed = (await response.json()) as InitiateResponse;
+    } catch {
+      if (this.state.kind !== "new_channel") return;
+      this.setState({
+        ...this.state,
+        paymentLoading: false,
+        paymentError: "Server returned an unparseable response.",
+      });
+      return;
+    }
+
+    if ("checkout_url" in parsed && parsed.checkout_url) {
+      // Leaving the page — no further state transitions.
+      location.href = parsed.checkout_url;
+      return;
+    }
+
+    // Error response — map the known codes to user copy.
+    if (this.state.kind !== "new_channel") return;
+    const errorKey = "error" in parsed ? parsed.error : "unknown_error";
+    const copy = paymentErrorCopy(errorKey);
+    this.setState({
+      ...this.state,
+      paymentLoading: false,
+      paymentError: copy,
+    });
   }
 
   // -------------------------------------------------------------------------

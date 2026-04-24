@@ -25,9 +25,18 @@
 // routing with DOs.
 
 import type { Env } from "./src/env";
+import { createPending } from "./src/lib/extension_tokens";
 export { RoomDO } from "./src/room";
 
 const ROOM_HASH_RE = /^[a-f0-9]{64}$/;
+const TOKEN_HASH_RE = /^[a-f0-9]{64}$/;
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -56,6 +65,17 @@ export default {
       return stub.fetch(request);
     }
 
+    // POST /api/payment/initiate — payment client (chat.ts) calls
+    // this with a token_hash. We create the extension_tokens row
+    // (status=pending) and return a checkout URL the client
+    // redirects to. The Paystack adapter wires the actual checkout
+    // URL in Phase 7; for now we stub it with a 501 + clear note
+    // when monetization is enabled, or 503 when the operator hasn't
+    // turned on monetization at all.
+    if (url.pathname === "/api/payment/initiate" && request.method === "POST") {
+      return handlePaymentInitiate(request, env);
+    }
+
     // Static assets fallthrough — Pages' ASSETS binding handles 404s
     // for missing files automatically (single-page-application mode is
     // off, so a missing /foo gets a normal 404 page rather than
@@ -63,3 +83,53 @@ export default {
     return env.ASSETS.fetch(request);
   },
 } satisfies ExportedHandler<Env>;
+
+async function handlePaymentInitiate(request: Request, env: Env): Promise<Response> {
+  if (env.MONETIZATION_ENABLED !== "true") {
+    return jsonResponse({ error: "monetization_disabled" }, 503);
+  }
+
+  let body: { token_hash?: unknown };
+  try {
+    body = (await request.json()) as { token_hash?: unknown };
+  } catch {
+    return jsonResponse({ error: "invalid_json" }, 400);
+  }
+
+  const tokenHash =
+    typeof body.token_hash === "string" ? body.token_hash : "";
+  if (!TOKEN_HASH_RE.test(tokenHash)) {
+    return jsonResponse({ error: "invalid_token_hash" }, 400);
+  }
+
+  // Compute expiry now so the row carries an explicit deadline. v1
+  // sets this 7 days out (the unredeemed-token sweep window). The
+  // Paystack call may bump it via Paystack's own session window —
+  // Phase 7 may overwrite this.
+  const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  const amountCents = parseInt(env.PRICE_CENTS, 10) || 200;
+  const currency = env.PAYMENT_CURRENCY || "USD";
+
+  try {
+    await createPending(env.DB, {
+      tokenHash,
+      amountCents,
+      currency,
+      expiresAt,
+    });
+  } catch {
+    return jsonResponse({ error: "create_token_failed" }, 500);
+  }
+
+  // Phase 7 wires the actual Paystack initialize call here:
+  //   const checkoutUrl = await Paystack.initialize(tokenHash, env);
+  //   return jsonResponse({ checkout_url: checkoutUrl });
+  return jsonResponse(
+    {
+      error: "paystack_not_configured",
+      detail:
+        "The Paystack adapter ports in Phase 7. Token row was created in D1, but no checkout URL is available.",
+    },
+    501,
+  );
+}

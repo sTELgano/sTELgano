@@ -108,6 +108,9 @@ root.addEventListener("click", (e) => {
     case "continue-free":
       void state.continueFree();
       break;
+    case "initiate-payment":
+      void state.initiatePayment();
+      break;
     case "send-message": {
       const ta = root.querySelector<HTMLTextAreaElement>("#chat-textarea");
       if (ta && ta.value.trim()) {
@@ -281,7 +284,7 @@ function render(s: State): string {
     case "deriving":
       return renderDeriving();
     case "new_channel":
-      return renderNewChannel();
+      return renderNewChannel(s);
     case "connecting":
       return renderConnecting();
     case "chat":
@@ -719,7 +722,19 @@ function renderDeriving(): string {
 
 // ----------------------------- :new_channel -----------------------------
 
-function renderNewChannel(): string {
+function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
+  const paidDisabled = s.paymentLoading ? "disabled" : "";
+  const paidClass = s.paymentLoading ? "opacity-50 cursor-not-allowed" : "";
+  const paidLabel = s.paymentLoading ? "Opening checkout…" : "Dedicated Tier";
+
+  const errorBanner = s.paymentError
+    ? `
+      <div class="p-4 rounded-2xl bg-danger/5 border border-danger/20 flex gap-3 items-start animate-in max-w-sm mx-auto">
+        ${icon("alert_circle", "size-5 text-danger shrink-0 mt-0.5")}
+        <p class="text-sm font-medium text-danger">${escapeHtml(s.paymentError)}</p>
+      </div>`
+    : "";
+
   return `
     <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 animate-in">
       <div class="w-full max-w-lg space-y-10">
@@ -734,6 +749,8 @@ function renderNewChannel(): string {
             Choose how long you want to keep this number active.
           </p>
         </div>
+
+        ${errorBanner}
 
         <div class="space-y-4 max-w-sm mx-auto">
           <!-- Free tier -->
@@ -755,25 +772,26 @@ function renderNewChannel(): string {
             ${icon("arrow_right", "size-4 text-slate-500 group-hover:translate-x-1 group-hover:text-white transition-all")}
           </button>
 
-          <!-- Paid tier — wired in Phase 7 -->
+          <!-- Paid tier — POSTs to /api/payment/initiate which returns
+               a Paystack checkout URL once Phase 7 wires the adapter. -->
           <button
             type="button"
-            disabled
-            class="w-full p-5 rounded-2xl bg-primary/10 border border-primary/20 text-left transition-all group flex items-center justify-between shadow-[0_0_20px_rgba(0,255,163,0.1)] opacity-50 cursor-not-allowed"
-            title="Dedicated tier — Phase 7"
+            data-action="initiate-payment"
+            ${paidDisabled}
+            class="w-full p-5 rounded-2xl bg-primary/10 border border-primary/20 hover:border-primary/40 hover:bg-primary/20 text-left transition-all group flex items-center justify-between shadow-[0_0_20px_rgba(0,255,163,0.1)] ${paidClass}"
           >
             <div class="flex items-center gap-4">
-              <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30">
+              <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 group-hover:scale-110 transition-transform">
                 ${icon("shield_check", "size-5 text-primary")}
               </div>
               <div>
-                <h3 class="text-primary font-bold text-sm">Dedicated Tier</h3>
+                <h3 class="text-primary font-bold text-sm">${escapeHtml(paidLabel)}</h3>
                 <p class="text-primary/80 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
                   1 Year &mdash; $2.00
                 </p>
               </div>
             </div>
-            ${icon("arrow_right", "size-4 text-primary")}
+            ${icon("arrow_right", "size-4 text-primary group-hover:translate-x-1 transition-transform")}
           </button>
         </div>
 
