@@ -73,6 +73,29 @@ export default {
       return stub.fetch(request);
     }
 
+    // GET /api/room/:roomHash/exists — probe whether a room has
+    // been initialised. Client uses this before full join to
+    // route first-time numbers through new_channel (tier
+    // selection) vs. straight into connect. No auth — the
+    // room_hash is already a SHA-256 hash of (phone + salt); if
+    // the caller knows one, they already know the phone number
+    // and ROOM_SALT.
+    const existsMatch = url.pathname.match(/^\/api\/room\/([^/]+)\/exists$/);
+    if (existsMatch && request.method === "GET") {
+      const roomHash = existsMatch[1] ?? "";
+      if (!ROOM_HASH_RE.test(roomHash)) {
+        return jsonResponse({ error: "invalid_room_hash" }, 400);
+      }
+      const id = env.ROOM.idFromName(roomHash);
+      const stub = env.ROOM.get(id);
+      // Synthesise a request to the DO with a path that ends in
+      // /exists. The DO inspects the pathname to distinguish this
+      // from a WebSocket upgrade.
+      return stub.fetch(
+        new Request(new URL(`/${roomHash}/exists`, url), { method: "GET" }),
+      );
+    }
+
     // POST /api/payment/initiate — payment client (chat.ts) calls
     // this with a token_hash. We create the extension_tokens row
     // (status=pending) and return a checkout URL the client

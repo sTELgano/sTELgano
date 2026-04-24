@@ -129,6 +129,26 @@ export class RoomDO implements DurableObject {
   // -------------------------------------------------------------------------
 
   async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    // GET /exists — probe whether this room has been initialised.
+    // Used by the client to route first-time joins through
+    // new_channel (tier selection) vs. straight into connect. No
+    // authentication — room_hash alone has enough entropy that
+    // someone probing it already has the phone number + ROOM_SALT.
+    if (request.method === "GET" && url.pathname.endsWith("/exists")) {
+      return new Response(
+        JSON.stringify({ exists: Boolean(this.room?.isInitialized) }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }
+
     if (request.headers.get("upgrade") !== "websocket") {
       return new Response("expected websocket upgrade", { status: 426 });
     }

@@ -232,6 +232,37 @@ function readHandoffPhone(): string {
   }
 }
 
+/** Reads and clears stelegano_handoff_tier. Set by initiatePayment
+ *  before the Paystack redirect; read once on return to decide
+ *  whether to skip the new_channel screen. */
+function readHandoffTier(): string | null {
+  try {
+    const v = sessionStorage.getItem("stelegano_handoff_tier");
+    if (v) sessionStorage.removeItem("stelegano_handoff_tier");
+    return v;
+  } catch {
+    return null;
+  }
+}
+
+/** GET /api/room/:roomHash/exists — probes whether the DO has a
+ *  state row. Used before full join to route first-time numbers
+ *  through new_channel. On any failure (network error, non-200,
+ *  unparseable body), returns true so the caller auto-joins —
+ *  false positives on the probe would surface as a "tier
+ *  selection" screen for a returning user, which is worse than
+ *  the alternative of silently auto-creating a free room. */
+async function probeRoomExists(roomHash: string): Promise<boolean> {
+  try {
+    const r = await fetch(`/api/room/${roomHash}/exists`);
+    if (!r.ok) return true;
+    const body = (await r.json()) as { exists?: boolean };
+    return body.exists === true;
+  } catch {
+    return true;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // ChatState
 // ---------------------------------------------------------------------------
@@ -351,8 +382,28 @@ export class ChatState {
       return;
     }
 
-    // Phase 3: connect + join.
-    await this.connectAndJoin(normalisedPhone, roomHash, accessHash, senderHash);
+    // Phase 3: probe the room. If it exists (returning user) OR the
+    // caller is landing back from a Paystack checkout with
+    // handoff_tier=free stashed, connectAndJoin directly. Otherwise
+    // route through new_channel so the user picks a tier — only
+    // Free calls connectAndJoin next; Paid sends the user through
+    // Paystack first.
+    const exists = await probeRoomExists(roomHash);
+    const handoffTier = readHandoffTier();
+    if (exists || handoffTier === "free") {
+      await this.connectAndJoin(normalisedPhone, roomHash, accessHash, senderHash);
+    } else {
+      this.setState({
+        kind: "new_channel",
+        phone: normalisedPhone,
+        pin,
+        roomHash,
+        accessHash,
+        senderHash,
+        paymentLoading: false,
+        paymentError: null,
+      });
+    }
   }
 
   // -------------------------------------------------------------------------
