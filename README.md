@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+
 # sTELgano
 
 **The messaging app hidden in your contacts.**
@@ -9,21 +11,20 @@ sTELgano is a privacy-focused anonymous messaging app and open protocol. It prot
 Two people share a phone number saved in their contacts. Each picks their own PIN. No account. No history. One message at a time.
 
 [![AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-green.svg)](LICENSE)
-[![Elixir](https://img.shields.io/badge/elixir-~>%201.15-purple.svg)](https://elixir-lang.org)
-[![Phoenix](https://img.shields.io/badge/phoenix-1.8-orange.svg)](https://phoenixframework.org)
+[![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange.svg)](https://workers.cloudflare.com)
 [![sTELgano-std-1](https://img.shields.io/badge/protocol-sTELgano--std--1-10B981.svg)](https://stelgano.com/spec)
 
 ---
 
 ## How it works
 
-1. **Generate a steg number** — pick a country destination and generate a random international phone number. You can use the dedicated `/steg-number` page or the integrated one-click generator within the `/chat` interface. All numbers are strictly formatted in E.164 (e.g. `+1212...`).
+1. **Generate a steg number** — pick a country and generate a random international phone number from the integrated drawer inside `/chat`. All numbers are strictly formatted in E.164 (e.g. `+1212...`).
 2. **Choose your own PIN** — never shared with anyone. The PIN never leaves your device.
-3. **Open the channel** — enter your secret number and PIN. The interface automatically infers the country context and enforces international formatting. Your browser derives all keys locally via the Web Crypto API. The server sees only hashes and ciphertext.
+3. **Open the channel** — enter your secret number and PIN. Your browser derives all keys locally via the Web Crypto API. The server sees only hashes and ciphertext.
 
 ### The N=1 invariant
 
-At most one message exists on the server at any moment. When you reply, the previous message is permanently deleted in an atomic database transaction. No history. Anywhere.
+At most one message exists on the server at any moment. When you reply, the previous message is permanently deleted in an atomic operation. No history. Anywhere.
 
 ### What the server stores vs. never stores
 
@@ -38,7 +39,7 @@ At most one message exists on the server at any moment. When you reply, the prev
 
 ## Cryptographic specification
 
-Canonical implementation: [`assets/js/crypto/anon.js`](assets/js/crypto/anon.js)
+Canonical implementation: [src/client/crypto/anon.ts](src/client/crypto/anon.ts)
 
 ```
 room_hash   = SHA-256(normalise(phone) + ":" + ROOM_SALT)
@@ -52,28 +53,41 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 
 ---
 
+## Architecture
+
+**Runtime:** Cloudflare Workers + Assets + Durable Objects + D1.
+
+- **Worker** (`_worker.ts`) — routes all requests, applies security headers (CSP, HSTS), handles HTTP API and WebSocket upgrades. `run_worker_first = true` ensures even static assets pass through the security-header middleware.
+- **RoomDO** (Durable Object) — one instance per room, single-threaded. Enforces the N=1 invariant by construction. Uses hibernatable WebSockets to keep idle rooms cheap. SQLite-backed storage for per-room state.
+- **D1** — extension tokens, country metrics, daily metrics. No per-room country metadata — server-blindness invariant preserved.
+- **Static assets** (`public/`) — HTML pages, bundled JS, CSS, fonts. Uploaded to Cloudflare's asset store on deploy.
+
+**Real-time:** WebSocket connections upgrade to the room's Durable Object. The client sends `join`, `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, and `redeem_extension` events.
+
+---
+
 ## Features
 
-- **N=1 messaging** — at most one message per room, enforced atomically
+- **N=1 messaging** — at most one message per room, enforced atomically by the Durable Object's single-threaded runtime
 - **Client-side crypto** — AES-256-GCM, PBKDF2 at 600k iterations, Web Crypto API only
-- **Real-time** — Phoenix Channels for send, read receipts, edit/delete before read, typing indicators
+- **Real-time** — Durable Object WebSockets for send, read receipts, edit/delete before read, typing indicators
 - **Lock screen** — PIN re-entry to resume, session clear for panic situations
 - **History Masking** — forces the browser history to only log the root path (`/`), leaving no trace of sensitive sub-pages
 - **Vault Isolation** — uses non-standard field attributes to discourage browser password managers from saving credentials
-- **Incognito Recommended** — integrated guidance to use private browsing for zero-trace local forensics
-- **Panic route** — `GET /x` instantly clears all session data
-- **Steg number generator** — integrated one-click generator drawer and dedicated `/steg-number` page; 19 curated countries, strict E.164 international formatting with real-time country inference.
+- **Panic route** — `GET /x` instantly clears all session data, redirects to `/?p=1`
+- **Steg number generator** — integrated one-click generator drawer inside `/chat`; 19 curated countries, strict E.164 formatting with real-time country inference
 - **Admin dashboard** — aggregate metrics at `/admin` (HTTP Basic Auth)
 - **Privacy-preserving telemetry** — lifetime per-country counters + daily global counters; no per-room country metadata, no third-party analytics
 - **Blog** — technical articles at `/blog`
 - **Protocol spec** — sTELgano-std-1 specification at `/spec`
 - **Pure web app** — no PWA, no service worker, no installable icon (see the passcode test rationale in the blog)
-- **Self-hosted fonts** — Inter / Outfit / JetBrains Mono ship from `priv/static/fonts/`; no Google Fonts CDN pings
-- **Nonce-based CSP** — `script-src` carries a per-request nonce rather than `'unsafe-inline'`
-- **Rate limiting** — IP-based via PlugAttack, tighter limit for `/admin`
-- **Security headers** — CSP, HSTS, CORP/COEP/COOP, no external scripts
-- **Configurable monetization** — optional paid tier for extended steg number TTL, pluggable payment providers (Paystack ships built-in, bring your own Stripe/Flutterwave/etc.)
-- **Privacy-preserving payments** — blind token protocol ensures the server cannot link a payment to a specific room
+- **Self-hosted fonts** — Inter / Outfit / JetBrains Mono ship from `public/fonts/`; no Google Fonts CDN pings
+- **Nonce-based CSP** — per-request nonce injected into the HTML at the Worker level; no `'unsafe-inline'` for scripts
+- **Rate limiting** — IP-based, tighter limits for `/admin` and WebSocket upgrades
+- **Security headers** — CSP, HSTS, X-Frame-Options, X-Robots-Tag
+- **Configurable monetization** — optional paid tier for extended steg number TTL, pluggable payment providers (Paystack ships built-in)
+- **Privacy-preserving payments** — blind token protocol; the server cannot link a payment to a specific room
+- **Daily token cleanup** — Cron Trigger at 03:00 UTC sweeps expired extension tokens from D1
 
 ---
 
@@ -81,76 +95,78 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 
 Monetization is fully optional and disabled by default. Self-hosters can run sTELgano without monetization — all rooms get unlimited TTL.
 
-When enabled, steg numbers have a configurable free TTL (default 7 days). Users can purchase a dedicated number for 1 year via the steg number generator page. The payment flow uses a **blind token** design: the `extension_tokens` table has no `room_id` column, so the server cannot link a payment to a specific room.
-
-Payment providers are pluggable via a behaviour (`Stelgano.Monetization.PaymentProvider`). Paystack ships built-in; implement the behaviour for Stripe, Flutterwave, M-Pesa, or any other gateway.
-
-```elixir
-# Self-hosted, no monetization (default)
-config :stelgano, Stelgano.Monetization, enabled: false
-
-# Production with Paystack
-config :stelgano, Stelgano.Monetization,
-  enabled: true,
-  provider: Stelgano.Monetization.Providers.Paystack,
-  free_ttl_days: 7,
-  paid_ttl_days: 365,
-  price_cents: 200,
-  currency: "USD"
-```
-
-**Display-vs-settlement currency.** `PAYMENT_CURRENCY` is what the UI shows and what `PRICE_CENTS` is denominated in. When the Paystack merchant account only accepts a different currency, set `PAYSTACK_SETTLEMENT_CURRENCY` (e.g. `KES`) and the adapter converts the amount at payment-initialize time via `Stelgano.Monetization.FxRate` — an in-memory GenServer that fetches a single `base→quote` rate from Fawazahmed0's public currency-api CDN on boot and refreshes every 24h. A configurable buffer (`PAYSTACK_FX_BUFFER_PCT`, default 5%) absorbs FX drift, and `PAYMENT_FX_FALLBACK_RATE` seeds the cache so the first payment works even if the rate API is down. Settlement-currency config lives on the Paystack adapter — future Stripe/Flutterwave adapters own their own story (or don't need one).
+When enabled, steg numbers have a configurable free TTL (default 7 days). Users can purchase a dedicated number for 1 year. The payment flow uses a **blind token** design: the `extension_tokens` table has no `room_id` column, so the server cannot link a payment to a specific room.
 
 ---
 
 ## Self-hosting
 
+### Prerequisites
+
+- [Node.js](https://nodejs.org) 18+
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (`npm install -g wrangler`)
+- A Cloudflare account (free tier works)
+
+### Local development
+
 ```bash
 git clone https://github.com/sTELgano/sTELgano
 cd stelgano
-mix setup        # deps + DB + migrations + assets
-mix phx.server   # → http://localhost:4000
+npm install
+npm run build          # compile HTML, icons, client JS, CSS
+npm run dev            # wrangler dev → http://localhost:8787
 ```
 
-**Required environment variables (production):**
+### Production deploy
 
-| Variable | Description |
-|----------|-------------|
-| `PHX_SERVER` | Set to `true` so the release binds the HTTP endpoint on boot |
-| `SECRET_KEY_BASE` | Phoenix session signing (`mix phx.gen.secret`) |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `PHX_HOST` | Production hostname |
-| `ADMIN_PASSWORD` | Admin dashboard password |
-| `MONETIZATION_ENABLED` | Set to `true` to enable paid tiers |
-| `PAYSTACK_SECRET_KEY` | Paystack secret key (required if monetization enabled) |
-| `PAYSTACK_PUBLIC_KEY` | Paystack public key (required if monetization enabled) |
-| `PAYSTACK_CALLBACK_URL` | Post-payment redirect URL (e.g. `https://stelgano.com/payment/callback`) |
-| `PAYSTACK_RECEIPT_EMAIL_DOMAIN` | **Domain you control** — used as the `@domain` of the anonymous placeholder email we send to Paystack on initialize. Paystack mails receipts to this address; if the domain isn't yours, a third party receives them. Typically your `PHX_HOST`. Required when monetization is enabled. |
+```bash
+wrangler d1 create stelgano          # create D1 database, note the ID
+# paste database_id into wrangler.toml
 
-Optional: `PORT` (default 4000), `POOL_SIZE` (default 10), `ADMIN_USERNAME` (default `admin`), salt overrides (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`), monetization tuning (`FREE_TTL_DAYS`, `PAID_TTL_DAYS`, `PRICE_CENTS`, `PAYMENT_CURRENCY`), settlement-currency conversion (`PAYSTACK_SETTLEMENT_CURRENCY`, `PAYSTACK_FX_BUFFER_PCT`, `PAYMENT_FX_FALLBACK_RATE`). See [.env.example](.env.example) for the full reference.
+wrangler d1 migrations apply stelgano --remote   # apply schema
+wrangler deploy                                   # deploy Worker
+```
 
-### Deployment (droplet + systemd)
+### Environment variables (production)
 
-The repo ships a reference deployment pipeline for a plain DigitalOcean droplet (or any SSH-reachable Linux host):
+Set via `wrangler secret put <NAME>` for secrets, or in `wrangler.toml [vars]` for non-sensitive values.
 
-- [.github/workflows/deploy.yml](.github/workflows/deploy.yml) — GitHub Actions workflow that builds a release with `mix release`, tarballs it, scp's the tarball to your server, runs `Stelgano.Release.migrate()`, and bounces the systemd unit.
-- [deploy/stelgano.service](deploy/stelgano.service) — systemd unit template. Copy to `/etc/systemd/system/stelgano.service` on the droplet; reads env from `/opt/stelgano/.env` (use [.env.example](.env.example) as the template).
-
-Required GitHub Actions secrets: `DO_HOST`, `DO_USERNAME`, `DO_SSH_KEY` (`DO_SSH_PORT` optional, defaults to 22). On the droplet, give the deploy user passwordless sudo for `systemctl {start,stop,is-active} stelgano` and `journalctl -u stelgano`. Front the app with nginx or Caddy on `:443` proxying to `127.0.0.1:4000`.
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `PHX_HOST` | Yes | Production hostname (used for CORS and `check_origin`) |
+| `ADMIN_PASSWORD` | Yes | Admin dashboard password (HTTP Basic Auth) |
+| `ADMIN_USERNAME` | No | Admin dashboard username (default: `admin`) |
+| `MONETIZATION_ENABLED` | No | Set to `true` to enable paid tiers |
+| `PAYSTACK_SECRET_KEY` | If monetization | Paystack secret key |
+| `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key |
+| `PAYSTACK_CALLBACK_URL` | If monetization | Post-payment redirect URL |
+| `PAYSTACK_RECEIPT_EMAIL_DOMAIN` | If monetization | Operator-controlled domain for anonymous placeholder emails sent to Paystack |
+| `PAYMENT_CURRENCY` | No | ISO 4217 display currency (default: `USD`) |
+| `PRICE_CENTS` | No | Price in smallest display-currency unit (default: `200`) |
+| `FREE_TTL_DAYS` | No | Free tier TTL in days (default: `7`) |
+| `PAID_TTL_DAYS` | No | Paid tier TTL in days (default: `365`) |
 
 ---
 
 ## Development
 
 ```bash
-mix setup              # deps + DB create/migrate + seed + assets
-mix phx.server         # dev server at http://localhost:4000
-mix test               # run all tests
-mix precommit          # compile (warnings-as-errors) + unlock unused deps + format + credo --strict + test
-mix credo --strict     # static analysis
-mix dialyzer           # type checking
-mix sobelow --config   # Phoenix security scanning
+npm run dev          # local dev server (wrangler dev)
+npm run typecheck    # TypeScript type checking (tsc --noEmit)
+npm run lint         # Biome linter
+npm run format       # Biome formatter (write)
+npm run format:check # Biome formatter (check only)
+npm run check        # Biome check (lint + format combined)
+npm run check:fix    # Biome check with auto-fix
+npm run precommit    # typecheck + check + test (run before pushing)
+npm test             # vitest run (pure-function + worker-runtime suites)
+npm run test:watch   # vitest watch mode
+npm run build        # compile all client assets to public/
 ```
+
+The test suite has two projects (see `vitest.workspace.ts`):
+- **Pure-function** (`vitest.config.ts`) — Node environment, no Workers runtime needed
+- **Worker-runtime** (`vitest.workers.config.ts`) — runs under real workerd via `@cloudflare/vitest-pool-workers`
 
 ---
 
@@ -159,15 +175,22 @@ mix sobelow --config   # Phoenix security scanning
 | Path | Description |
 |------|-------------|
 | `/` | Homepage |
-| `/chat` | Anonymous chat (no URL params; phone handoff via sessionStorage) |
-| `/steg-number` | Steg number generator |
+| `/chat` | Anonymous chat (no URL params; steg number generator integrated as slide-in drawer) |
+| `/pricing` | Pricing page |
 | `/spec` | Protocol specification |
 | `/blog` | Blog index |
+| `/blog/:slug` | Individual blog post |
 | `/security`, `/privacy`, `/terms`, `/about` | Static pages |
 | `/admin` | Admin dashboard (HTTP Basic Auth) |
 | `/payment/callback` | Post-payment redirect (monetization) |
-| `/api/webhooks/paystack` | Paystack webhook endpoint |
-| `/x` | Panic route (instant session clear) |
+| `/api/room/:hash/exists` | Room existence check (GET) |
+| `/api/payment/initiate` | Start payment flow (POST) |
+| `/api/webhooks/paystack` | Paystack webhook endpoint (HMAC-SHA512 verified) |
+| `/x` | Panic route (instant session clear → redirect to `/?p=1`) |
+| `/.well-known/security.txt` | Security disclosure |
+| `/.well-known/apple-developer-merchantid-domain-association` | Apple Pay merchant verification |
+| `/robots.txt` | Crawler policy |
+| `/healthz` | Health check (Worker-only, not in assets) |
 
 ---
 

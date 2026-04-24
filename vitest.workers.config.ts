@@ -18,10 +18,7 @@
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  defineWorkersConfig,
-  readD1Migrations,
-} from "@cloudflare/vitest-pool-workers/config";
+import { defineWorkersConfig, readD1Migrations } from "@cloudflare/vitest-pool-workers/config";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 

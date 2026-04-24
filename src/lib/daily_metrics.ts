@@ -67,5 +67,8 @@ async function bump(db: D1Database, column: DailyColumn, count: number): Promise
       updated_at = excluded.updated_at
   `;
 
-  await db.prepare(sql).bind(today, ...values, now, count).run();
+  await db
+    .prepare(sql)
+    .bind(today, ...values, now, count)
+    .run();
 }

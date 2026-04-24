@@ -11,9 +11,9 @@
 // once per isolated storage realm (vitest-pool-workers creates one
 // realm per test file in singleWorker mode).
 
-import { beforeAll } from "vitest";
 // @ts-expect-error — see healthz.test.ts for why this expect-error lives here.
 import { applyD1Migrations, env } from "cloudflare:test";
+import { beforeAll } from "vitest";
 
 beforeAll(async () => {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);

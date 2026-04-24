@@ -3,9 +3,9 @@
 // Tests for src/lib/daily_metrics — per-day global counters with no
 // country dimension and no per-room linkage.
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts
 import { env } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 import {
   incrementFreeExpired,

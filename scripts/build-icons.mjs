@@ -19,15 +19,12 @@
 // Usage in templates:
 //   <svg class="size-4"><use href="/icons.svg#shield_check"/></svg>
 
-import { readFile, writeFile, readdir } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const SCAN_DIRS = [
-  join(ROOT, "src/client/templates"),
-  join(ROOT, "src/client/pages"),
-];
+const SCAN_DIRS = [join(ROOT, "src/client/templates"), join(ROOT, "src/client/pages")];
 const LUCIDE_DIR = join(ROOT, "node_modules/lucide-static/icons");
 const OUT = join(ROOT, "public/icons.svg");
 
@@ -55,6 +52,7 @@ async function collectReferences() {
     for (const file of files) {
       const content = await readFile(file, "utf8");
       let m;
+      // biome-ignore lint/suspicious/noAssignInExpressions: standard regex exec loop
       while ((m = REF_RE.exec(content)) !== null) refs.add(m[1]);
     }
   }
@@ -117,9 +115,7 @@ async function build() {
 `;
 
   await writeFile(OUT, sprite, "utf8");
-  console.log(
-    `build-icons: ${names.length} icons → public/icons.svg (${sprite.length} bytes)`,
-  );
+  console.log(`build-icons: ${names.length} icons → public/icons.svg (${sprite.length} bytes)`);
 }
 
 build().catch((err) => {

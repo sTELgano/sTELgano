@@ -24,9 +24,9 @@
 //   7. Read receipts gate edit/delete — once read, edits return
 //      not_editable.
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts
 import { SELF } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 // ---- helpers --------------------------------------------------------------
 
@@ -216,7 +216,7 @@ describe("RoomDO — messaging", () => {
     send(ws, {
       event: "join",
       ref: "j",
-      data: { sender_hash: hex64(who), access_hash: hex64(who + "-pin") },
+      data: { sender_hash: hex64(who), access_hash: hex64(`${who}-pin`) },
     });
     await waitRef(ws, "j");
     return ws;

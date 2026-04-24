@@ -133,10 +133,7 @@ function placeholderEmail(tokenHash: string, domain: string): string {
  *  the `x-paystack-signature` header on incoming webhook POSTs.
  *  Web Crypto is constant-time inside the comparison step; we
  *  also use constant-time-ish string compare on the caller side. */
-export async function hmacSha512Hex(
-  secret: string,
-  payload: string,
-): Promise<string> {
+export async function hmacSha512Hex(secret: string, payload: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -166,19 +163,13 @@ export function timingSafeHexEqual(a: string, b: string): boolean {
 /** Calls Paystack's /transaction/verify/:reference and returns
  *  true iff the transaction exists and is `success`. Used for
  *  defence-in-depth double-verification in the webhook handler. */
-export async function verifyTransaction(
-  reference: string,
-  env: Env,
-): Promise<boolean> {
+export async function verifyTransaction(reference: string, env: Env): Promise<boolean> {
   if (!env.PAYSTACK_SECRET_KEY) return false;
   let response: Response;
   try {
-    response = await fetch(
-      `${PAYSTACK_API}/transaction/verify/${encodeURIComponent(reference)}`,
-      {
-        headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}` },
-      },
-    );
+    response = await fetch(`${PAYSTACK_API}/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}` },
+    });
   } catch {
     return false;
   }

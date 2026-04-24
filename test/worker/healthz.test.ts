@@ -7,12 +7,12 @@
 // default export. Calling SELF.fetch() hits our actual _worker.ts
 // handler with a real workerd Request and real Response.
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — types ship with the vitest-pool-workers
 // package but aren't in the default @cloudflare/workers-types
 // resolution. Adding the triple-slash reference is a noisier fix;
 // the expect-error is the minimal annotation.
 import { SELF } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 describe("GET /healthz", () => {
   it("returns 200 with the literal body 'ok'", async () => {

@@ -17,9 +17,9 @@
 // a mock Paystack /transaction/verify backend, which is worth doing but
 // is better as a local integration test than a unit one.
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts
 import { SELF } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 const SECRET = "sk_test_REPLACE_ME"; // matches .dev.vars
 
@@ -83,7 +83,7 @@ describe("POST /api/webhooks/paystack", () => {
     // response gives no oracle for "is this reference in our DB".
     const raw = JSON.stringify({
       event: "charge.success",
-      data: { reference: "never-seen-" + crypto.randomUUID() },
+      data: { reference: `never-seen-${crypto.randomUUID()}` },
     });
     const sig = await hmacHex(SECRET, raw);
     const res = await postSigned(raw, sig);

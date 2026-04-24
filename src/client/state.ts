@@ -21,21 +21,21 @@
 // handle_event clause and produces 0+ setState() calls before
 // resolving.
 
+import type { JoinReply, MessagePayload } from "../protocol";
 import {
-  type ProgressCallback,
-  accessHash as deriveAccessHash,
   decrypt,
+  accessHash as deriveAccessHash,
   deriveKeyInWorker,
+  roomHash as deriveRoomHash,
+  senderHash as deriveSenderHash,
   encrypt,
   fromBase64,
   generateExtensionToken,
   normalise,
-  roomHash as deriveRoomHash,
-  senderHash as deriveSenderHash,
+  type ProgressCallback,
   toBase64,
 } from "./crypto/anon";
 import { RoomClient, type RoomClientError } from "./room_client";
-import { type MessagePayload } from "../protocol";
 
 // ---------------------------------------------------------------------------
 // Public state shape
@@ -486,9 +486,7 @@ export class ChatState {
       return;
     }
 
-    type InitiateResponse =
-      | { checkout_url: string }
-      | { error: string; detail?: string };
+    type InitiateResponse = { checkout_url: string } | { error: string; detail?: string };
     let parsed: InitiateResponse;
     try {
       parsed = (await response.json()) as InitiateResponse;
@@ -832,7 +830,7 @@ export class ChatState {
       return;
     }
 
-    let joinReply;
+    let joinReply: JoinReply | undefined;
     try {
       joinReply = await this.client.join(senderHash, accessHash);
     } catch (err) {
@@ -846,10 +844,7 @@ export class ChatState {
           phone,
           reason: e.reason,
           attemptsRemaining: e.attempts_remaining,
-          lockError:
-            e.reason === "locked"
-              ? "LOCKOUT ACTIVE · 30 MIN"
-              : "INVALID PIN",
+          lockError: e.reason === "locked" ? "LOCKOUT ACTIVE · 30 MIN" : "INVALID PIN",
           lockAttempts: prevAttempts + 1,
         });
         return;

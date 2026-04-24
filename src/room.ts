@@ -18,23 +18,23 @@
 // reference behaviour we are porting.
 
 import type { Env } from "./env";
+import { incrementPaid as countryIncrementPaid } from "./lib/country_metrics";
+import { incrementPaidNew } from "./lib/daily_metrics";
+import { findByTokenHash, markRedeemed } from "./lib/extension_tokens";
 import {
+  type ClientEvent,
+  type ErrorReason,
   FREE_TTL_DAYS,
   HEX64_RE,
   JOIN_TIME_FLOOR_MS,
   LOCKOUT_MINUTES,
   MAX_ACCESS_ATTEMPTS,
   MAX_CIPHERTEXT_BYTES,
-  PAID_TTL_DAYS,
-  type ClientEvent,
-  type ErrorReason,
   type MessagePayload,
+  PAID_TTL_DAYS,
   type ServerBroadcast,
   type ServerReply,
 } from "./protocol";
-import { findByTokenHash, markRedeemed } from "./lib/extension_tokens";
-import { incrementPaid as countryIncrementPaid } from "./lib/country_metrics";
-import { incrementPaidNew } from "./lib/daily_metrics";
 
 // ---------------------------------------------------------------------------
 // Persisted state — the entire room lives under one storage key. Rooms
@@ -137,16 +137,13 @@ export class RoomDO implements DurableObject {
     // authentication — room_hash alone has enough entropy that
     // someone probing it already has the phone number + ROOM_SALT.
     if (request.method === "GET" && url.pathname.endsWith("/exists")) {
-      return new Response(
-        JSON.stringify({ exists: Boolean(this.room?.isInitialized) }),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json",
-            "cache-control": "no-store",
-          },
+      return new Response(JSON.stringify({ exists: Boolean(this.room?.isInitialized) }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store",
         },
-      );
+      });
     }
 
     if (request.headers.get("upgrade") !== "websocket") {
@@ -275,7 +272,10 @@ export class RoomDO implements DurableObject {
   // Event handlers
   // -------------------------------------------------------------------------
 
-  private async handleJoin(ws: WebSocket, evt: Extract<ClientEvent, { event: "join" }>): Promise<void> {
+  private async handleJoin(
+    ws: WebSocket,
+    evt: Extract<ClientEvent, { event: "join" }>,
+  ): Promise<void> {
     const start = Date.now();
 
     const senderHash = evt.data.sender_hash;
@@ -295,7 +295,7 @@ export class RoomDO implements DurableObject {
     // Auto-initialise on first join with default free tier.
     // Phase 3+ will add an explicit create-room HTTP entry that lets
     // the client pick a tier (free vs. paid) before the WebSocket join.
-    if (!this.room || !this.room.isInitialized) {
+    if (!this.room?.isInitialized) {
       const ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
       this.room = {
         isInitialized: true,
@@ -674,7 +674,6 @@ export class RoomDO implements DurableObject {
   }
 
   private send(ws: WebSocket, msg: ServerReply | ServerBroadcast): void {
-
     try {
       ws.send(JSON.stringify(msg));
     } catch {

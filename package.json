@@ -9,6 +9,12 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "precommit": "npm run typecheck && npm run check && npm test",
     "test": "vitest run",
     "test:watch": "vitest",
     "build:html": "node scripts/build-html.mjs",
@@ -22,6 +28,7 @@
     "d1:migrate:remote": "wrangler d1 migrations apply stelgano --remote"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.13",
     "@cloudflare/vitest-pool-workers": "^0.5.36",
     "@cloudflare/workers-types": "^4.20250414.0",
     "@tailwindcss/cli": "^4.0.0",

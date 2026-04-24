@@ -11,7 +11,6 @@
 @source "../../public/**/*.html";
 @source "../../functions/**/*.ts";
 
-
 /* ===========================================================================
    Self-hosted fonts
    ---------------------------------------------------------------------------
@@ -24,106 +23,106 @@
    =========================================================================== */
 
 @font-face {
-  font-family: 'Inter';
+  font-family: "Inter";
   font-style: normal;
   font-weight: 300;
   font-display: swap;
-  src: url('/fonts/inter-latin-300-normal.woff2') format('woff2');
+  src: url("/fonts/inter-latin-300-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'Inter';
+  font-family: "Inter";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('/fonts/inter-latin-400-normal.woff2') format('woff2');
+  src: url("/fonts/inter-latin-400-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'Inter';
+  font-family: "Inter";
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('/fonts/inter-latin-500-normal.woff2') format('woff2');
+  src: url("/fonts/inter-latin-500-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'Inter';
+  font-family: "Inter";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url('/fonts/inter-latin-600-normal.woff2') format('woff2');
+  src: url("/fonts/inter-latin-600-normal.woff2") format("woff2");
 }
 
 @font-face {
-  font-family: 'JetBrains Mono';
+  font-family: "JetBrains Mono";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+  src: url("/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'JetBrains Mono';
+  font-family: "JetBrains Mono";
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2');
+  src: url("/fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2");
 }
 
 @font-face {
-  font-family: 'Outfit';
+  font-family: "Outfit";
   font-style: normal;
   font-weight: 300;
   font-display: swap;
-  src: url('/fonts/outfit-latin-300-normal.woff2') format('woff2');
+  src: url("/fonts/outfit-latin-300-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'Outfit';
+  font-family: "Outfit";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('/fonts/outfit-latin-400-normal.woff2') format('woff2');
+  src: url("/fonts/outfit-latin-400-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'Outfit';
+  font-family: "Outfit";
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('/fonts/outfit-latin-500-normal.woff2') format('woff2');
+  src: url("/fonts/outfit-latin-500-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'Outfit';
+  font-family: "Outfit";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url('/fonts/outfit-latin-600-normal.woff2') format('woff2');
+  src: url("/fonts/outfit-latin-600-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'Outfit';
+  font-family: "Outfit";
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url('/fonts/outfit-latin-700-normal.woff2') format('woff2');
+  src: url("/fonts/outfit-latin-700-normal.woff2") format("woff2");
 }
 @font-face {
-  font-family: 'Outfit';
+  font-family: "Outfit";
   font-style: normal;
   font-weight: 800;
   font-display: swap;
-  src: url('/fonts/outfit-latin-800-normal.woff2') format('woff2');
+  src: url("/fonts/outfit-latin-800-normal.woff2") format("woff2");
 }
 
 /* ===========================================================================
    Design tokens - Hyper-Glass System
    =========================================================================== */
 :root {
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-display: 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-display: "Outfit", "Inter", system-ui, sans-serif;
 
   /* Electric Emerald & Cyber Jade */
   --color-primary: #00ffa3;
   --color-primary-hover: #00e692;
   --color-primary-glow: rgba(0, 255, 163, 0.4);
   --color-primary-soft: rgba(0, 255, 163, 0.1);
-  
+
   --accent: #00ffa3;
   --accent-secondary: #7c3aed; /* Deep Violet for bold contrast */
   --accent-soft: rgba(0, 255, 163, 0.12);
@@ -134,7 +133,7 @@
   --bg-base: #020617;
   --bg-surface: rgba(15, 23, 42, 0.6);
   --bg-raised: rgba(30, 41, 59, 0.4);
-  
+
   --color-surface: rgba(15, 23, 42, 0.6);
   --color-surface-border: rgba(255, 255, 255, 0.08);
   --color-surface-glow: rgba(0, 255, 163, 0.05);
@@ -186,7 +185,8 @@ html {
   scroll-behavior: smooth;
 }
 
-*:focus, *:focus-visible {
+*:focus,
+*:focus-visible {
   outline: none !important;
 }
 
@@ -213,7 +213,7 @@ body {
 .bg-grid {
   position: absolute;
   inset: 0;
-  background-image: 
+  background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: 40px 40px;
@@ -234,22 +234,28 @@ body {
 }
 
 .orb-1 {
-  width: 500px; height: 500px;
+  width: 500px;
+  height: 500px;
   background: radial-gradient(circle, var(--color-primary-soft), transparent 70%);
-  top: -10%; left: -10%;
+  top: -10%;
+  left: -10%;
 }
 
 .orb-2 {
-  width: 400px; height: 400px;
+  width: 400px;
+  height: 400px;
   background: radial-gradient(circle, rgba(124, 58, 237, 0.1), transparent 70%);
-  bottom: 10%; right: -5%;
+  bottom: 10%;
+  right: -5%;
   animation-delay: -5s;
 }
 
 .orb-3 {
-  width: 300px; height: 300px;
+  width: 300px;
+  height: 300px;
   background: radial-gradient(circle, rgba(0, 255, 163, 0.05), transparent 70%);
-  top: 40%; left: 60%;
+  top: 40%;
+  left: 60%;
   animation-duration: 20s;
 }
 
@@ -268,8 +274,12 @@ body {
   color: var(--bg-dark);
 }
 
-.font-display { font-family: var(--font-display); }
-.font-mono { font-family: var(--font-mono); }
+.font-display {
+  font-family: var(--font-display);
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
 
 /* ===========================================================================
    Hyper-Glass Components
@@ -292,7 +302,7 @@ body {
 }
 
 .glass-card::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
@@ -304,7 +314,9 @@ body {
   backdrop-filter: blur(40px) saturate(200%);
   -webkit-backdrop-filter: blur(40px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(0, 255, 163, 0.1);
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.7),
+    0 0 40px rgba(0, 255, 163, 0.1);
 }
 
 .glass-input {
@@ -320,7 +332,9 @@ body {
 .glass-input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 4px var(--color-primary-soft), 0 8px 16px -4px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 0 4px var(--color-primary-soft),
+    0 8px 16px -4px rgba(0, 0, 0, 0.2);
   transform: translateY(-1px);
 }
 
@@ -490,7 +504,7 @@ body {
     gap: 0.5rem;
     border-radius: var(--radius-xl);
   }
-  
+
   .chat-bubble {
     max-width: 90%;
     padding: 0.875rem 1rem;
@@ -502,30 +516,59 @@ body {
    Animations
    =========================================================================== */
 @keyframes orbFloat {
-  0% { transform: translate(0, 0) rotate(0deg) scale(1); }
-  33% { transform: translate(30px, -50px) rotate(10deg) scale(1.1); }
-  66% { transform: translate(-20px, 20px) rotate(-10deg) scale(0.9); }
-  100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) rotate(10deg) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) rotate(-10deg) scale(0.9);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
 }
 
 @keyframes slideInUp {
-  from { opacity: 0; transform: translateY(20px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes spin-reverse {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.5; filter: blur(10px); }
-  50% { opacity: 1; filter: blur(15px); }
+  0%,
+  100% {
+    opacity: 0.5;
+    filter: blur(10px);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(15px);
+  }
 }
 
 .animate-spin-reverse {
@@ -540,9 +583,15 @@ body {
   animation: fadeIn 0.8s ease-out forwards;
 }
 
-.stagger-1 { animation-delay: 0.1s; }
-.stagger-2 { animation-delay: 0.2s; }
-.stagger-3 { animation-delay: 0.3s; }
+.stagger-1 {
+  animation-delay: 0.1s;
+}
+.stagger-2 {
+  animation-delay: 0.2s;
+}
+.stagger-3 {
+  animation-delay: 0.3s;
+}
 
 /* ===========================================================================
    Utilities
@@ -558,5 +607,10 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
-.hide-scrollbar::-webkit-scrollbar { display: none; }
-.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

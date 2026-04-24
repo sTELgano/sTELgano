@@ -52,7 +52,11 @@ export type ClientEvent =
   | { event: "join"; ref: string; data: { sender_hash: string; access_hash: string } }
   | { event: "send_message"; ref: string; data: { ciphertext: string; iv: string } }
   | { event: "read_receipt"; ref?: string; data: { message_id: string } }
-  | { event: "edit_message"; ref: string; data: { message_id: string; ciphertext: string; iv: string } }
+  | {
+      event: "edit_message";
+      ref: string;
+      data: { message_id: string; ciphertext: string; iv: string };
+    }
   | { event: "delete_message"; ref: string; data: { message_id: string } }
   | { event: "typing"; ref?: string; data: Record<string, never> }
   | { event: "expire_room"; ref: string; data: Record<string, never> }

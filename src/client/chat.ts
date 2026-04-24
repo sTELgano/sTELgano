@@ -17,9 +17,9 @@
 // elixir/lib/stelgano_web/live/chat_live.ex so that nothing in the
 // shipped HTML drifts from what designers signed off on in v1.
 
-import { generatePhoneNumber, CountryNames } from "phone-number-generator-js";
+import { CountryNames, generatePhoneNumber } from "phone-number-generator-js";
 
-import { ChatState, type GeneratorState, type State, type PlainMessage } from "./state";
+import { ChatState, type GeneratorState, type PlainMessage, type State } from "./state";
 
 // Adapter from CountryNames enum to the value the generator
 // expects. The enum keys are snake_cased versions of the values
@@ -113,7 +113,7 @@ root.addEventListener("click", (e) => {
       break;
     case "send-message": {
       const ta = root.querySelector<HTMLTextAreaElement>("#chat-textarea");
-      if (ta && ta.value.trim()) {
+      if (ta?.value.trim()) {
         void state.sendMessage(ta.value);
         ta.value = "";
         updateCharCount(0);
@@ -170,10 +170,7 @@ root.addEventListener(
       state.typing();
       updateCharCount(target.value.length);
       autoResize(target);
-    } else if (
-      target instanceof HTMLInputElement &&
-      target.id === "drawer-country-input"
-    ) {
+    } else if (target instanceof HTMLInputElement && target.id === "drawer-country-input") {
       state.setCountrySearch(target.value, true);
     }
   },
@@ -451,14 +448,13 @@ function renderGeneratorDrawer(g: GeneratorState): string {
   // Filter the country list by current search query (case-insensitive
   // substring on the country name).
   const filtered = g.searchQuery
-    ? COUNTRY_LIST.filter((c) =>
-        c.name.toLowerCase().includes(g.searchQuery.toLowerCase()),
-      )
+    ? COUNTRY_LIST.filter((c) => c.name.toLowerCase().includes(g.searchQuery.toLowerCase()))
     : COUNTRY_LIST;
   const countriesToShow = filtered.slice(0, 50); // cap UI list size
 
-  const dropdown = g.showCountries && countriesToShow.length > 0
-    ? `
+  const dropdown =
+    g.showCountries && countriesToShow.length > 0
+      ? `
       <div class="absolute z-100 w-full mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2">
         ${countriesToShow
           .map(
@@ -475,7 +471,7 @@ function renderGeneratorDrawer(g: GeneratorState): string {
           )
           .join("")}
       </div>`
-    : "";
+      : "";
 
   const inputRightIcon = g.selectedCountry
     ? icon("badge_check", "size-5 text-emerald-400")
@@ -649,8 +645,7 @@ function renderGeneratorDrawer(g: GeneratorState): string {
                   icon: "shield_check",
                   title: "3. Establishment",
                   text: "Once both parties connect, a zero-trace link is armed.",
-                  guidance:
-                    "All messages are locally encrypted and wiped atomically upon reply.",
+                  guidance: "All messages are locally encrypted and wiped atomically upon reply.",
                 },
               ]
                 .map(
@@ -830,9 +825,7 @@ function renderConnecting(): string {
 
 function renderChat(s: Extract<State, { kind: "chat" }>): string {
   const canType = !s.current || s.current.senderHash !== s.senderHash;
-  const msgArea = s.current
-    ? renderMessageBubble(s.current, s.senderHash)
-    : renderEmptyBuffer();
+  const msgArea = s.current ? renderMessageBubble(s.current, s.senderHash) : renderEmptyBuffer();
 
   const interactionZone = s.editing
     ? renderInputArea({ editing: true, value: s.current?.plaintext ?? "" })
@@ -1034,7 +1027,9 @@ function renderWaitingArea(
     ? "border-primary/40 shadow-[0_0_40px_-5px_var(--color-primary-glow)]"
     : "border-white/5";
   const primaryDot = typing ? "bg-primary" : "bg-primary/60";
-  const labelTransform = typing ? "text-primary scale-105 origin-left" : "text-slate-400 group-hover:text-primary";
+  const labelTransform = typing
+    ? "text-primary scale-105 origin-left"
+    : "text-slate-400 group-hover:text-primary";
   const label = typing ? "Node is typing..." : "Waiting for Reply";
   const subtitle = typing ? "Processing incoming sequence..." : "Identity artifacts are locked";
 
@@ -1123,7 +1118,10 @@ function renderDestructionModal(): string {
 // -------------------------------- :locked --------------------------------
 
 function renderLocked(s: Extract<State, { kind: "locked" }>): string {
-  const pips = Array.from({ length: s.lockAttempts }, () => `<div class="size-1 rounded-full bg-primary/40"></div>`).join("");
+  const pips = Array.from(
+    { length: s.lockAttempts },
+    () => `<div class="size-1 rounded-full bg-primary/40"></div>`,
+  ).join("");
   const errorBlock = s.lockError
     ? `<div class="p-3 rounded-xl bg-danger/10 border border-danger/20 text-xs font-bold text-danger animate-bounce uppercase tracking-widest">${escapeHtml(s.lockError)}</div>`
     : "";

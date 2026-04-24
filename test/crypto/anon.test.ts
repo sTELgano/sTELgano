@@ -101,11 +101,10 @@ describe("encrypt / decrypt round-trip", () => {
   // latency in the test loop. Using crypto.subtle.generateKey
   // directly instead.
   async function makeKey(): Promise<CryptoKey> {
-    return crypto.subtle.generateKey(
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["encrypt", "decrypt"],
-    );
+    return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, [
+      "encrypt",
+      "decrypt",
+    ]);
   }
 
   it("round-trips UTF-8 plaintext byte-for-byte", async () => {

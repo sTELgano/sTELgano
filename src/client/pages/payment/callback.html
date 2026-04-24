@@ -79,7 +79,7 @@
      bundle a separate JS file for ~10 lines of code. Phase 8 will
      SHA-pin this body in CSP. -->
 <script>
-  (function () {
+  (() => {
     try {
       var ref = new URL(window.location.href).searchParams.get("reference");
       var el = document.getElementById("payment-reference");

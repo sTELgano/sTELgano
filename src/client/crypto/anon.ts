@@ -79,11 +79,7 @@ export async function accessHash(phone: string, pin: string): Promise<string> {
 /** sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)
  *  Two users with the same phone but different PINs produce different
  *  sender_hashes — that's the point of including access_hash. */
-export async function senderHash(
-  phone: string,
-  access: string,
-  room: string,
-): Promise<string> {
+export async function senderHash(phone: string, access: string, room: string): Promise<string> {
   return sha256hex(`${normalise(phone)}:${access}:${room}:${SENDER_SALT}`);
 }
 

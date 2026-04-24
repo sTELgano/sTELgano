@@ -13,10 +13,7 @@ describe("hmacSha512Hex", () => {
   it("matches a known RFC 4231 test vector", async () => {
     // RFC 4231 §4.2 test case 1: key="Jefe" (4 bytes),
     // data="what do ya want for nothing?".
-    const got = await hmacSha512Hex(
-      "Jefe",
-      "what do ya want for nothing?",
-    );
+    const got = await hmacSha512Hex("Jefe", "what do ya want for nothing?");
     expect(got).toBe(
       "164b7a7bfcf819e2e395fbe73b56e0a387bd64222e831fd610270cd7ea2505549758bf75c05a994a6d034f65f8f0e6fdcaeab1a34d4a6b4b636e070a38bce737",
     );

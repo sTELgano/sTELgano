@@ -38,17 +38,17 @@
     } catch (e) {}
 
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (rs) {
+      navigator.serviceWorker.getRegistrations().then((rs) => {
         for (var i = 0; i < rs.length; i++) rs[i].unregister();
       });
       if ("caches" in window) {
-        caches.keys().then(function (names) {
+        caches.keys().then((names) => {
           for (var i = 0; i < names.length; i++) caches.delete(names[i]);
         });
       }
     }
 
-    (function () {
+    (() => {
       function maskHistory() {
         if (window.location.pathname !== "/") {
           window.history.replaceState(null, "", "/");

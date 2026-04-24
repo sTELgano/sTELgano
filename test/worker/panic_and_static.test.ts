@@ -4,9 +4,9 @@
 // parity audit: panic route, robots.txt, and the .well-known files
 // (security.txt + Apple Pay merchant-id verification).
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts
 import { SELF } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 describe("GET /x — panic route", () => {
   it("returns a 302 redirect to /?p=1", async () => {

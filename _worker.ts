@@ -22,17 +22,18 @@
 // Pages-specific features. docs/MIGRATION.md → "Why Workers + Assets
 // (and not Pages)" captures the reasoning.
 
-import type { Env } from "./src/env";
 import { INLINE_SCRIPT_HASHES } from "./src/csp_hashes";
-import { list as listCountryMetrics, type CountryRow } from "./src/lib/country_metrics";
-import { listRecent as listDailyRecent, type DailyRow } from "./src/lib/daily_metrics";
+import type { Env } from "./src/env";
+import { type CountryRow, list as listCountryMetrics } from "./src/lib/country_metrics";
+import { type DailyRow, listRecent as listDailyRecent } from "./src/lib/daily_metrics";
 import { createPending, deleteExpired, markPaid } from "./src/lib/extension_tokens";
 import {
-  initialize as paystackInitialize,
   hmacSha512Hex,
+  initialize as paystackInitialize,
   timingSafeHexEqual,
   verifyTransaction,
 } from "./src/lib/paystack";
+
 export { RoomDO } from "./src/room";
 
 const ROOM_HASH_RE = /^[a-f0-9]{64}$/;
@@ -72,108 +73,106 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 async function dispatch(request: Request, env: Env, url: URL): Promise<Response> {
-    // GET /healthz — used by deploy smoke tests, not by users.
-    if (url.pathname === "/healthz") {
-      return new Response("ok", { headers: { "content-type": "text/plain" } });
-    }
+  // GET /healthz — used by deploy smoke tests, not by users.
+  if (url.pathname === "/healthz") {
+    return new Response("ok", { headers: { "content-type": "text/plain" } });
+  }
 
-    // /.well-known/* — serve from public/wellknown/ via the ASSETS
-    // binding. The real files live under a non-dotted directory
-    // because Cloudflare's Workers + Assets runtime (and miniflare
-    // under vitest-pool-workers) historically skipped dotfile
-    // directories when bundling. Deployment stays stable, and RFC-
-    // compliant clients still get the expected /.well-known/ URL.
-    if (url.pathname.startsWith("/.well-known/")) {
-      const rewritten = url.pathname.replace(/^\/\.well-known\//, "/wellknown/");
-      return env.ASSETS.fetch(new Request(new URL(rewritten, url.origin), request));
-    }
+  // /.well-known/* — serve from public/wellknown/ via the ASSETS
+  // binding. The real files live under a non-dotted directory
+  // because Cloudflare's Workers + Assets runtime (and miniflare
+  // under vitest-pool-workers) historically skipped dotfile
+  // directories when bundling. Deployment stays stable, and RFC-
+  // compliant clients still get the expected /.well-known/ URL.
+  if (url.pathname.startsWith("/.well-known/")) {
+    const rewritten = url.pathname.replace(/^\/\.well-known\//, "/wellknown/");
+    return env.ASSETS.fetch(new Request(new URL(rewritten, url.origin), request));
+  }
 
-    // GET /x — panic route. Redirects to /?p=1; the root layout's
-    // inline bootstrap detects the flag, calls sessionStorage.clear(),
-    // and strips the flag from the URL via history.replaceState before
-    // the user sees the address bar. Must be a single discoverable
-    // URL per CLAUDE.md's Passcode Test — a suspicious partner should
-    // not see anything worth investigating here.
-    if (url.pathname === "/x") {
-      return new Response(null, {
-        status: 302,
-        headers: { location: "/?p=1", "cache-control": "no-store" },
-      });
-    }
+  // GET /x — panic route. Redirects to /?p=1; the root layout's
+  // inline bootstrap detects the flag, calls sessionStorage.clear(),
+  // and strips the flag from the URL via history.replaceState before
+  // the user sees the address bar. Must be a single discoverable
+  // URL per CLAUDE.md's Passcode Test — a suspicious partner should
+  // not see anything worth investigating here.
+  if (url.pathname === "/x") {
+    return new Response(null, {
+      status: 302,
+      headers: { location: "/?p=1", "cache-control": "no-store" },
+    });
+  }
 
-    // GET /room/:roomHash/ws — WebSocket upgrade routed to the room's DO.
-    // The room_hash is validated as 64-char lowercase hex (the SHA-256
-    // hex of the normalised phone + ROOM_SALT, exactly as in v1's
-    // anon_socket.ex).
-    const roomMatch = url.pathname.match(/^\/room\/([^/]+)\/ws$/);
-    if (roomMatch) {
-      const roomHash = roomMatch[1] ?? "";
-      if (!ROOM_HASH_RE.test(roomHash)) {
-        return new Response("invalid room hash", { status: 400 });
-      }
-      if (request.headers.get("upgrade") !== "websocket") {
-        return new Response("expected websocket upgrade", { status: 426 });
-      }
-      const id = env.ROOM.idFromName(roomHash);
-      const stub = env.ROOM.get(id);
-      return stub.fetch(request);
+  // GET /room/:roomHash/ws — WebSocket upgrade routed to the room's DO.
+  // The room_hash is validated as 64-char lowercase hex (the SHA-256
+  // hex of the normalised phone + ROOM_SALT, exactly as in v1's
+  // anon_socket.ex).
+  const roomMatch = url.pathname.match(/^\/room\/([^/]+)\/ws$/);
+  if (roomMatch) {
+    const roomHash = roomMatch[1] ?? "";
+    if (!ROOM_HASH_RE.test(roomHash)) {
+      return new Response("invalid room hash", { status: 400 });
     }
-
-    // GET /api/room/:roomHash/exists — probe whether a room has
-    // been initialised. Client uses this before full join to
-    // route first-time numbers through new_channel (tier
-    // selection) vs. straight into connect. No auth — the
-    // room_hash is already a SHA-256 hash of (phone + salt); if
-    // the caller knows one, they already know the phone number
-    // and ROOM_SALT.
-    const existsMatch = url.pathname.match(/^\/api\/room\/([^/]+)\/exists$/);
-    if (existsMatch && request.method === "GET") {
-      const roomHash = existsMatch[1] ?? "";
-      if (!ROOM_HASH_RE.test(roomHash)) {
-        return jsonResponse({ error: "invalid_room_hash" }, 400);
-      }
-      const id = env.ROOM.idFromName(roomHash);
-      const stub = env.ROOM.get(id);
-      // Synthesise a request to the DO with a path that ends in
-      // /exists. The DO inspects the pathname to distinguish this
-      // from a WebSocket upgrade.
-      return stub.fetch(
-        new Request(new URL(`/${roomHash}/exists`, url), { method: "GET" }),
-      );
+    if (request.headers.get("upgrade") !== "websocket") {
+      return new Response("expected websocket upgrade", { status: 426 });
     }
+    const id = env.ROOM.idFromName(roomHash);
+    const stub = env.ROOM.get(id);
+    return stub.fetch(request);
+  }
 
-    // POST /api/payment/initiate — payment client (chat.ts) calls
-    // this with a token_hash. We create the extension_tokens row
-    // (status=pending) and return a checkout URL the client
-    // redirects to. The Paystack adapter wires the actual checkout
-    // URL in Phase 7; for now we stub it with a 501 + clear note
-    // when monetization is enabled, or 503 when the operator hasn't
-    // turned on monetization at all.
-    if (url.pathname === "/api/payment/initiate" && request.method === "POST") {
-      return handlePaymentInitiate(request, env);
+  // GET /api/room/:roomHash/exists — probe whether a room has
+  // been initialised. Client uses this before full join to
+  // route first-time numbers through new_channel (tier
+  // selection) vs. straight into connect. No auth — the
+  // room_hash is already a SHA-256 hash of (phone + salt); if
+  // the caller knows one, they already know the phone number
+  // and ROOM_SALT.
+  const existsMatch = url.pathname.match(/^\/api\/room\/([^/]+)\/exists$/);
+  if (existsMatch && request.method === "GET") {
+    const roomHash = existsMatch[1] ?? "";
+    if (!ROOM_HASH_RE.test(roomHash)) {
+      return jsonResponse({ error: "invalid_room_hash" }, 400);
     }
+    const id = env.ROOM.idFromName(roomHash);
+    const stub = env.ROOM.get(id);
+    // Synthesise a request to the DO with a path that ends in
+    // /exists. The DO inspects the pathname to distinguish this
+    // from a WebSocket upgrade.
+    return stub.fetch(new Request(new URL(`/${roomHash}/exists`, url), { method: "GET" }));
+  }
 
-    // POST /api/webhooks/paystack — Paystack hits this after a
-    // successful charge. HMAC-SHA512 verifies the payload, then
-    // we double-verify with Paystack's /transaction/verify, then
-    // markPaid in D1. Returns 200 for all non-signature failures
-    // so the response doesn't leak which references exist.
-    if (url.pathname === "/api/webhooks/paystack" && request.method === "POST") {
-      return handlePaystackWebhook(request, env);
-    }
+  // POST /api/payment/initiate — payment client (chat.ts) calls
+  // this with a token_hash. We create the extension_tokens row
+  // (status=pending) and return a checkout URL the client
+  // redirects to. The Paystack adapter wires the actual checkout
+  // URL in Phase 7; for now we stub it with a 501 + clear note
+  // when monetization is enabled, or 503 when the operator hasn't
+  // turned on monetization at all.
+  if (url.pathname === "/api/payment/initiate" && request.method === "POST") {
+    return handlePaymentInitiate(request, env);
+  }
 
-    // GET /admin — aggregate metrics dashboard. HTTP Basic Auth
-    // against ADMIN_USERNAME / ADMIN_PASSWORD. Shows only counts —
-    // never individual hashes, messages, or ciphertext.
-    if (url.pathname === "/admin" && request.method === "GET") {
-      return handleAdminDashboard(request, env);
-    }
+  // POST /api/webhooks/paystack — Paystack hits this after a
+  // successful charge. HMAC-SHA512 verifies the payload, then
+  // we double-verify with Paystack's /transaction/verify, then
+  // markPaid in D1. Returns 200 for all non-signature failures
+  // so the response doesn't leak which references exist.
+  if (url.pathname === "/api/webhooks/paystack" && request.method === "POST") {
+    return handlePaystackWebhook(request, env);
+  }
 
-    // Static assets fall-through — the ASSETS binding serves files
-    // from public/. A missing /foo returns the binding's default 404
-    // (not index.html) since wrangler.toml doesn't opt in to
-    // not_found_handling = "single-page-application".
-    return env.ASSETS.fetch(request);
+  // GET /admin — aggregate metrics dashboard. HTTP Basic Auth
+  // against ADMIN_USERNAME / ADMIN_PASSWORD. Shows only counts —
+  // never individual hashes, messages, or ciphertext.
+  if (url.pathname === "/admin" && request.method === "GET") {
+    return handleAdminDashboard(request, env);
+  }
+
+  // Static assets fall-through — the ASSETS binding serves files
+  // from public/. A missing /foo returns the binding's default 404
+  // (not index.html) since wrangler.toml doesn't opt in to
+  // not_found_handling = "single-page-application".
+  return env.ASSETS.fetch(request);
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +282,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 function checkBasicAuth(request: Request, env: Env): boolean {
   if (!env.ADMIN_PASSWORD) return false;
   const auth = request.headers.get("authorization");
-  if (!auth || !auth.startsWith("Basic ")) return false;
+  if (!auth?.startsWith("Basic ")) return false;
   let decoded: string;
   try {
     decoded = atob(auth.slice(6));
@@ -295,10 +294,7 @@ function checkBasicAuth(request: Request, env: Env): boolean {
   const user = decoded.slice(0, sep);
   const pass = decoded.slice(sep + 1);
   const expectedUser = env.ADMIN_USERNAME || "admin";
-  return (
-    timingSafeEqual(user, expectedUser) &&
-    timingSafeEqual(pass, env.ADMIN_PASSWORD)
-  );
+  return timingSafeEqual(user, expectedUser) && timingSafeEqual(pass, env.ADMIN_PASSWORD);
 }
 
 function basicAuthChallenge(): Response {
@@ -325,10 +321,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   let country: CountryRow[] = [];
   let daily: DailyRow[] = [];
   try {
-    [country, daily] = await Promise.all([
-      listCountryMetrics(env.DB),
-      listDailyRecent(env.DB, 30),
-    ]);
+    [country, daily] = await Promise.all([listCountryMetrics(env.DB), listDailyRecent(env.DB, 30)]);
   } catch {
     // D1 unavailable or schema not migrated — show an empty
     // dashboard rather than 500.
@@ -344,7 +337,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   const sum30 = daily.reduce((a, r) => a + r.free_new + r.paid_new, 0);
 
   const html = renderAdminHtml({
-    updated: new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC",
+    updated: `${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`,
     newToday,
     sum30,
     daily,
@@ -619,8 +612,7 @@ async function handlePaystackWebhook(request: Request, env: Env): Promise<Respon
     return jsonResponse({ status: "ok" });
   }
 
-  const reference =
-    typeof payload.data?.reference === "string" ? payload.data.reference : "";
+  const reference = typeof payload.data?.reference === "string" ? payload.data.reference : "";
   if (!reference) {
     return jsonResponse({ status: "ok" });
   }
@@ -656,8 +648,7 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
     return jsonResponse({ error: "invalid_json" }, 400);
   }
 
-  const tokenHash =
-    typeof body.token_hash === "string" ? body.token_hash : "";
+  const tokenHash = typeof body.token_hash === "string" ? body.token_hash : "";
   if (!TOKEN_HASH_RE.test(tokenHash)) {
     return jsonResponse({ error: "invalid_token_hash" }, 400);
   }

@@ -3,9 +3,9 @@
 // Tests for src/lib/country_metrics — UPSERT-based aggregate counters
 // with no per-room linkage. Hits real D1.
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts
 import { env } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 import { incrementFree, incrementPaid, list } from "../../src/lib/country_metrics";
 
@@ -13,9 +13,7 @@ async function findRow(code: string): Promise<{
   free_rooms: number;
   paid_rooms: number;
 } | null> {
-  return env.DB.prepare(
-    "SELECT free_rooms, paid_rooms FROM country_metrics WHERE country_code = ?",
-  )
+  return env.DB.prepare("SELECT free_rooms, paid_rooms FROM country_metrics WHERE country_code = ?")
     .bind(code)
     .first();
 }

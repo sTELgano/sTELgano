@@ -5,12 +5,12 @@
 // scraping. Credentials come from .dev.vars via the pool wrangler
 // config: ADMIN_USERNAME="admin", ADMIN_PASSWORD="letmein".
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts for why this expect-error lives here.
 import { SELF } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 function basic(user: string, pass: string): string {
-  return "Basic " + btoa(`${user}:${pass}`);
+  return `Basic ${btoa(`${user}:${pass}`)}`;
 }
 
 describe("GET /admin", () => {

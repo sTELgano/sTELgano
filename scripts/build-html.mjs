@@ -18,8 +18,8 @@
 // Cloudflare Pages serves clean URLs out of the box: /privacy.html is
 // reachable as /privacy. The home page is index.html → /.
 
-import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
-import { join, dirname, relative, sep } from "node:path";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -47,6 +47,7 @@ function extractMetadata(source) {
 
   const block = m[1];
   let lineMatch;
+  // biome-ignore lint/suspicious/noAssignInExpressions: standard regex exec loop
   while ((lineMatch = META_LINE_RE.exec(block)) !== null) {
     meta[lineMatch[1].toLowerCase()] = lineMatch[2];
   }
@@ -108,7 +109,9 @@ async function build() {
     const outFile = join(OUT_DIR, relPath);
     await mkdir(dirname(outFile), { recursive: true });
     await writeFile(outFile, html, "utf8");
-    console.log(`build-html: ${relPath.split(sep).join("/")} → public/${relPath.split(sep).join("/")} (${html.length} bytes, layout=${layoutName})`);
+    console.log(
+      `build-html: ${relPath.split(sep).join("/")} → public/${relPath.split(sep).join("/")} (${html.length} bytes, layout=${layoutName})`,
+    );
   }
 }
 

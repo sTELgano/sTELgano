@@ -8,9 +8,9 @@
 // tests — the adapter itself is covered by the pure-function tests
 // in test/lib/paystack.test.ts.
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts
 import { SELF } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 const VALID_TOKEN_HASH = "c".repeat(64);
 
@@ -61,8 +61,6 @@ describe("POST /api/payment/initiate", () => {
     const res = await post({ token_hash: VALID_TOKEN_HASH });
     expect([502, 500]).toContain(res.status);
     const body = (await res.json()) as { error: string };
-    expect(["provider_error", "provider_unavailable", "create_token_failed"]).toContain(
-      body.error,
-    );
+    expect(["provider_error", "provider_unavailable", "create_token_failed"]).toContain(body.error);
   });
 });

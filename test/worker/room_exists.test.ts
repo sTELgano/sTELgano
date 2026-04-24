@@ -7,9 +7,9 @@
 // initialised. No auth — the room_hash already encodes the phone +
 // ROOM_SALT, so knowing one means knowing the other.
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts
 import { SELF } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 const FRESH_HASH = "a".repeat(64);
 const ANOTHER_HASH = "b".repeat(64);
@@ -23,7 +23,7 @@ describe("GET /api/room/:hash/exists", () => {
   });
 
   it("rejects an uppercase hex hash (must be lowercase) with 400", async () => {
-    const res = await SELF.fetch("https://example.com/api/room/" + "A".repeat(64) + "/exists");
+    const res = await SELF.fetch(`https://example.com/api/room/${"A".repeat(64)}/exists`);
     expect(res.status).toBe(400);
   });
 

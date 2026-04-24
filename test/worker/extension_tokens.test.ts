@@ -9,9 +9,9 @@
 // d1Persist:false → fresh DB per file). Each test uses a unique
 // token_hash to stay independent.
 
-import { describe, expect, it } from "vitest";
 // @ts-expect-error — see healthz.test.ts
 import { env } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
 import {
   createPending,

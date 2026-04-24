@@ -14,13 +14,13 @@
 // neither remembers messages nor tracks the room's current state.
 // The state machine layer (Phase 5c) layers that on top.
 
-import {
-  type ClientEvent,
-  type ErrorReason,
-  type JoinReply,
-  type MessagePayload,
-  type ServerBroadcast,
-  type ServerReply,
+import type {
+  ClientEvent,
+  ErrorReason,
+  JoinReply,
+  MessagePayload,
+  ServerBroadcast,
+  ServerReply,
 } from "../protocol";
 
 export type RoomClientError = {
