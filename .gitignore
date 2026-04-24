@@ -63,6 +63,7 @@ deps/
 /public/_worker.js
 /public/_worker.js.map
 /public/assets/
+/public/icons.svg
 
 # =============================================================================
 # Cross-cutting (apply regardless of v1/v2 location)
