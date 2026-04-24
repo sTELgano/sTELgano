@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+
+  <!-- OpenGraph & SEO -->
+  <meta property="og:title" content="sTELgano - Zero Trace Encrypted Channels">
+  <meta property="og:description" content="The messaging app hidden in your contacts. No accounts, no logs, end-to-end encrypted.">
+  <meta property="og:image" content="/images/og_image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:url" content="/">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="sTELgano - Zero Trace Encrypted Channels">
+  <meta name="twitter:description" content="The messaging app hidden in your contacts. No accounts, no logs, end-to-end encrypted.">
+  <meta name="twitter:image" content="/images/og_image.jpg">
+
+  <!-- Minimal title — reveals nothing about the nature of the service in browser history. -->
+  <title>What sTELgano Protects Against — sTELgano Blog</title>
+
+  <link rel="stylesheet" href="/assets/app.css">
+
+  <!-- Bootstrap cleanup. Identical script body across every page so
+       Phase 8 can pin it via a SHA-256 in script-src (CSP nonce won't
+       work for static-served HTML — the file is byte-identical across
+       requests, so a hash is the right primitive).
+
+       1. Panic clear: if the URL carries ?p=1 (set by /x), wipe
+          sessionStorage completely and strip the flag from the URL.
+       2. Service-worker + cache cleanup for any stragglers from older
+          deployments that shipped a sw.js.
+       3. History masking: replace any sub-path with "/" in browser
+          history so back/forward only reveals the root. -->
+  <script>
+    try {
+      var url = new URL(window.location.href);
+      if (url.searchParams.get("p") === "1") {
+        sessionStorage.clear();
+        url.searchParams.delete("p");
+        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      }
+    } catch (e) {}
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        for (var i = 0; i < rs.length; i++) rs[i].unregister();
+      });
+      if ("caches" in window) {
+        caches.keys().then(function (names) {
+          for (var i = 0; i < names.length; i++) caches.delete(names[i]);
+        });
+      }
+    }
+
+    (function () {
+      function maskHistory() {
+        if (window.location.pathname !== "/") {
+          window.history.replaceState(null, "", "/");
+        }
+      }
+      window.addEventListener("load", maskHistory);
+      window.addEventListener("popstate", maskHistory);
+    })();
+  </script>
+</head>
+<body class="antialiased">
+  <div class="bg-grid-container">
+    <div class="bg-grid"></div>
+    <div class="bg-orbs">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="noise-overlay"></div>
+  </div>
+
+  <nav class="fixed top-0 left-0 right-0 z-50 border-b border-white/5 backdrop-blur-2xl bg-slate-950/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="wordmark group text-xl">
+        <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
+      </a>
+
+      <div class="flex items-center gap-2 sm:gap-6">
+        <div class="hidden md:flex items-center gap-8 mr-4">
+          <a href="/spec" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">Spec</a>
+          <a href="/about" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">About</a>
+          <a href="/blog" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">Blog</a>
+          <a href="/pricing" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">Pricing</a>
+        </div>
+
+        <div class="hidden sm:block h-4 w-px bg-white/10 mx-2"></div>
+
+        <div class="flex items-center gap-3">
+          <a href="/chat" class="btn-primary py-2 px-4 text-[10px] sm:text-xs">Open Chat</a>
+
+          <button type="button" id="mobile-menu-open" aria-label="Open menu" class="md:hidden flex flex-col gap-1.5 p-2">
+            <span class="w-5 h-0.5 bg-white/70 rounded-full"></span>
+            <span class="w-3 h-0.5 bg-white/70 rounded-full ml-auto"></span>
+            <span class="w-5 h-0.5 bg-white/70 rounded-full"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mobile-menu" class="fixed inset-0 z-[60] hidden">
+      <div id="mobile-menu-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-xl"></div>
+      <nav class="absolute top-0 right-0 bottom-0 w-64 bg-slate-950 border-l border-white/10 p-8 flex flex-col gap-8 shadow-2xl">
+        <div class="flex items-center justify-between mb-4">
+          <span class="wordmark text-lg">
+            <span class="wm-symbol">s</span><span class="wm-accent">TEL</span>
+          </span>
+          <button type="button" id="mobile-menu-close" aria-label="Close menu" class="p-2 text-slate-400 hover:text-white">
+            <svg class="size-6" aria-hidden="true"><use href="/icons.svg#x"/></svg>
+          </button>
+        </div>
+        <div class="flex flex-col gap-6">
+          <a href="/spec" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Spec</a>
+          <a href="/about" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">About</a>
+          <a href="/blog" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Blog</a>
+          <a href="/pricing" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Pricing</a>
+        </div>
+        <div class="mt-auto">
+          <a href="/chat" class="btn-primary w-full py-3 text-xs block text-center">Open Chat</a>
+        </div>
+      </nav>
+    </div>
+  </nav>
+
+  <main class="flex-1 flex flex-col h-screen overflow-y-auto pt-16">
+    <div class="w-full flex-1 flex flex-col max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <header class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+      Security
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+      What sTELgano <span class="text-gradient">Protects Against.</span>
+    </h1>
+
+    <p class="text-slate-400 text-base font-medium animate-in stagger-2">And what it doesn't.</p>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-03-28</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 6 min read</span>
+    </div>
+  </header>
+
+  <div class="space-y-16 animate-in stagger-4">
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Honest Security</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Most security products oversell. They use words like &ldquo;military-grade&rdquo; and &ldquo;impenetrable&rdquo; and imply they protect against everything. They don't. Nothing does.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">We think honesty is better security practice. If you understand exactly what sTELgano protects against and what it doesn't, you can make an informed decision about whether it's the right tool for your situation. Overselling creates a false sense of security, and false security is worse than no security.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What We Protect Against</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="space-y-4">
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-primary/10 bg-primary/2 group hover:bg-primary/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#smartphone"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Casual Device Snooping</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">There's no app to find on your home screen. No chat history to scroll through. If someone picks up your phone, they see contacts&mdash;normal. If they somehow find the sTELgano URL, they see a blank form with two fields. Nothing to explain.</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-primary/10 bg-primary/2 group hover:bg-primary/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Shoulder Surfing</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">The UI is minimal by design. No message previews outside the active chat session. No notification badges. No typing indicators visible on the home screen. Someone looking over your shoulder sees nothing useful.</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-primary/10 bg-primary/2 group hover:bg-primary/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#wifi"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">ISP and Network Inspection</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">All data is encrypted in transit via TLS and at rest via AES-256-GCM. Your ISP can see you connected to a server. They cannot see what you sent, who you're talking to, or the content of any message.</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-primary/10 bg-primary/2 group hover:bg-primary/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#database"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Database Breaches</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">The server stores only SHA-256 hashes and AES-256-GCM ciphertext. A complete database dump reveals room hashes, access hashes, and encrypted blobs. Without the client-side key, none of this data can be reversed or decrypted.</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-primary/10 bg-primary/2 group hover:bg-primary/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#globe"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Browser Forensics</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">sTELgano uses sessionStorage exclusively&mdash;no localStorage, no IndexedDB, no cookies for session data. Close the browser tab and the session is gone. There's no cache to inspect, no persistent storage to recover.</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-primary/10 bg-primary/2 group hover:bg-primary/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#hard_drive"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Device Seizure</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">There's no app installed on the device. No application data directory. No SQLite database with chat logs. The steg number is saved as a normal phone contact, indistinguishable from any other number in your contact list.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-danger/60 ml-1">What We Don't Protect Against</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-danger/20 to-transparent"></div>
+      </div>
+      <div class="space-y-4">
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-danger/10 bg-danger/2 group hover:bg-danger/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-danger" aria-hidden="true"><use href="/icons.svg#landmark"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Nation-State Surveillance</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">If a government targets you specifically with dedicated surveillance infrastructure, sTELgano is not your tool. Nation-states can compromise devices, install rootkits, perform traffic analysis at scale, and compel service providers. This is an adversary class beyond our threat model.</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-danger/10 bg-danger/2 group hover:bg-danger/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-danger" aria-hidden="true"><use href="/icons.svg#scale"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Law Enforcement Subpoenas</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">We can be compelled to hand over what we store: hashes and ciphertext. The data is cryptographically useless without the client-side key, but we're transparent about the fact that we can be compelled to produce it. We cannot produce what we don't have (plaintext, keys, phone numbers).</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-danger/10 bg-danger/2 group hover:bg-danger/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-danger" aria-hidden="true"><use href="/icons.svg#bug"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Targeted Malware and Keyloggers</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">A keylogger on your device captures everything you type regardless of encryption. If your device is compromised with targeted malware, all bets are off. sTELgano encrypts data in your browser, but it can't protect against an attacker who has already compromised the browser's environment.</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-danger/10 bg-danger/2 group hover:bg-danger/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-danger" aria-hidden="true"><use href="/icons.svg#shield_off"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Physical Coercion</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">If someone physically forces you to reveal your PIN, no amount of encryption can help. Cryptography protects data at rest and in transit. It does not protect against a human being compelled to divulge a secret. This is a fundamental limitation of all encryption systems.</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 border-danger/10 bg-danger/2 group hover:bg-danger/4 transition-all duration-500">
+          <div class="flex items-center gap-4">
+            <div class="size-10 rounded-xl bg-danger/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <svg class="size-5 text-danger" aria-hidden="true"><use href="/icons.svg#alert_triangle"/></svg>
+            </div>
+            <h3 class="text-base font-extrabold text-white font-display">Compromised Browser</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium pl-14">If your browser itself is backdoored&mdash;through a malicious extension, a compromised update, or a supply chain attack on the browser vendor&mdash;the Web Crypto API cannot be trusted. The encryption happens in the browser; if the browser is hostile, the encryption is theatre.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Threat Model</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-8 md:p-10 animate-in text-center space-y-6">
+        <p class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight max-w-3xl mx-auto">sTELgano protects against intimate-access attackers&mdash;a partner, family member, or colleague with physical access to your device.</p>
+        <div class="h-px w-24 mx-auto bg-primary/30"></div>
+        <p class="text-slate-400 leading-relaxed font-medium max-w-2xl mx-auto">This is the scenario we optimise for. The person who picks up your phone while you're in the shower. The colleague who glances at your screen. The family member who &ldquo;borrows&rdquo; your device. Against this threat class, sTELgano provides strong, layered protection.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">When to Use Something Else</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-4">
+        <p class="text-slate-300 leading-relaxed font-medium mb-4">We'd rather you use the right tool than use ours in the wrong situation:</p>
+        <ul class="space-y-4">
+          <li class="flex items-start gap-4">
+            <svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+            <div><span class="text-white font-bold text-sm">Government surveillance:</span> <span class="text-slate-400 text-sm font-medium">Use Tor, Tails, or a hardened operating system designed for high-threat environments.</span></div>
+          </li>
+          <li class="flex items-start gap-4">
+            <svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+            <div><span class="text-white font-bold text-sm">Legal pressure or subpoena risk:</span> <span class="text-slate-400 text-sm font-medium">Consult a lawyer. Technology alone cannot protect you from legal compulsion.</span></div>
+          </li>
+          <li class="flex items-start gap-4">
+            <svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+            <div><span class="text-white font-bold text-sm">Compromised device:</span> <span class="text-slate-400 text-sm font-medium">Re-image the device from a trusted source before using any secure communication tool.</span></div>
+          </li>
+          <li class="flex items-start gap-4">
+            <svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+            <div><span class="text-white font-bold text-sm">Life-or-death stakes:</span> <span class="text-slate-400 text-sm font-medium">Use multiple layers of protection. No single tool is sufficient. Seek expert operational security guidance.</span></div>
+          </li>
+        </ul>
+        <p class="text-slate-500 leading-relaxed font-medium text-sm pt-4 border-t border-white/5 mt-6">sTELgano is for everyday discretion, not extraordinary threat environments. We're honest about that because your safety depends on choosing the right tool for the right threat.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-white/5">
+    <a href="/blog" class="btn-ghost px-6 py-3 text-sm group">
+      <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+      Back to Blog
+    </a>
+    <a href="/chat" class="btn-primary px-8 py-3 text-sm group">
+      Open Chat
+      <svg class="size-4 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+    </a>
+  </div>
+</article>
+
+    </div>
+
+    <footer class="px-6 py-20 border-t border-white/5 bg-slate-950/40 relative">
+      <div class="max-w-6xl mx-auto flex flex-col items-center md:items-start md:flex-row justify-between gap-12">
+        <div class="flex flex-col items-center md:items-start gap-4 text-center md:text-left">
+          <a href="/" class="wordmark text-2xl">
+            <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span>gano</span>
+          </a>
+          <p class="text-slate-500 text-sm font-medium max-w-xs">
+            The messaging app hidden in your contacts.
+          </p>
+          <p class="text-slate-600 text-[10px] font-mono uppercase tracking-[0.25em]">
+            stel<span class="text-slate-400">·GAH·</span>no &mdash; steganography + TEL
+          </p>
+        </div>
+
+        <div class="flex flex-wrap justify-center gap-x-8 gap-y-4 max-w-sm">
+          <a href="/security" class="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Security</a>
+          <a href="/privacy" class="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Privacy</a>
+          <a href="/terms" class="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Terms</a>
+          <a href="/about" class="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">About</a>
+          <a href="/spec" class="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Spec</a>
+          <a href="/blog" class="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Blog</a>
+        </div>
+
+        <div class="flex flex-col items-center md:items-end gap-4">
+          <div class="flex items-center gap-3">
+            <div class="px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-slate-500 uppercase">AGPL-3.0</div>
+            <div class="px-2 py-1 rounded bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-slate-500 uppercase">Build 2026.04</div>
+          </div>
+          <p class="text-[9px] text-slate-700 font-mono italic">&copy; 2026 sTELgano Contributors</p>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <!-- Mobile menu toggle. Phase 8 will SHA-pin this script body in CSP. -->
+  <script>
+    (function () {
+      var menu = document.getElementById("mobile-menu");
+      var openBtn = document.getElementById("mobile-menu-open");
+      var closeBtn = document.getElementById("mobile-menu-close");
+      var overlay = document.getElementById("mobile-menu-overlay");
+      function open() { menu.classList.remove("hidden"); }
+      function close() { menu.classList.add("hidden"); }
+      if (openBtn) openBtn.addEventListener("click", open);
+      if (closeBtn) closeBtn.addEventListener("click", close);
+      if (overlay) overlay.addEventListener("click", close);
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") close();
+      });
+    })();
+  </script>
+</body>
+</html>

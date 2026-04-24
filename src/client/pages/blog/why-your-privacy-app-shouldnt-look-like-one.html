@@ -1,0 +1,138 @@
+<!--
+  title: Why Your Privacy App Shouldn't Look Like One — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <header class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#lightbulb"/></svg>
+      Philosophy
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+      Why Your Privacy App <span class="text-gradient">Shouldn't Look Like One.</span>
+    </h1>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-14</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 6 min read</span>
+    </div>
+  </header>
+
+  <div class="space-y-16 animate-in stagger-4">
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Visibility Problem</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Most privacy tools are conspicuous. Signal, Tor Browser, ProtonMail&mdash;they all have one thing in common: having them on your device tells people you have something to hide.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">In certain contexts, this visibility can be dangerous. A journalist in an authoritarian country. A person in an abusive relationship. An activist under surveillance. For these people, the mere presence of a privacy app is incriminating evidence.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">The privacy tool itself becomes a signal. And signals can be used against you.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Steganography vs. Cryptography</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <svg class="size-6 text-primary" aria-hidden="true"><use href="/icons.svg#lock"/></svg>
+          </div>
+          <h3 class="text-lg font-extrabold text-white font-display">Cryptography</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">Protects the <span class="text-white font-bold">content</span> of a message. An attacker knows communication is happening but cannot read it. The ciphertext itself is evidence that something was encrypted.</p>
+        </div>
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <svg class="size-6 text-primary" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
+          </div>
+          <h3 class="text-lg font-extrabold text-white font-display">Steganography</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">Hides the <span class="text-white font-bold">existence</span> of the message. An attacker doesn't even know communication is happening. There is nothing suspicious to investigate.</p>
+        </div>
+      </div>
+      <p class="text-slate-300 leading-relaxed font-medium px-2">sTELgano combines both. Messages are encrypted with AES-256-GCM (cryptography), and the entire communication channel is hidden inside a phone contact (steganography). Two layers of protection instead of one.</p>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Contact Layer</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-8 md:p-10 animate-in space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">A phone number in your contacts is the most ordinary thing in the world. Nobody questions it. Nobody examines the numbers saved in your phone to see if they're &ldquo;real.&rdquo;</p>
+        <p class="text-slate-400 leading-relaxed font-medium">That's the hiding place. A randomly generated phone number, saved under an unremarkable name in your contacts, is the seed for an entire encrypted communication channel. The steg number looks like any other contact. It IS a contact. It just happens to also be a key.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What a Suspicious Person Sees</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6 border-primary/20 bg-primary/2">
+        <p class="text-slate-300 leading-relaxed font-medium">They open your phone. They see contacts. Normal. Hundreds of names and numbers like every other phone.</p>
+        <p class="text-slate-300 leading-relaxed font-medium">They open sTELgano&mdash;if they even find it. There's no app to find. It's a website. They'd have to know the URL. And even the name reveals nothing&mdash;&ldquo;sTELgano&rdquo; is intentionally obscure, designed to look like any forgettable utility if it appears in browser history. The steganography starts at the brand.</p>
+        <p class="text-slate-300 leading-relaxed font-medium">But say they do find it. What do they see? A blank form asking for a number and PIN. No messages. No history. No contacts list. No &ldquo;recent chats.&rdquo; Nothing to explain. Nothing to incriminate.</p>
+        <div class="p-6 rounded-2xl bg-slate-950/60 border border-white/5 text-center">
+          <p class="text-slate-500 text-sm font-mono font-bold tracking-wider">[ Blank entry screen. Two fields. Nothing else. ]</p>
+        </div>
+        <p class="text-slate-400 leading-relaxed font-medium">This is the passcode test. Every feature in sTELgano must pass it.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Even the Name</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">The hiding starts before you open the app. <span class="text-white font-mono">sTELgano</span> &mdash; pronounced <span class="text-white font-mono">stel-GAH-no</span> &mdash; is a portmanteau of <span class="text-white">stegano</span>graphy and <span class="text-primary">TEL</span>, the contact layer it lives inside.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">To anyone not looking for it, the word is forgettable noise in a browser history. To the two people who share a channel, it is insider vocabulary. The brand is doing the same work as the rest of the system: one thing to the two of you, nothing to everyone else.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Design Implications</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-4">
+        <p class="text-slate-300 leading-relaxed font-medium mb-6">This philosophy constrains every design decision we make:</p>
+        <ul class="space-y-4">
+          <li class="flex items-start gap-4"><svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#minus"/></svg><span class="text-slate-400 text-sm leading-relaxed font-medium">No notification badges. Ever. Nothing pops up on the home screen.</span></li>
+          <li class="flex items-start gap-4"><svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#minus"/></svg><span class="text-slate-400 text-sm leading-relaxed font-medium">No message previews. Not in notifications, not in the app switcher.</span></li>
+          <li class="flex items-start gap-4"><svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#minus"/></svg><span class="text-slate-400 text-sm leading-relaxed font-medium">No &ldquo;last seen&rdquo; indicators. No typing indicators visible outside the session.</span></li>
+          <li class="flex items-start gap-4"><svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#minus"/></svg><span class="text-slate-400 text-sm leading-relaxed font-medium">No contact list inside the app. You enter a number each time.</span></li>
+          <li class="flex items-start gap-4"><svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#minus"/></svg><span class="text-slate-400 text-sm leading-relaxed font-medium">No chat history. One message per room. Reply deletes the previous.</span></li>
+          <li class="flex items-start gap-4"><svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#minus"/></svg><span class="text-slate-400 text-sm leading-relaxed font-medium">SessionStorage only. Close the tab and the session is gone.</span></li>
+          <li class="flex items-start gap-4"><svg class="size-4 text-primary shrink-0 mt-1" aria-hidden="true"><use href="/icons.svg#minus"/></svg><span class="text-slate-400 text-sm leading-relaxed font-medium">Even the name is steganographic. &ldquo;sTELgano&rdquo; reveals nothing to a casual observer.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Conclusion</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-8 md:p-10 animate-in text-center space-y-4">
+        <p class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight">The safest secret is the one nobody knows exists.</p>
+        <p class="text-slate-400 leading-relaxed font-medium max-w-2xl mx-auto">Privacy isn't just about encryption strength or key sizes. It's about whether anyone even suspects there's something to look for. When the hiding place is the most mundane object on your phone&mdash;a contact&mdash;suspicion never arises.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-white/5">
+    <a href="/blog" class="btn-ghost px-6 py-3 text-sm group">
+      <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+      Back to Blog
+    </a>
+    <a href="/chat" class="btn-primary px-8 py-3 text-sm group">
+      Open Chat
+      <svg class="size-4 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+    </a>
+  </div>
+</article>
