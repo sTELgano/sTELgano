@@ -26,7 +26,7 @@ import type { Env } from "./src/env";
 import { INLINE_SCRIPT_HASHES } from "./src/csp_hashes";
 import { list as listCountryMetrics, type CountryRow } from "./src/lib/country_metrics";
 import { listRecent as listDailyRecent, type DailyRow } from "./src/lib/daily_metrics";
-import { createPending, markPaid } from "./src/lib/extension_tokens";
+import { createPending, deleteExpired, markPaid } from "./src/lib/extension_tokens";
 import {
   initialize as paystackInitialize,
   hmacSha512Hex,
@@ -58,12 +58,47 @@ export default {
     const response = await dispatch(request, env, url);
     return applySecurityHeaders(response, url.pathname);
   },
+
+  // Cron handler — wired via [triggers] crons in wrangler.toml.
+  // Ports elixir/lib/stelgano/jobs/expire_unredeemed_tokens.ex:
+  // once a day, sweep extension_tokens whose expires_at has passed.
+  // Pending tokens get this far when the user abandoned checkout; paid
+  // tokens get this far when a user paid but never redeemed. Either
+  // way we don't keep them around forever.
+  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    const cutoff = new Date().toISOString();
+    await deleteExpired(env.DB, cutoff);
+  },
 } satisfies ExportedHandler<Env>;
 
 async function dispatch(request: Request, env: Env, url: URL): Promise<Response> {
     // GET /healthz — used by deploy smoke tests, not by users.
     if (url.pathname === "/healthz") {
       return new Response("ok", { headers: { "content-type": "text/plain" } });
+    }
+
+    // /.well-known/* — serve from public/wellknown/ via the ASSETS
+    // binding. The real files live under a non-dotted directory
+    // because Cloudflare's Workers + Assets runtime (and miniflare
+    // under vitest-pool-workers) historically skipped dotfile
+    // directories when bundling. Deployment stays stable, and RFC-
+    // compliant clients still get the expected /.well-known/ URL.
+    if (url.pathname.startsWith("/.well-known/")) {
+      const rewritten = url.pathname.replace(/^\/\.well-known\//, "/wellknown/");
+      return env.ASSETS.fetch(new Request(new URL(rewritten, url.origin), request));
+    }
+
+    // GET /x — panic route. Redirects to /?p=1; the root layout's
+    // inline bootstrap detects the flag, calls sessionStorage.clear(),
+    // and strips the flag from the URL via history.replaceState before
+    // the user sees the address bar. Must be a single discoverable
+    // URL per CLAUDE.md's Passcode Test — a suspicious partner should
+    // not see anything worth investigating here.
+    if (url.pathname === "/x") {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/?p=1", "cache-control": "no-store" },
+      });
     }
 
     // GET /room/:roomHash/ws — WebSocket upgrade routed to the room's DO.
