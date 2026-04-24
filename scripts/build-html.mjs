@@ -19,7 +19,7 @@
 // reachable as /privacy. The home page is index.html → /.
 
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -53,28 +53,44 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+async function collectPages(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const pages = [];
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      pages.push(...(await collectPages(fullPath)));
+    } else if (entry.isFile() && entry.name.endsWith(".html")) {
+      pages.push(fullPath);
+    }
+  }
+  return pages;
+}
+
 async function build() {
   const layout = await readFile(LAYOUT_PATH, "utf8");
   await mkdir(OUT_DIR, { recursive: true });
 
-  const entries = await readdir(PAGES_DIR);
-  const pages = entries.filter((f) => f.endsWith(".html"));
-  if (pages.length === 0) {
+  const pagePaths = await collectPages(PAGES_DIR);
+  if (pagePaths.length === 0) {
     console.warn("build-html: no pages found in src/client/pages/");
     return;
   }
 
-  for (const file of pages) {
-    const source = await readFile(join(PAGES_DIR, file), "utf8");
+  for (const sourcePath of pagePaths) {
+    const source = await readFile(sourcePath, "utf8");
     const { meta, body } = extractMetadata(source);
 
     const html = layout
       .replace(/\{\{TITLE\}\}/g, escapeHtml(meta.title))
       .replace(/\{\{CONTENT\}\}/g, body);
 
-    const outFile = join(OUT_DIR, file);
+    // Mirror the directory structure under PAGES_DIR into OUT_DIR.
+    const relPath = relative(PAGES_DIR, sourcePath);
+    const outFile = join(OUT_DIR, relPath);
+    await mkdir(dirname(outFile), { recursive: true });
     await writeFile(outFile, html, "utf8");
-    console.log(`build-html: ${file} → public/${basename(outFile)} (${html.length} bytes)`);
+    console.log(`build-html: ${relPath.split(sep).join("/")} → public/${relPath.split(sep).join("/")} (${html.length} bytes)`);
   }
 }
 

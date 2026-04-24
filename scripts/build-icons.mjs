@@ -34,13 +34,26 @@ const OUT = join(ROOT, "public/icons.svg");
 const REF_RE = /href=["']\/icons\.svg#([a-z][a-z0-9_-]*)["']/g;
 const SVG_INNER_RE = /<svg\b[^>]*>([\s\S]*?)<\/svg>/;
 
+async function walk(dir) {
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  const files = [];
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await walk(full)));
+    } else if (entry.isFile() && (entry.name.endsWith(".html") || entry.name.endsWith(".ts"))) {
+      files.push(full);
+    }
+  }
+  return files;
+}
+
 async function collectReferences() {
   const refs = new Set();
   for (const dir of SCAN_DIRS) {
-    const entries = await readdir(dir).catch(() => []);
-    for (const file of entries) {
-      if (!file.endsWith(".html") && !file.endsWith(".ts")) continue;
-      const content = await readFile(join(dir, file), "utf8");
+    const files = await walk(dir);
+    for (const file of files) {
+      const content = await readFile(file, "utf8");
       let m;
       while ((m = REF_RE.exec(content)) !== null) refs.add(m[1]);
     }
