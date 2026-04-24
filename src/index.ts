@@ -16,28 +16,7 @@
 // fallthrough. Subsequent phases fill in the routes referenced below.
 
 import { Hono } from "hono";
-
-export interface Env {
-  ASSETS: Fetcher;
-  ROOM: DurableObjectNamespace;
-  DB: D1Database;
-  PHX_HOST: string;
-  PAYMENT_CURRENCY: string;
-  PRICE_CENTS: string;
-  FREE_TTL_DAYS: string;
-  PAID_TTL_DAYS: string;
-  MONETIZATION_ENABLED: string;
-  // Secrets (set via `wrangler secret put`):
-  ADMIN_USERNAME?: string;
-  ADMIN_PASSWORD?: string;
-  PAYSTACK_SECRET_KEY?: string;
-  PAYSTACK_PUBLIC_KEY?: string;
-  PAYSTACK_CALLBACK_URL?: string;
-  PAYSTACK_RECEIPT_EMAIL_DOMAIN?: string;
-  PAYSTACK_SETTLEMENT_CURRENCY?: string;
-  PAYSTACK_FX_BUFFER_PCT?: string;
-  PAYMENT_FX_FALLBACK_RATE?: string;
-}
+import type { Env } from "./env";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -73,6 +52,6 @@ app.all("*", async (c) => {
 });
 
 // Re-export the Durable Object class so the Workers runtime can find it.
-export { RoomDO } from "./room.ts";
+export { RoomDO } from "./room";
 
 export default app;
