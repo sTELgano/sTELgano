@@ -179,14 +179,15 @@ git push origin v1-elixir-cutover
 git checkout main
 git rm -rf .
 git checkout v2-cloudflare -- .
-git commit -m "Migrate to Cloudflare Workers + Durable Objects + D1
+git commit -m "Migrate to Cloudflare Pages + Durable Objects + D1
 
 Replaces the Phoenix/Elixir implementation. The previous tree is preserved
 on the v1-elixir branch and tagged at v1-elixir-cutover for archival and
 AGPL forks.
 
 Architecture:
-- Workers + Hono routing
+- Cloudflare Pages with file-routed Functions (no framework)
+- Static pages served from public/ by the Pages CDN edge
 - Durable Object per room_hash (single-threaded N=1 enforcement)
 - D1 for aggregate metrics + extension tokens
 - DO alarms replace Oban TTL sweep
@@ -327,26 +328,70 @@ TypeScript code and may not realise the Elixir version exists at all.
 
 ## New architecture
 
+### Why Pages and not Workers + Assets
+
+Cloudflare offers two ways to ship this kind of app:
+
+- **Workers + the `[assets]` binding** — one Worker that does everything,
+  with static files served by an asset binding.
+- **Cloudflare Pages with file-routed Functions** — Pages serves
+  `public/` natively, and dynamic routes live in `functions/` files.
+  Functions are also Workers under the hood, with the same DO/D1/cron
+  primitives.
+
+For sTELgano specifically, **Pages wins on three concrete fronts**:
+
+1. **Free unlimited bandwidth.** Pages doesn't meter egress at any
+   volume. Workers charges per request after 100k/day (free) or per
+   $5/mo plan. A content-heavy site (18+ static pages plus a blog)
+   benefits noticeably at scale.
+2. **Auto preview deployments per PR / branch.** Connect the repo,
+   every push gets a `*.pages.dev` URL. Replicating this on Workers
+   means rolling your own GHA workflow.
+3. **"Mostly static" is the happy path.** sTELgano is overwhelmingly
+   static content with one interactive route (`/chat`). That's exactly
+   the shape Pages was built for.
+
+What we give up vs. Workers + Assets:
+
+- **Cron Triggers** — Pages added them later; less battle-tested than
+  Workers. Acceptable risk for our daily token-cleanup job.
+- **A single deployable unit feels slightly different** — Pages
+  Functions run in the same isolate model as Workers, but the project
+  shape (`public/` + `functions/` + `src/` + `wrangler.toml`) is its
+  own convention. Worth being aware of when reading docs.
+
+What we do **not** give up:
+
+- Pages Functions support every binding Workers do (DO, D1, KV, R2,
+  Queues, Cron, Vectorize, AI, etc.).
+- Pages Functions are framework-free — file-routed `.ts` files with a
+  default export. No Next/Astro/SvelteKit required despite what the
+  dashboard's "framework preset" wizard implies. We use the **None**
+  preset.
+
 ### Stack at a glance
 
 | Layer | v1 (Elixir) | v2 (Cloudflare) |
 |---|---|---|
-| Routing | Phoenix Router | Hono on Workers |
+| Hosting product | DigitalOcean droplet | Cloudflare Pages (with Functions) |
+| Routing | Phoenix Router | File-based Pages Functions in `functions/` |
 | Real-time | Phoenix Channels | Hibernatable WebSockets on Durable Objects |
 | Per-room state | Postgres rows + UNIQUE index | One Durable Object per `room_hash` |
 | Aggregate metrics | Postgres tables | D1 (SQLite at the edge) |
 | Payment tokens | Postgres table | D1 table |
 | TTL expiry | Oban hourly sweep job | DO alarms (per-room, exact-time) |
-| Background jobs | Oban | Workers Cron Triggers + DO alarms |
-| Static assets | Phoenix `Plug.Static` from droplet | Workers Assets (or R2) |
+| Background jobs | Oban | Pages Cron Triggers + DO alarms |
+| Static assets | Phoenix `Plug.Static` from droplet | Pages CDN serving `public/` (free unlimited bandwidth) |
 | Client UI | LiveView state machine + JS hooks | Static HTML shell + vanilla TS |
 | Crypto | Web Crypto API in `elixir/assets/js/crypto/anon.js` | **Same code, ported unchanged** |
 | Rate limiting | PlugAttack (ETS) | Cloudflare native rate-limiting rules |
-| Security headers / CSP | `SecurityHeaders` plug + nonce plug | Workers middleware (same nonce strategy) |
-| Admin dashboard | LiveView + HTTP Basic Auth | Worker route + HTML + D1 query |
-| Payment provider | `Stelgano.Monetization.Providers.Paystack` | Ported TypeScript adapter, same protocol |
+| Security headers / CSP | `SecurityHeaders` plug + nonce plug | `functions/_middleware.ts` (same nonce strategy) |
+| Admin dashboard | LiveView + HTTP Basic Auth | Pages Function + HTML + D1 query |
+| Payment provider | `elixir/lib/stelgano/monetization/providers/paystack.ex` | Ported TypeScript adapter, same protocol |
 | Migrations | `Stelgano.Release.migrate/0` | `wrangler d1 migrations apply` |
-| Deploy | scp tarball + systemd restart | `wrangler deploy` |
+| Deploy | scp tarball + systemd restart | `wrangler pages deploy` (or git-driven auto-deploy) |
+| Preview environments | None | One per non-production branch (free) |
 
 ### Per-room Durable Object
 
@@ -605,33 +650,41 @@ Things that don't need a decision today but should not be forgotten:
 Suggested order of work on the `v2-cloudflare` branch, each phase ending in
 a commit that compiles and runs (even if incomplete):
 
-1. **Skeleton.** `wrangler.toml`, `package.json`, `tsconfig.json`, Hono
-   route stub, "hello world" Worker. Confirm `wrangler dev` works locally.
-2. **One DO end-to-end.** Implement `RoomDO` with `join`, `send_message`,
-   `read_receipt`. Hand-test via a minimal HTML page that opens a
-   WebSocket. No UI polish, no D1, no payments — prove the architecture.
+1. **Skeleton.** `wrangler.toml`, `package.json`, `tsconfig.json`, a
+   `functions/healthz.ts` stub, the Pages project layout (`public/` for
+   static, `functions/` for routes, `src/` for shared code). Confirm
+   `wrangler pages dev` returns 200 at `/healthz` and serves
+   `public/index.html` at `/`.
+2. **One DO end-to-end.** Implement `RoomDO` in `src/room.ts` with
+   `join`, `send_message`, `read_receipt`. Re-export the class from a
+   function file so the Pages bundler discovers it. Hand-test via a
+   minimal HTML page that opens a WebSocket. No UI polish, no D1, no
+   payments — prove the architecture.
 3. **D1 schema for metrics + tokens.** Ports the existing `country_metrics`,
    `daily_metrics`, `extension_tokens` schemas. Migrations via
-   `wrangler d1 migrations`.
+   `wrangler d1 migrations apply stelgano`.
 4. **Static pages.** Port `/`, `/security`, `/privacy`, `/terms`, `/about`,
-   `/spec`, `/blog` as static HTML files served by Workers Assets. Same
-   content, same Tailwind output.
+   `/spec`, `/blog` as static HTML files in `public/`. Pages serves them
+   directly with no Function involved. Same Tailwind output.
 5. **Chat UI.** Vanilla TS state machine, port the LiveView state
    transitions. Wire to the DO via WebSocket.
 6. **Generator drawer + payment flow + admin dashboard.** Port the
    remaining LiveView surfaces.
 7. **Paystack adapter port.** `initialize`, webhook verification (HMAC-
    SHA512), FX-rate caching. Same protocol, TS instead of Elixir.
-8. **CSP, security headers, rate limiting.** Worker middleware for headers
-   + per-request CSP nonce. CF dashboard rate-limiting rules for the
-   PlugAttack equivalents.
+8. **CSP, security headers, rate limiting.** `functions/_middleware.ts`
+   for headers + per-request CSP nonce (one middleware applied to the
+   whole tree). CF dashboard rate-limiting rules for the PlugAttack
+   equivalents.
 9. **Tests.** Port the integration tests. Vitest + DO test harness.
    Reach 90% coverage parity.
-10. **Smoke test on `*.workers.dev`.** Run end-to-end on a CF-provided
-    subdomain before touching the production domain.
-11. **Cutover.** Run the cutover commands above. Swap DNS to the Worker.
-    Drain v1 traffic. Archive the droplet (don't terminate it for ~30 days
-    in case rollback is needed).
+10. **Smoke test on `*.pages.dev`.** Connect the GitHub repo to the Pages
+    project so every push to `v2-cloudflare` (and per-PR previews) builds
+    and deploys to a `*.pages.dev` URL automatically. Verify end-to-end
+    on a preview deploy before touching the production domain.
+11. **Cutover.** Run the cutover commands above. Swap DNS to the Pages
+    project. Drain v1 traffic. Archive the droplet (don't terminate it
+    for ~30 days in case rollback is needed).
 
 ---
 
