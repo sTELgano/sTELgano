@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+
+  <!-- OpenGraph & SEO -->
+  <meta property="og:title" content="sTELgano - Zero Trace Encrypted Channels">
+  <meta property="og:description" content="The messaging app hidden in your contacts. No accounts, no logs, end-to-end encrypted.">
+  <meta property="og:image" content="/images/og_image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:url" content="/">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="sTELgano - Zero Trace Encrypted Channels">
+  <meta name="twitter:description" content="The messaging app hidden in your contacts. No accounts, no logs, end-to-end encrypted.">
+  <meta name="twitter:image" content="/images/og_image.jpg">
+
+  <!-- Minimal title — reveals nothing about the nature of the service in browser history. -->
+  <title>{{TITLE}}</title>
+
+  <link rel="stylesheet" href="/assets/app.css">
+
+  <!-- Bootstrap cleanup. Identical script body across every page so
+       Phase 8 can pin it via a SHA-256 in script-src (CSP nonce won't
+       work for static-served HTML — the file is byte-identical across
+       requests, so a hash is the right primitive).
+
+       1. Panic clear: if the URL carries ?p=1 (set by /x), wipe
+          sessionStorage completely and strip the flag from the URL.
+       2. Service-worker + cache cleanup for any stragglers from older
+          deployments that shipped a sw.js.
+       3. History masking: replace any sub-path with "/" in browser
+          history so back/forward only reveals the root. -->
+  <script>
+    try {
+      var url = new URL(window.location.href);
+      if (url.searchParams.get("p") === "1") {
+        sessionStorage.clear();
+        url.searchParams.delete("p");
+        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      }
+    } catch (e) {}
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        for (var i = 0; i < rs.length; i++) rs[i].unregister();
+      });
+      if ("caches" in window) {
+        caches.keys().then(function (names) {
+          for (var i = 0; i < names.length; i++) caches.delete(names[i]);
+        });
+      }
+    }
+
+    (function () {
+      function maskHistory() {
+        if (window.location.pathname !== "/") {
+          window.history.replaceState(null, "", "/");
+        }
+      }
+      window.addEventListener("load", maskHistory);
+      window.addEventListener("popstate", maskHistory);
+    })();
+  </script>
+</head>
+<body class="antialiased">
+  <div class="bg-grid-container">
+    <div class="bg-grid"></div>
+    <div class="bg-orbs">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="noise-overlay"></div>
+  </div>
+  {{CONTENT}}
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!--
+  title: sTELgano
+
+  Phase 4a placeholder homepage. Proves the layout shell, design tokens,
+  fonts, and Tailwind v4 pipeline all resolve correctly. The full v1
+  homepage (728 lines of HEEX with hero, features, FAQ, CTA, footer)
+  ports in Phase 4c after the icon system lands in Phase 4b.
+
+  Source for the full port:
+  elixir/lib/stelgano_web/controllers/page_html/home.html.heex
+-->
+
+<main class="relative min-h-[90vh] flex flex-col items-center justify-center px-6 py-24 text-center">
+  <div class="max-w-4xl mx-auto space-y-8 relative z-10 animate-in stagger-1">
+    <h1 class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter font-display leading-[0.9]">
+      <span class="text-slate-500 font-light italic">s</span><span class="text-gradient">TEL</span><span class="text-white">gano</span>
+    </h1>
+
+    <p class="text-[10px] sm:text-xs font-mono uppercase tracking-[0.35em] text-slate-500">
+      stel<span class="text-primary">·GAH·</span>no
+    </p>
+
+    <p class="text-xl sm:text-2xl md:text-3xl text-slate-300 font-medium tracking-tight leading-tight max-w-2xl mx-auto">
+      The messaging app hidden in
+      <span class="text-white italic underline decoration-primary decoration-4 underline-offset-8">
+        your contacts.
+      </span>
+    </p>
+
+    <p class="text-slate-500 text-sm sm:text-lg leading-relaxed max-w-lg mx-auto">
+      No accounts. No chat history. No metadata. Your browser encrypts everything locally with AES-256-GCM before it ever touches a server. The server only sees ciphertext.
+    </p>
+
+    <div class="flex flex-col sm:flex-row gap-4 pt-4 justify-center">
+      <a href="/chat" class="btn-primary px-10 py-4 text-xl">Open Chat</a>
+      <a href="/spec" class="btn-secondary px-10 py-4 text-xl">Read the Spec</a>
+    </div>
+
+    <p class="text-xs text-slate-600 pt-12 max-w-md mx-auto">
+      v2 placeholder &middot; full content port in progress &middot; see
+      <a href="https://github.com/sTELgano/sTELgano/blob/v2-cloudflare/docs/MIGRATION.md" class="underline decoration-slate-700 hover:text-slate-400">docs/MIGRATION.md</a>
+    </p>
+  </div>
+</main>

@@ -11,9 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:html": "node scripts/build-html.mjs",
     "build:client": "esbuild src/client/chat.ts --bundle --minify --format=esm --target=es2022 --outfile=public/assets/chat.js",
     "build:css": "tailwindcss -i src/client/app.css -o public/assets/app.css --minify",
-    "build": "npm run build:client && npm run build:css",
+    "build": "npm run build:html && npm run build:css",
     "d1:migrate:local": "wrangler d1 migrations apply stelgano --local",
     "d1:migrate:remote": "wrangler d1 migrations apply stelgano --remote"
   },
