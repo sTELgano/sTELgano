@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Worker bindings declared in wrangler.toml. Imported by every module
-// that touches the runtime (Hono routes, Durable Object, future D1
-// migrations) so the type is the single source of truth.
+// Worker bindings declared in wrangler.toml plus the implicit ones
+// Pages adds in Advanced Mode (_worker.ts). Imported by every module
+// that touches the runtime so the type is the single source of truth.
 
 export interface Env {
-  /** Static asset binding from wrangler.toml [assets]. */
+  /** Static asset binding — auto-provided by Pages in Advanced Mode.
+   *  Not declared in wrangler.toml. Serves files from the configured
+   *  pages_build_output_dir (public/). */
   ASSETS: Fetcher;
 
   /** Durable Object namespace for the room class. */

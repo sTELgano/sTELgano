@@ -334,10 +334,10 @@ Cloudflare offers two ways to ship this kind of app:
 
 - **Workers + the `[assets]` binding** — one Worker that does everything,
   with static files served by an asset binding.
-- **Cloudflare Pages with file-routed Functions** — Pages serves
-  `public/` natively, and dynamic routes live in `functions/` files.
-  Functions are also Workers under the hood, with the same DO/D1/cron
-  primitives.
+- **Cloudflare Pages** — Pages serves `public/` natively, with dynamic
+  routes either as file-based functions in `functions/` (the standard
+  shape) or via a single `_worker.ts` at the project root ("Advanced
+  Mode").
 
 For sTELgano specifically, **Pages wins on three concrete fronts**:
 
@@ -363,19 +363,55 @@ What we give up vs. Workers + Assets:
 
 What we do **not** give up:
 
-- Pages Functions support every binding Workers do (DO, D1, KV, R2,
-  Queues, Cron, Vectorize, AI, etc.).
-- Pages Functions are framework-free — file-routed `.ts` files with a
-  default export. No Next/Astro/SvelteKit required despite what the
-  dashboard's "framework preset" wizard implies. We use the **None**
-  preset.
+- Pages supports every binding Workers do (DO, D1, KV, R2, Queues,
+  Cron, Vectorize, AI, etc.).
+- Pages is framework-free. No Next/Astro/SvelteKit required despite
+  what the dashboard's "framework preset" wizard implies. We use the
+  **None** preset.
+
+### Why Advanced Mode (`_worker.ts`) and not file-based `functions/`
+
+We initially used `functions/_middleware.ts` + `functions/room/[roomHash]/ws.ts`
+(Pages' file-based routing). The DO class (`RoomDO`) was re-exported
+from the middleware so `[[durable_objects.bindings]]` in `wrangler.toml`
+could resolve `class_name = "RoomDO"`.
+
+Empirically that path failed: Pages' bundler does not reliably hoist
+named exports from individual function files to the bundled
+`functionsWorker` entry, and `wrangler pages dev` died with:
+
+> Your Worker depends on the following Durable Objects, which are not
+> exported in your entrypoint file: RoomDO. You should export these
+> objects from your entrypoint, …functionsWorker-*.mjs.
+
+Re-exporting from `_middleware.ts` (the documented workaround) did not
+fix it on wrangler 4.84.1.
+
+**Advanced Mode** (`_worker.ts` at the project root) collapses everything
+into a single Worker entry where the DO export and fetch handler
+coexist by construction. The bundler can't lose the export.
+
+Trade-off: we lose Pages' file-based routing convention. For our small
+route surface (~10 routes total) the manual switch/match in `_worker.ts`
+is fine — at the scale where file-based routing earns its keep,
+we'd be staring at a different scaling problem first.
+
+Build flow with Advanced Mode:
+- `_worker.ts` lives at the project root (TypeScript)
+- `npm run build:worker` (esbuild) compiles it to `public/_worker.js`
+- `wrangler pages dev public` finds `public/_worker.js` and uses it
+- On deploy, the Pages "Build command" runs `npm run build`, then
+  `wrangler pages deploy public` ships the directory
+
+Per Pages convention, when `_worker.js` exists in the build output,
+the `functions/` directory is ignored — they're mutually exclusive.
 
 ### Stack at a glance
 
 | Layer | v1 (Elixir) | v2 (Cloudflare) |
 |---|---|---|
 | Hosting product | DigitalOcean droplet | Cloudflare Pages (with Functions) |
-| Routing | Phoenix Router | File-based Pages Functions in `functions/` |
+| Routing | Phoenix Router | Single `_worker.ts` (Pages Advanced Mode) |
 | Real-time | Phoenix Channels | Hibernatable WebSockets on Durable Objects |
 | Per-room state | Postgres rows + UNIQUE index | One Durable Object per `room_hash` |
 | Aggregate metrics | Postgres tables | D1 (SQLite at the edge) |
@@ -386,7 +422,7 @@ What we do **not** give up:
 | Client UI | LiveView state machine + JS hooks | Static HTML shell + vanilla TS |
 | Crypto | Web Crypto API in `elixir/assets/js/crypto/anon.js` | **Same code, ported unchanged** |
 | Rate limiting | PlugAttack (ETS) | Cloudflare native rate-limiting rules |
-| Security headers / CSP | `SecurityHeaders` plug + nonce plug | `functions/_middleware.ts` (same nonce strategy) |
+| Security headers / CSP | `SecurityHeaders` plug + nonce plug | Header injection in `_worker.ts` (SHA-256 pinning for the inline shell script — see Phase 8 notes) |
 | Admin dashboard | LiveView + HTTP Basic Auth | Pages Function + HTML + D1 query |
 | Payment provider | `elixir/lib/stelgano/monetization/providers/paystack.ex` | Ported TypeScript adapter, same protocol |
 | Migrations | `Stelgano.Release.migrate/0` | `wrangler d1 migrations apply` |
@@ -651,15 +687,16 @@ Suggested order of work on the `v2-cloudflare` branch, each phase ending in
 a commit that compiles and runs (even if incomplete):
 
 1. **Skeleton.** `wrangler.toml`, `package.json`, `tsconfig.json`, a
-   `functions/healthz.ts` stub, the Pages project layout (`public/` for
-   static, `functions/` for routes, `src/` for shared code). Confirm
-   `wrangler pages dev` returns 200 at `/healthz` and serves
-   `public/index.html` at `/`.
+   `_worker.ts` stub at the project root (Pages Advanced Mode — see
+   the architecture section for why we skipped `functions/`), the
+   Pages project layout (`public/` for static, `src/` for shared code).
+   Confirm `wrangler pages dev public` returns 200 at `/healthz` and
+   serves `public/index.html` at `/`.
 2. **One DO end-to-end.** Implement `RoomDO` in `src/room.ts` with
-   `join`, `send_message`, `read_receipt`. Re-export the class from a
-   function file so the Pages bundler discovers it. Hand-test via a
-   minimal HTML page that opens a WebSocket. No UI polish, no D1, no
-   payments — prove the architecture.
+   `join`, `send_message`, `read_receipt`. Re-export the class from
+   `_worker.ts` so the bundler keeps it. Hand-test via a minimal HTML
+   page that opens a WebSocket. No UI polish, no D1, no payments —
+   prove the architecture.
 3. **D1 schema for metrics + tokens.** Ports the existing `country_metrics`,
    `daily_metrics`, `extension_tokens` schemas. Migrations via
    `wrangler d1 migrations apply stelgano`.
@@ -672,10 +709,12 @@ a commit that compiles and runs (even if incomplete):
    remaining LiveView surfaces.
 7. **Paystack adapter port.** `initialize`, webhook verification (HMAC-
    SHA512), FX-rate caching. Same protocol, TS instead of Elixir.
-8. **CSP, security headers, rate limiting.** `functions/_middleware.ts`
-   for headers + per-request CSP nonce (one middleware applied to the
-   whole tree). CF dashboard rate-limiting rules for the PlugAttack
-   equivalents.
+8. **CSP, security headers, rate limiting.** Header injection in
+   `_worker.ts`'s fetch handler (wraps responses from both ASSETS and
+   the DO routes). The bootstrap inline `<script>` in the layout is
+   byte-identical across requests, so script-src pins it via SHA-256
+   rather than nonce. CF dashboard rate-limiting rules for the
+   PlugAttack equivalents.
 9. **Tests.** Port the integration tests. Vitest + DO test harness.
    Reach 90% coverage parity.
 10. **Smoke test on `*.pages.dev`.** Connect the GitHub repo to the Pages
