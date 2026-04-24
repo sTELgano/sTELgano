@@ -714,37 +714,57 @@ Things that don't need a decision today but should not be forgotten:
 Suggested order of work on the `v2-cloudflare` branch, each phase ending in
 a commit that compiles and runs (even if incomplete):
 
-1. **Skeleton.** `wrangler.toml`, `package.json`, `tsconfig.json`, a
-   `_worker.ts` stub at the project root (Pages Advanced Mode — see
-   the architecture section for why we skipped `functions/`), the
-   Pages project layout (`public/` for static, `src/` for shared code).
-   Confirm `wrangler pages dev public` returns 200 at `/healthz` and
-   serves `public/index.html` at `/`.
-2. **One DO end-to-end.** Implement `RoomDO` in `src/room.ts` with
-   `join`, `send_message`, `read_receipt`. Re-export the class from
-   `_worker.ts` so the bundler keeps it. Hand-test via a minimal HTML
-   page that opens a WebSocket. No UI polish, no D1, no payments —
-   prove the architecture.
-3. **D1 schema for metrics + tokens.** Ports the existing `country_metrics`,
-   `daily_metrics`, `extension_tokens` schemas. Migrations via
+1. **Skeleton.** ✅ _done 2026-04-24 (fbeae33)._ `wrangler.toml`,
+   `package.json`, `tsconfig.json`, a `_worker.ts` stub at the project
+   root (Pages Advanced Mode — see the architecture section for why
+   we skipped `functions/`), the Pages project layout (`public/` for
+   static, `src/` for shared code). Confirm `wrangler pages dev public`
+   returns 200 at `/healthz` and serves `public/index.html` at `/`.
+2. **One DO end-to-end.** ✅ _done 2026-04-24 (f2c8fbb)._ Implement
+   `RoomDO` in `src/room.ts` with `join`, `send_message`, `read_receipt`.
+   Re-export the class from `_worker.ts` so the bundler keeps it.
+   Hand-test via a minimal HTML page that opens a WebSocket. No UI
+   polish, no D1, no payments — prove the architecture.
+3. **D1 schema for metrics + tokens.** ✅ _done 2026-04-24 (977348d)._
+   Ports the existing `country_metrics`, `daily_metrics`,
+   `extension_tokens` schemas. Migrations via
    `wrangler d1 migrations apply stelgano`.
-4. **Static pages.** Port `/`, `/security`, `/privacy`, `/terms`, `/about`,
-   `/spec`, `/blog` as static HTML files in `public/`. Pages serves them
-   directly with no Function involved. Same Tailwind output.
-5. **Chat UI.** Vanilla TS state machine, port the LiveView state
-   transitions. Wire to the DO via WebSocket.
-6. **Generator drawer + payment flow + admin dashboard.** Port the
-   remaining LiveView surfaces.
-7. **Paystack adapter port.** `initialize`, webhook verification (HMAC-
-   SHA512), FX-rate caching. Same protocol, TS instead of Elixir.
-8. **CSP, security headers, rate limiting.** Header injection in
-   `_worker.ts`'s fetch handler (wraps responses from both ASSETS and
-   the DO routes). The bootstrap inline `<script>` in the layout is
-   byte-identical across requests, so script-src pins it via SHA-256
-   rather than nonce. CF dashboard rate-limiting rules for the
-   PlugAttack equivalents.
-9. **Tests.** Port the integration tests. Vitest + DO test harness.
-   Reach 90% coverage parity.
+4. **Static pages.** ✅ _done 2026-04-24 (e885793 → b7b160c)._ Port
+   `/`, `/security`, `/privacy`, `/terms`, `/about`, `/spec`, `/blog`
+   as static HTML files in `public/`. Pages serves them directly with
+   no Function involved. Same Tailwind output. (Split into 4a
+   scaffolding, 4b icons, 4c marketing pages, 4d blog.)
+5. **Chat UI.** ✅ _done 2026-04-24 (70e9fbb → bea46e7)._ Vanilla TS
+   state machine, port the LiveView state transitions. Wire to the DO
+   via WebSocket. The chat UI was redone once (bea46e7) after the
+   initial port diverged too far from v1; shipped as a verbatim port.
+6. **Generator drawer + payment flow + admin dashboard.** ✅ _done
+   2026-04-24 (0ef27f3, a99597b, 0d3362a)._ Port the remaining
+   LiveView surfaces.
+7. **Paystack adapter port.** ✅ _done 2026-04-24 (4dfc2ac → 7ad2ade)._
+   `initialize`, webhook verification (HMAC-SHA512). FX-rate caching
+   is deferred — see `src/lib/paystack.ts` docstring: if
+   `PAYSTACK_SETTLEMENT_CURRENCY` differs from `PAYMENT_CURRENCY`,
+   `initialize()` returns `fx_conversion_not_wired` rather than
+   silently losing money. Will wire when we first need a settlement
+   currency that differs from the display currency.
+8. **CSP, security headers, rate limiting.** ✅ _done 2026-04-24
+   (1efe406)._ Header injection in `_worker.ts`'s fetch handler
+   (wraps responses from both ASSETS and the DO routes). The
+   bootstrap inline `<script>` in the layout is byte-identical
+   across requests, so script-src pins it via SHA-256 rather than
+   nonce. Rate limiting deferred to CF dashboard rules at deploy
+   time (no application-layer PlugAttack equivalent shipped).
+9. **Tests.** ✅ _done 2026-04-24 (9082f5e + 43e1929)._ Two-project
+   vitest workspace: pure-function tests (crypto + paystack helpers)
+   run in Node, Worker/DO runtime tests run under workerd via
+   `@cloudflare/vitest-pool-workers`. 85 tests green covering
+   healthz + security headers, admin Basic Auth, /api/room/:hash/exists,
+   /api/payment/initiate gates, /api/webhooks/paystack signature
+   handling, full RoomDO WebSocket protocol (join, turn-taking, N=1
+   overwrite, read-gated edits, lockout math), and the D1 lib
+   modules (extension_tokens lifecycle, country/daily UPSERT
+   counters). D1 migrations apply per test realm via a setup file.
 10. **Smoke test on `*.pages.dev`.** Connect the GitHub repo to the Pages
     project so every push to `v2-cloudflare` (and per-PR previews) builds
     and deploys to a `*.pages.dev` URL automatically. Verify end-to-end
