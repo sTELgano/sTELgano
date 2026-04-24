@@ -25,12 +25,16 @@ import {
   LOCKOUT_MINUTES,
   MAX_ACCESS_ATTEMPTS,
   MAX_CIPHERTEXT_BYTES,
+  PAID_TTL_DAYS,
   type ClientEvent,
   type ErrorReason,
   type MessagePayload,
   type ServerBroadcast,
   type ServerReply,
 } from "./protocol";
+import { findByTokenHash, markRedeemed } from "./lib/extension_tokens";
+import { incrementPaid as countryIncrementPaid } from "./lib/country_metrics";
+import { incrementPaidNew } from "./lib/daily_metrics";
 
 // ---------------------------------------------------------------------------
 // Persisted state — the entire room lives under one storage key. Rooms
@@ -77,6 +81,20 @@ type RoomState = {
 };
 
 const STATE_KEY = "state";
+
+/** SHA-256 of a UTF-8 string, returned as lowercase hex. Used to
+ *  reconstitute the token_hash from the client's extension_secret
+ *  in the redeem flow. Same algorithm as AnonCrypto.sha256hex on
+ *  the client. */
+async function sha256hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(input) as unknown as ArrayBuffer,
+  );
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 /** Per-WebSocket attachment that survives hibernation. */
 type WsAttachment = {
@@ -180,6 +198,9 @@ export class RoomDO implements DurableObject {
         break;
       case "expire_room":
         await this.handleExpireRoom(ws, evt);
+        break;
+      case "redeem_extension":
+        await this.handleRedeemExtension(ws, evt);
         break;
       default: {
         // Unknown event — ignore (matches v1's Logger.warning + noreply).
@@ -446,6 +467,85 @@ export class RoomDO implements DurableObject {
   }
 
   // -------------------------------------------------------------------------
+  // Redeem extension
+  //
+  // Client fires this with the extension_secret (random 256-bit hex)
+  // it stashed in sessionStorage before redirecting to Paystack. We
+  // hash it via SHA-256 to reconstitute the token_hash used as the
+  // Paystack transaction reference, look the row up in D1, and —
+  // if it's status=paid — mark it redeemed and bump the room TTL
+  // to PAID_TTL_DAYS from now.
+  //
+  // The extension_tokens table has no room_id column, so the only
+  // correlation between a payment and a room lives ephemerally
+  // inside this handler. v1's elixir/lib/stelgano/monetization.ex
+  // `redeem_token/2` is the same contract.
+  // -------------------------------------------------------------------------
+
+  private async handleRedeemExtension(
+    ws: WebSocket,
+    evt: Extract<ClientEvent, { event: "redeem_extension" }>,
+  ): Promise<void> {
+    if (this.env.MONETIZATION_ENABLED !== "true") {
+      this.send(ws, { ref: evt.ref, error: { reason: "monetization_disabled" } });
+      return;
+    }
+    if (!this.room) {
+      this.send(ws, { ref: evt.ref, error: { reason: "not_found" } });
+      return;
+    }
+
+    const secret = evt.data.extension_secret;
+    if (typeof secret !== "string" || secret.length === 0) {
+      this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
+      return;
+    }
+
+    // Reconstitute the server-side token_hash from the client's secret.
+    const tokenHash = await sha256hex(secret);
+
+    const token = await findByTokenHash(this.env.DB, tokenHash);
+    if (!token || token.status !== "paid") {
+      // Not found OR still pending (webhook hasn't landed) OR
+      // already redeemed. All collapse to "invalid_token" so the
+      // client can't distinguish.
+      this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
+      return;
+    }
+
+    const changed = await markRedeemed(this.env.DB, tokenHash);
+    if (changed === 0) {
+      // Race: another connection redeemed it between our findByTokenHash
+      // and markRedeemed. Treat as invalid.
+      this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
+      return;
+    }
+
+    // Extend the room's TTL and reschedule its self-destruct alarm.
+    const newTtlMs = Date.now() + PAID_TTL_DAYS * 86_400_000;
+    this.room.tier = "paid";
+    this.room.ttlExpiresAtMs = newTtlMs;
+    await this.persist();
+    await this.state.storage.setAlarm(newTtlMs);
+
+    // Bump telemetry. country_iso is optional — the client derives
+    // it from libphonenumber-js, never stored alongside any
+    // individual room or token.
+    const iso = evt.data.country_iso;
+    await Promise.all([
+      iso ? countryIncrementPaid(this.env.DB, iso) : Promise.resolve(),
+      incrementPaidNew(this.env.DB),
+    ]);
+
+    const ttlIso = new Date(newTtlMs).toISOString();
+    this.broadcastAll({
+      event: "ttl_extended",
+      data: { ttl_expires_at: ttlIso },
+    });
+    this.send(ws, { ref: evt.ref, ok: { ttl_expires_at: ttlIso } });
+  }
+
+  // -------------------------------------------------------------------------
   // Access control — ports the elixir/lib/stelgano/rooms.ex handle_access /
   // handle_access_miss logic. Keeps the "increment counter on the record
   // with the most failures" cleverness so a wrong PIN doesn't reveal which
@@ -554,6 +654,7 @@ export class RoomDO implements DurableObject {
   }
 
   private send(ws: WebSocket, msg: ServerReply | ServerBroadcast): void {
+
     try {
       ws.send(JSON.stringify(msg));
     } catch {

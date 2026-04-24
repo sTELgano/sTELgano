@@ -55,7 +55,18 @@ export type ClientEvent =
   | { event: "edit_message"; ref: string; data: { message_id: string; ciphertext: string; iv: string } }
   | { event: "delete_message"; ref: string; data: { message_id: string } }
   | { event: "typing"; ref?: string; data: Record<string, never> }
-  | { event: "expire_room"; ref: string; data: Record<string, never> };
+  | { event: "expire_room"; ref: string; data: Record<string, never> }
+  | {
+      event: "redeem_extension";
+      ref: string;
+      data: {
+        extension_secret: string;
+        /** Optional ISO-3166 alpha-2 derived client-side from
+         *  the E.164 phone. Bumps CountryMetrics.paid_rooms. Never
+         *  stored alongside any individual room/token. */
+        country_iso?: string;
+      };
+    };
 
 // ---------------------------------------------------------------------------
 // Server → Client messages
@@ -71,7 +82,8 @@ export type ServerBroadcast =
   | { event: "message_edited"; data: { message_id: string; ciphertext: string; iv: string } }
   | { event: "message_deleted"; data: { message_id: string } }
   | { event: "counterparty_typing"; data: Record<string, never> }
-  | { event: "room_expired"; data: Record<string, never> };
+  | { event: "room_expired"; data: Record<string, never> }
+  | { event: "ttl_extended"; data: { ttl_expires_at: string } };
 
 // ---------------------------------------------------------------------------
 // Payloads

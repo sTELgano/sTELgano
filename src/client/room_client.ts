@@ -40,6 +40,7 @@ export type Listeners = {
   onMessageDeleted?: (messageId: string) => void;
   onCounterpartyTyping?: () => void;
   onRoomExpired?: () => void;
+  onTtlExtended?: (ttlExpiresAt: string) => void;
 
   /** Underlying socket closed (clean or unclean). Code 1000 = normal. */
   onClose?: (code: number, reason: string) => void;
@@ -261,10 +262,27 @@ export class RoomClient {
       case "room_expired":
         this.listeners.onRoomExpired?.();
         break;
+      case "ttl_extended":
+        this.listeners.onTtlExtended?.(b.data.ttl_expires_at);
+        break;
       default: {
         const _exhaustive: never = b;
         void _exhaustive;
       }
     }
+  }
+
+  /** Send a redeem_extension event. ref-based reply resolves with
+   *  { ttl_expires_at } on success; rejects with invalid_token /
+   *  monetization_disabled / not_found otherwise. */
+  redeemExtension(
+    extensionSecret: string,
+    countryIso?: string,
+  ): Promise<{ ttl_expires_at: string }> {
+    const data: { extension_secret: string; country_iso?: string } = {
+      extension_secret: extensionSecret,
+    };
+    if (countryIso) data.country_iso = countryIso;
+    return this.request<{ ttl_expires_at: string }>("redeem_extension", data);
   }
 }
