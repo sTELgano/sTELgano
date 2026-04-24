@@ -1,0 +1,191 @@
+<!--
+  title: Pricing — sTELgano
+
+  Ported from elixir/lib/stelgano_web/controllers/page_html/pricing.html.heex.
+  Static port — runtime values (price, TTL days, monetization flag) are
+  hardcoded to the wrangler.toml defaults: monetization-enabled view,
+  $2.00/year, 7-day free TTL, 365-day paid TTL. If those defaults
+  change, this file needs updating (or pricing moves to a Worker route
+  that renders from env in Phase 7).
+-->
+
+<div class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <!-- Hero -->
+  <div class="text-center space-y-8 pt-6 sm:pt-12 px-4">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+      Transparent Pricing
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.9] sm:leading-tight">
+      Privacy is <span class="text-gradient">never</span> gated.
+    </h1>
+
+    <p class="text-slate-400 text-base sm:text-xl font-medium leading-relaxed max-w-2xl mx-auto animate-in stagger-3 px-2">
+      Every security feature is identical on both tiers. The only difference is how long your number stays active.
+    </p>
+  </div>
+
+  <!-- Pricing Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 animate-in stagger-4 px-4">
+    <!-- Free Tier -->
+    <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-white/20 transition-all duration-500">
+      <div class="space-y-4">
+        <div class="size-14 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+          <svg class="size-7 text-slate-400" aria-hidden="true"><use href="/icons.svg#clock"/></svg>
+        </div>
+        <h3 class="text-2xl font-extrabold text-white font-display">Temporary</h3>
+        <p class="text-slate-500 text-sm font-medium leading-relaxed">
+          Try sTELgano with a temporary number. Perfect for short conversations.
+        </p>
+      </div>
+
+      <div class="space-y-1">
+        <div class="text-5xl font-extrabold text-white font-display">Free</div>
+        <p class="text-slate-500 text-sm font-medium">7 days, then recycled</p>
+      </div>
+
+      <ul class="space-y-3">
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          AES-256-GCM encryption
+        </li>
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          N=1 atomic messaging
+        </li>
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          Zero-knowledge server
+        </li>
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          Panic route (/x)
+        </li>
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          No account required
+        </li>
+      </ul>
+
+      <a href="/chat" class="btn-ghost w-full py-4 text-center inline-flex items-center justify-center gap-2 group/btn">
+        Open Chat
+        <svg class="size-4 group-hover/btn:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+
+    <!-- Paid Tier -->
+    <div class="glass-card p-6 sm:p-10 space-y-8 group hover:border-primary/30 transition-all duration-500 border-primary/10 bg-primary/2 relative overflow-hidden">
+      <div class="absolute -right-10 -top-10 size-40 bg-primary/5 rounded-full blur-3xl"></div>
+
+      <div class="relative space-y-4">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+        </div>
+        <h3 class="text-2xl font-extrabold text-white font-display">Dedicated</h3>
+        <p class="text-slate-500 text-sm font-medium leading-relaxed">
+          Your number, secured for a full year. Same encryption, longer commitment.
+        </p>
+      </div>
+
+      <div class="relative space-y-1">
+        <div class="text-5xl font-extrabold text-primary font-display">
+          $2.00<span class="text-lg text-slate-500 font-bold">/year</span>
+        </div>
+        <p class="text-slate-500 text-sm font-medium">365 days, your number alone</p>
+      </div>
+
+      <ul class="relative space-y-3">
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          Everything in Free
+        </li>
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          Dedicated number for 1 year
+        </li>
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          Number is yours alone
+        </li>
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          Extend anytime before expiry
+        </li>
+        <li class="flex items-center gap-3 text-sm text-slate-400 font-medium">
+          <svg class="size-4 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          Privacy-preserving payment
+        </li>
+      </ul>
+
+      <a href="/chat" class="btn-primary w-full py-4 text-center inline-flex items-center justify-center gap-2 group/btn shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]">
+        Open Chat
+        <svg class="size-4 group-hover/btn:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- Honesty Section -->
+  <div class="space-y-8 animate-in stagger-5 px-4">
+    <div class="flex items-center gap-4">
+      <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+        The Honesty Commitment
+      </h2>
+      <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+    </div>
+
+    <div class="glass-card-premium p-6 sm:p-10 md:p-12 animate-in space-y-6">
+      <div class="size-12 sm:size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+        <svg class="size-6 sm:size-7 text-primary" aria-hidden="true"><use href="/icons.svg#heart"/></svg>
+      </div>
+      <blockquote class="text-slate-300 text-base sm:text-xl font-medium leading-relaxed italic">
+        &ldquo;We will never put a privacy feature behind a paywall. You are not buying more security &mdash; you are buying a number that is yours alone, and the certainty that someone is awake to keep the protocol honest.&rdquo;
+      </blockquote>
+    </div>
+  </div>
+
+  <!-- Payment Privacy -->
+  <div class="space-y-8 animate-in stagger-5 px-4">
+    <div class="flex items-center gap-4">
+      <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">
+        Payment Privacy
+      </h2>
+      <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+          <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
+        </div>
+        <h4 class="text-white font-bold font-display">Blind Token Protocol</h4>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium">Our server cannot link your payment to your chat room. The payment and room extension are cryptographically unlinkable.</p>
+      </div>
+      <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+          <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#shield"/></svg>
+        </div>
+        <h4 class="text-white font-bold font-display">No Data Stored</h4>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium">Your email is entered on the payment provider's page, not ours. We never see or store your payment details.</p>
+      </div>
+      <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+          <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#lock"/></svg>
+        </div>
+        <h4 class="text-white font-bold font-display">Same Encryption</h4>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium">Free and paid tiers use identical AES-256-GCM encryption. Payment buys time, not security.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="text-center space-y-6 animate-in stagger-5">
+    <p class="text-slate-500 text-sm font-medium">
+      Ready to start a private conversation?
+    </p>
+    <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+      Open Chat
+      <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+    </a>
+  </div>
+</div>
