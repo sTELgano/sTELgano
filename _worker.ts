@@ -27,8 +27,13 @@
 import type { Env } from "./src/env";
 import { list as listCountryMetrics, type CountryRow } from "./src/lib/country_metrics";
 import { listRecent as listDailyRecent, type DailyRow } from "./src/lib/daily_metrics";
-import { createPending } from "./src/lib/extension_tokens";
-import { initialize as paystackInitialize } from "./src/lib/paystack";
+import { createPending, markPaid } from "./src/lib/extension_tokens";
+import {
+  initialize as paystackInitialize,
+  hmacSha512Hex,
+  timingSafeHexEqual,
+  verifyTransaction,
+} from "./src/lib/paystack";
 export { RoomDO } from "./src/room";
 
 const ROOM_HASH_RE = /^[a-f0-9]{64}$/;
@@ -77,6 +82,15 @@ export default {
     // turned on monetization at all.
     if (url.pathname === "/api/payment/initiate" && request.method === "POST") {
       return handlePaymentInitiate(request, env);
+    }
+
+    // POST /api/webhooks/paystack — Paystack hits this after a
+    // successful charge. HMAC-SHA512 verifies the payload, then
+    // we double-verify with Paystack's /transaction/verify, then
+    // markPaid in D1. Returns 200 for all non-signature failures
+    // so the response doesn't leak which references exist.
+    if (url.pathname === "/api/webhooks/paystack" && request.method === "POST") {
+      return handlePaystackWebhook(request, env);
     }
 
     // GET /admin — aggregate metrics dashboard. HTTP Basic Auth
@@ -390,6 +404,88 @@ function adminMetricCard(
       </div>
     </div>
   `;
+}
+
+// ---------------------------------------------------------------------------
+// Paystack webhook
+// ---------------------------------------------------------------------------
+//
+// Security:
+//   - Verifies the x-paystack-signature HMAC-SHA512 header against the
+//     raw request body. No trust of parsed JSON is made before the
+//     signature passes.
+//   - Double-verifies the transaction via Paystack's /transaction/verify
+//     endpoint. Belt and braces — a leaked HMAC secret alone isn't
+//     enough to mark a token paid, since the attacker would also have
+//     to craft a real transaction on Paystack's side.
+//   - Returns 200 for all non-signature failures so the response body
+//     doesn't leak which references exist. Bad signature is 401.
+//
+// Privacy:
+//   - Logs carry NO token_hash material (not even a prefix). Request-id
+//     metadata is enough to trace a specific webhook through logs
+//     without naming the token. Mirrors v1.
+
+async function handlePaystackWebhook(request: Request, env: Env): Promise<Response> {
+  if (env.MONETIZATION_ENABLED !== "true") {
+    return jsonResponse({ error: "not_found" }, 404);
+  }
+  if (!env.PAYSTACK_SECRET_KEY) {
+    return jsonResponse({ error: "not_configured" }, 503);
+  }
+
+  const signature = request.headers.get("x-paystack-signature") ?? "";
+  // Read the body as text, NOT JSON — HMAC is over the raw bytes, and
+  // re-serialising from a parsed object would change whitespace and
+  // break the signature check.
+  const rawBody = await request.text();
+
+  const expected = await hmacSha512Hex(env.PAYSTACK_SECRET_KEY, rawBody);
+  if (!timingSafeHexEqual(signature.toLowerCase(), expected)) {
+    return jsonResponse({ error: "invalid_signature" }, 401);
+  }
+
+  // From here on, the body is trusted. Parse and dispatch.
+  type WebhookPayload = {
+    event?: string;
+    data?: { reference?: string };
+  };
+  let payload: WebhookPayload;
+  try {
+    payload = JSON.parse(rawBody) as WebhookPayload;
+  } catch {
+    // Signed but unparseable — swallow with 200 so operators can't
+    // probe for signature-oracle behaviour.
+    return jsonResponse({ status: "ok" });
+  }
+
+  if (payload.event !== "charge.success") {
+    return jsonResponse({ status: "ok" });
+  }
+
+  const reference =
+    typeof payload.data?.reference === "string" ? payload.data.reference : "";
+  if (!reference) {
+    return jsonResponse({ status: "ok" });
+  }
+
+  // Double-verify with Paystack's own API. If verification fails,
+  // still return 200 — don't reveal whether the reference was known
+  // to us or not.
+  const verified = await verifyTransaction(reference, env);
+  if (!verified) {
+    return jsonResponse({ status: "ok" });
+  }
+
+  try {
+    await markPaid(env.DB, reference, reference);
+  } catch {
+    // Even a DB failure returns 200 — Paystack retries on non-2xx,
+    // so we'd rather absorb a transient blip and let the client
+    // re-redeem on return. Alternative (return 500) risks a loop
+    // of retries against a durable failure.
+  }
+  return jsonResponse({ status: "ok" });
 }
 
 async function handlePaymentInitiate(request: Request, env: Env): Promise<Response> {
