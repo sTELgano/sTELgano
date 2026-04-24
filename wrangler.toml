@@ -1,11 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# Cloudflare Pages configuration for sTELgano v2.
+# Cloudflare Workers + Assets configuration for sTELgano v2.
 #
-# Pages serves the contents of `public/` as static assets and routes
-# dynamic requests through Pages Functions in `functions/`. The DO
-# class lives under `src/` and is re-exported from one of the function
-# files so the Pages bundler picks it up.
+# We started this migration on Cloudflare Pages (commit bf05903 flipped
+# to Pages from an initial Workers + Assets skeleton), then discovered
+# Pages' file-based functions routing silently dropped the RoomDO
+# export and pushed us into Pages Advanced Mode (one `_worker.ts` at
+# the root — functionally identical to a Workers script). At that
+# point the only thing Pages was still doing for us was the
+# git-integrated build + per-branch previews; everything else (ASSETS
+# binding, DOs, D1, WebSocket upgrade) is native Workers. We flipped
+# back to Workers + Assets so the mental model matches what the code
+# actually is, and picked up version-based rollouts / instant rollback
+# as a bonus. GitHub Actions (.github/workflows/deploy.yml) replaces
+# the Pages git integration.
 #
 # The v1 (Phoenix/Elixir) deployment lives on `main` and is unaffected
 # by anything in this file.
@@ -13,9 +21,22 @@
 # See docs/MIGRATION.md for the broader architecture record.
 
 name = "stelgano"
+main = "./_worker.ts"
 compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "./public"
+
+# Static assets — public/ is the built output of scripts/build-html.mjs
+# plus the esbuild/tailwind bundles in public/assets/. Wrangler uploads
+# the whole tree on deploy.
+#
+# run_worker_first = true routes every request through the Worker so
+# the security-headers middleware wraps static assets too. Without
+# this, assets would bypass the Worker and ship with no CSP / HSTS /
+# X-Frame-Options headers — defeating Phase 8's entire purpose.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
 
 # Durable Object: one instance per room_hash. Single-threaded execution
 # enforces the N=1 invariant by construction. Hibernatable WebSockets
@@ -39,26 +60,17 @@ database_name = "stelgano"
 database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
 migrations_dir = "migrations"
 
-# Observability: Pages Functions inherit Workers Logs. Default sampling
-# is 1.0 at low volumes — no third-party telemetry, keeps the
-# server-blindness invariant.
+# Observability: Workers Logs, no third-party telemetry.
 [observability]
 enabled = true
 head_sampling_rate = 1.0
 
 # Production environment variables. Secrets (PAYSTACK_*, ADMIN_PASSWORD)
-# are set via `wrangler pages secret put`, never committed.
+# are set via `wrangler secret put`, never committed.
 [vars]
 PHX_HOST = "set-at-deploy-time.example"
 PAYMENT_CURRENCY = "USD"
 PRICE_CENTS = "200"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
-MONETIZATION_ENABLED = "false"
-
-# Preview environment — Pages auto-creates one per non-production branch
-# when connected to the GitHub repo. Vars here apply to those preview
-# deploys; secrets are still set via `wrangler pages secret put --env preview`.
-[env.preview.vars]
-PHX_HOST = "preview.example"
 MONETIZATION_ENABLED = "false"

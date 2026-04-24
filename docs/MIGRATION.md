@@ -179,15 +179,15 @@ git push origin v1-elixir-cutover
 git checkout main
 git rm -rf .
 git checkout v2-cloudflare -- .
-git commit -m "Migrate to Cloudflare Pages + Durable Objects + D1
+git commit -m "Migrate to Cloudflare Workers + Assets + Durable Objects + D1
 
 Replaces the Phoenix/Elixir implementation. The previous tree is preserved
 on the v1-elixir branch and tagged at v1-elixir-cutover for archival and
 AGPL forks.
 
 Architecture:
-- Cloudflare Pages with file-routed Functions (no framework)
-- Static pages served from public/ by the Pages CDN edge
+- Cloudflare Workers + Assets (no framework, no Pages)
+- Static pages served from public/ via the ASSETS binding
 - Durable Object per room_hash (single-threaded N=1 enforcement)
 - D1 for aggregate metrics + extension tokens
 - DO alarms replace Oban TTL sweep
@@ -328,106 +328,124 @@ TypeScript code and may not realise the Elixir version exists at all.
 
 ## New architecture
 
-### Why Pages and not Workers + Assets
+### Why Workers + Assets (and not Pages)
 
 Cloudflare offers two ways to ship this kind of app:
 
-- **Workers + the `[assets]` binding** — one Worker that does everything,
-  with static files served by an asset binding.
+- **Workers + the `[assets]` binding** — one Worker that does
+  everything, with static files served by an asset binding from the
+  same deployment.
 - **Cloudflare Pages** — Pages serves `public/` natively, with dynamic
-  routes either as file-based functions in `functions/` (the standard
-  shape) or via a single `_worker.ts` at the project root ("Advanced
-  Mode").
+  routes either as file-based functions in `functions/` or via a
+  single `_worker.ts` at the project root ("Advanced Mode").
 
-For sTELgano specifically, **Pages wins on three concrete fronts**:
+We started on Workers + Assets (Phase 1 skeleton), flipped to Pages
+after an exploration about which product fit better, hit a DO-export
+bug with Pages' file-based routing (next section), moved to Pages
+Advanced Mode as a workaround, and then flipped back to Workers +
+Assets once it was clear we were using **zero Pages-specific
+features** — Advanced Mode is, functionally, a Worker script that
+Pages happens to host. The four commits telling this story:
+`fbeae33` (Workers skeleton), `bf05903` (flip to Pages), `17e957c`
+(Advanced Mode after the file-based bug), and the flip recorded in
+this revision of the doc.
 
-1. **Free unlimited bandwidth.** Pages doesn't meter egress at any
-   volume. Workers charges per request after 100k/day (free) or per
-   $5/mo plan. A content-heavy site (18+ static pages plus a blog)
-   benefits noticeably at scale.
-2. **Auto preview deployments per PR / branch.** Connect the repo,
-   every push gets a `*.pages.dev` URL. Replicating this on Workers
-   means rolling your own GHA workflow.
-3. **"Mostly static" is the happy path.** sTELgano is overwhelmingly
-   static content with one interactive route (`/chat`). That's exactly
-   the shape Pages was built for.
+Why the final landing is Workers + Assets:
 
-What we give up vs. Workers + Assets:
+1. **Mental-model clarity.** `_worker.ts` + the `[assets]` binding is
+   literally a Worker. Keeping it on Pages meant calling the same
+   thing by two names and explaining Advanced Mode in every file
+   header.
+2. **Deploy-time controls.** `wrangler deploy` supports version
+   uploads, gradual rollouts, and instant rollback. For a
+   privacy-focused app a bad deploy is worse than a delayed one, so
+   those matter.
+3. **Cloudflare's forward path.** Workers + Assets is where the
+   platform is being invested in; Pages remains supported but
+   feature-static.
+4. **We already tripped a Pages-specific bug once.** Less attack
+   surface for unknown Pages quirks in the future.
 
-- **Cron Triggers** — Pages added them later; less battle-tested than
-  Workers. Acceptable risk for our daily token-cleanup job.
-- **A single deployable unit feels slightly different** — Pages
-  Functions run in the same isolate model as Workers, but the project
-  shape (`public/` + `functions/` + `src/` + `wrangler.toml`) is its
-  own convention. Worth being aware of when reading docs.
+What we gave up vs. Pages:
 
-What we do **not** give up:
+- **Native git-integrated build + preview URLs.** Replaced by
+  `.github/workflows/deploy.yml` (~70 lines, runs tests + deploys
+  via `cloudflare/wrangler-action`). One-time setup, not ongoing ops.
+- **Metered bandwidth ceiling.** Workers' paid plan has a generous
+  bandwidth allowance; Pages has none. Unlikely to matter at our
+  scale, and if it does, we re-evaluate.
 
-- Pages supports every binding Workers do (DO, D1, KV, R2, Queues,
-  Cron, Vectorize, AI, etc.).
-- Pages is framework-free. No Next/Astro/SvelteKit required despite
-  what the dashboard's "framework preset" wizard implies. We use the
-  **None** preset.
+What we did **not** give up: every binding (DO, D1, KV, R2, Queues,
+Cron, AI), the `ASSETS` fall-through, `_worker.ts` as the entry, the
+`public/` layout, the `wrangler.toml` bindings — all unchanged. The
+flip touched `wrangler.toml` (`main` + `[assets]` instead of
+`pages_build_output_dir`), `package.json` (`wrangler dev` /
+`wrangler deploy` instead of the `pages` subcommands), and the
+deploy workflow.
 
-### Why Advanced Mode (`_worker.ts`) and not file-based `functions/`
+### Why file-based `functions/` didn't work (historical)
 
-We initially used `functions/_middleware.ts` + `functions/room/[roomHash]/ws.ts`
-(Pages' file-based routing). The DO class (`RoomDO`) was re-exported
-from the middleware so `[[durable_objects.bindings]]` in `wrangler.toml`
-could resolve `class_name = "RoomDO"`.
+The Pages Advanced Mode detour happened because file-based routing
+broke first. Keeping the note here because anyone reading this in
+git history will want to know what we tried:
+
+We initially used `functions/_middleware.ts` +
+`functions/room/[roomHash]/ws.ts` (Pages' file-based routing). The
+DO class (`RoomDO`) was re-exported from the middleware so
+`[[durable_objects.bindings]]` in `wrangler.toml` could resolve
+`class_name = "RoomDO"`.
 
 Empirically that path failed: Pages' bundler does not reliably hoist
 named exports from individual function files to the bundled
 `functionsWorker` entry, and `wrangler pages dev` died with:
 
-> Your Worker depends on the following Durable Objects, which are not
-> exported in your entrypoint file: RoomDO. You should export these
-> objects from your entrypoint, …functionsWorker-*.mjs.
+> Your Worker depends on the following Durable Objects, which are
+> not exported in your entrypoint file: RoomDO. You should export
+> these objects from your entrypoint, …functionsWorker-*.mjs.
 
-Re-exporting from `_middleware.ts` (the documented workaround) did not
-fix it on wrangler 4.84.1.
+Re-exporting from `_middleware.ts` (the documented workaround) did
+not fix it on wrangler 4.84.1. The Advanced Mode workaround avoided
+the bug but we are no longer on Pages at all — so the bug is
+irrelevant to the current build.
 
-**Advanced Mode** (`_worker.ts` at the project root) collapses everything
-into a single Worker entry where the DO export and fetch handler
-coexist by construction. The bundler can't lose the export.
+### Build + deploy flow
 
-Trade-off: we lose Pages' file-based routing convention. For our small
-route surface (~10 routes total) the manual switch/match in `_worker.ts`
-is fine — at the scale where file-based routing earns its keep,
-we'd be staring at a different scaling problem first.
-
-Build flow with Advanced Mode:
-- `_worker.ts` lives at the project root (TypeScript)
-- `npm run build:worker` (esbuild) compiles it to `public/_worker.js`
-- `wrangler pages dev public` finds `public/_worker.js` and uses it
-- On deploy, the Pages "Build command" runs `npm run build`, then
-  `wrangler pages deploy public` ships the directory
-
-Per Pages convention, when `_worker.js` exists in the build output,
-the `functions/` directory is ignored — they're mutually exclusive.
+- `_worker.ts` at the project root is the Worker entry. `main` in
+  `wrangler.toml` points at it; wrangler bundles on `wrangler dev` /
+  `wrangler deploy` (no separate `build:worker` step).
+- `npm run build` produces the static assets under `public/`: HTML
+  (from `scripts/build-html.mjs`), icon sprite, CSP hashes, the
+  client chat bundle, the PBKDF2 worker, and Tailwind CSS.
+- `wrangler dev` runs the Worker locally with D1 + DO emulation and
+  serves `public/` via the ASSETS binding; `.dev.vars` supplies
+  secrets.
+- `wrangler deploy` uploads a new Worker version and promotes it to
+  production. Unlike Pages, there is no automatic per-branch preview
+  URL — GitHub Actions handles CI; manual previews can be produced
+  via `wrangler versions upload` if/when we need them.
 
 ### Stack at a glance
 
 | Layer | v1 (Elixir) | v2 (Cloudflare) |
 |---|---|---|
-| Hosting product | DigitalOcean droplet | Cloudflare Pages (with Functions) |
-| Routing | Phoenix Router | Single `_worker.ts` (Pages Advanced Mode) |
+| Hosting product | DigitalOcean droplet | Cloudflare Workers + Assets |
+| Routing | Phoenix Router | Single `_worker.ts` (switch/match) |
 | Real-time | Phoenix Channels | Hibernatable WebSockets on Durable Objects |
 | Per-room state | Postgres rows + UNIQUE index | One Durable Object per `room_hash` |
 | Aggregate metrics | Postgres tables | D1 (SQLite at the edge) |
 | Payment tokens | Postgres table | D1 table |
 | TTL expiry | Oban hourly sweep job | DO alarms (per-room, exact-time) |
-| Background jobs | Oban | Pages Cron Triggers + DO alarms |
-| Static assets | Phoenix `Plug.Static` from droplet | Pages CDN serving `public/` (free unlimited bandwidth) |
+| Background jobs | Oban | Workers Cron Triggers + DO alarms |
+| Static assets | Phoenix `Plug.Static` from droplet | Workers ASSETS binding serving `public/` |
 | Client UI | LiveView state machine + JS hooks | Static HTML shell + vanilla TS |
 | Crypto | Web Crypto API in `elixir/assets/js/crypto/anon.js` | **Same code, ported unchanged** |
 | Rate limiting | PlugAttack (ETS) | Cloudflare native rate-limiting rules |
 | Security headers / CSP | `SecurityHeaders` plug + nonce plug | Header injection in `_worker.ts` (SHA-256 pinning for the inline shell script — see Phase 8 notes) |
-| Admin dashboard | LiveView + HTTP Basic Auth | Pages Function + HTML + D1 query |
+| Admin dashboard | LiveView + HTTP Basic Auth | Worker HTML route + D1 query |
 | Payment provider | `elixir/lib/stelgano/monetization/providers/paystack.ex` | Ported TypeScript adapter, same protocol |
-| Migrations | `Stelgano.Release.migrate/0` | `wrangler d1 migrations apply` |
-| Deploy | scp tarball + systemd restart | `wrangler pages deploy` (or git-driven auto-deploy) |
-| Preview environments | None | One per non-production branch (free) |
+| Migrations | `Stelgano.Release.migrate/0` | `wrangler d1 migrations apply` (run by GH Actions on deploy) |
+| Deploy | scp tarball + systemd restart | `wrangler deploy` via GitHub Actions |
+| Preview environments | None | On-demand via `wrangler versions upload` |
 
 ### Per-room Durable Object
 
@@ -625,8 +643,10 @@ v1's ETS-backed PlugAttack rules (20/IP/min on /admin, 30/IP/min on
 WebSocket upgrades, 200/IP/min globally) don't port directly — there's
 no cross-request in-memory store in Workers. Two options v2 can use:
 
-1. **Cloudflare dashboard Rate Limiting Rules** (recommended). Go to
-   the Pages project → Security → WAF → Rate Limiting Rules and add:
+1. **Cloudflare dashboard Rate Limiting Rules** (recommended). In the
+   CF dashboard, route the Worker's custom domain through a zone,
+   then go to the zone → Security → WAF → Rate Limiting Rules and
+   add:
    - `http.request.uri.path eq "/admin"` → 20 requests / minute / IP, block
    - `http.request.uri.path matches "^/room/[a-f0-9]{64}/ws$"` →
      30 requests / minute / IP, block
@@ -715,11 +735,12 @@ Suggested order of work on the `v2-cloudflare` branch, each phase ending in
 a commit that compiles and runs (even if incomplete):
 
 1. **Skeleton.** ✅ _done 2026-04-24 (fbeae33)._ `wrangler.toml`,
-   `package.json`, `tsconfig.json`, a `_worker.ts` stub at the project
-   root (Pages Advanced Mode — see the architecture section for why
-   we skipped `functions/`), the Pages project layout (`public/` for
-   static, `src/` for shared code). Confirm `wrangler pages dev public`
-   returns 200 at `/healthz` and serves `public/index.html` at `/`.
+   `package.json`, `tsconfig.json`, a `_worker.ts` stub at the
+   project root, the project layout (`public/` for static, `src/`
+   for shared code). Confirm `wrangler dev` returns 200 at
+   `/healthz` and serves `public/index.html` at `/`. (Originally
+   shipped on Pages; the flip back to Workers + Assets is
+   documented in the architecture section above.)
 2. **One DO end-to-end.** ✅ _done 2026-04-24 (f2c8fbb)._ Implement
    `RoomDO` in `src/room.ts` with `join`, `send_message`, `read_receipt`.
    Re-export the class from `_worker.ts` so the bundler keeps it.
@@ -731,9 +752,10 @@ a commit that compiles and runs (even if incomplete):
    `wrangler d1 migrations apply stelgano`.
 4. **Static pages.** ✅ _done 2026-04-24 (e885793 → b7b160c)._ Port
    `/`, `/security`, `/privacy`, `/terms`, `/about`, `/spec`, `/blog`
-   as static HTML files in `public/`. Pages serves them directly with
-   no Function involved. Same Tailwind output. (Split into 4a
-   scaffolding, 4b icons, 4c marketing pages, 4d blog.)
+   as static HTML files in `public/`. Served via the ASSETS binding
+   with the Worker wrapping responses in security headers. Same
+   Tailwind output. (Split into 4a scaffolding, 4b icons, 4c
+   marketing pages, 4d blog.)
 5. **Chat UI.** ✅ _done 2026-04-24 (70e9fbb → bea46e7)._ Vanilla TS
    state machine, port the LiveView state transitions. Wire to the DO
    via WebSocket. The chat UI was redone once (bea46e7) after the
@@ -765,13 +787,20 @@ a commit that compiles and runs (even if incomplete):
    overwrite, read-gated edits, lockout math), and the D1 lib
    modules (extension_tokens lifecycle, country/daily UPSERT
    counters). D1 migrations apply per test realm via a setup file.
-10. **Smoke test on `*.pages.dev`.** Connect the GitHub repo to the Pages
-    project so every push to `v2-cloudflare` (and per-PR previews) builds
-    and deploys to a `*.pages.dev` URL automatically. Verify end-to-end
-    on a preview deploy before touching the production domain.
-11. **Cutover.** Run the cutover commands above. Swap DNS to the Pages
-    project. Drain v1 traffic. Archive the droplet (don't terminate it
-    for ~30 days in case rollback is needed).
+10. **Smoke test on `workers.dev`.** Add GitHub secrets
+    (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), create the D1
+    database (`wrangler d1 create stelgano`, paste the ID into
+    `wrangler.toml`), and let `.github/workflows/deploy.yml` run
+    against a throwaway branch merged into `main` (or flip the `if:`
+    in the workflow to include `v2-cloudflare` for a one-off
+    pre-cutover deploy). The worker comes up at
+    `stelgano.<account>.workers.dev` by default. Smoke-test
+    end-to-end there before touching the production domain.
+11. **Cutover.** Run the cutover commands above. Point the
+    production custom domain at the Worker (Workers routes or a
+    custom domain attached to the Worker). Drain v1 traffic.
+    Archive the droplet (don't terminate it for ~30 days in case
+    rollback is needed).
 
 ---
 

@@ -1,28 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Cloudflare Pages — Advanced Mode entry.
+// Cloudflare Workers + Assets — single-file entry.
 //
-// Why Advanced Mode and not file-based functions/:
+// `main = "./_worker.ts"` in wrangler.toml points here; wrangler
+// bundles this module (and everything it imports from src/) on deploy.
+// The RoomDO class export at the bottom of the file is how the
+// [[durable_objects.bindings]] in wrangler.toml resolves
+// `class_name = "RoomDO"`.
 //
-// We initially used functions/_middleware.ts + functions/room/[roomHash]/ws.ts
-// (Pages' file-based routing). The DO class (RoomDO) was re-exported from
-// the middleware so the [[durable_objects.bindings]] in wrangler.toml could
-// resolve `class_name = "RoomDO"`. That path failed: Pages' bundler does
-// not reliably hoist named exports from individual function files to the
-// bundled `functionsWorker` entry, and `wrangler pages dev` died with
-//   "Your Worker depends on the following Durable Objects, which are not
-//    exported in your entrypoint file: RoomDO."
+// `[assets] run_worker_first = true` means every request lands on this
+// fetch handler first; env.ASSETS.fetch(request) at the bottom of
+// dispatch() is the fall-through to static files in public/. That
+// ordering is what lets applySecurityHeaders() wrap static asset
+// responses with CSP / HSTS / X-Frame-Options — switch the flag off
+// and static assets would bypass the Worker entirely, defeating
+// Phase 8.
 //
-// Advanced Mode collapses everything into this single file: DO export +
-// fetch handler + asset fallthrough live together, so the bundler can't
-// lose the export. Trade-off is the loss of file-based routing — fine
-// for our small route surface (~10 routes total). Pages still serves
-// public/ as static assets via env.ASSETS; only dynamic dispatch
-// changes.
-//
-// docs/MIGRATION.md captures this decision under "Why Pages and not
-// Workers + Assets" → revised after the empirical failure of file-based
-// routing with DOs.
+// Historical note: we started on Cloudflare Pages (initially
+// file-based functions, then Pages Advanced Mode), then flipped to
+// Workers + Assets once it became clear we were using zero
+// Pages-specific features. docs/MIGRATION.md → "Why Workers + Assets
+// (and not Pages)" captures the reasoning.
 
 import type { Env } from "./src/env";
 import { INLINE_SCRIPT_HASHES } from "./src/csp_hashes";
@@ -136,10 +134,10 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
       return handleAdminDashboard(request, env);
     }
 
-    // Static assets fallthrough — Pages' ASSETS binding handles 404s
-    // for missing files automatically (single-page-application mode is
-    // off, so a missing /foo gets a normal 404 page rather than
-    // index.html).
+    // Static assets fall-through — the ASSETS binding serves files
+    // from public/. A missing /foo returns the binding's default 404
+    // (not index.html) since wrangler.toml doesn't opt in to
+    // not_found_handling = "single-page-application".
     return env.ASSETS.fetch(request);
 }
 
