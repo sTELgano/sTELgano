@@ -16,11 +16,11 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["test/**/*.test.ts"],
+    // Only the pure-function tests. Worker/DO runtime tests live
+    // under test/worker/** and are handled by
+    // vitest.workers.config.ts via the workspace root.
+    include: ["test/crypto/**/*.test.ts", "test/lib/**/*.test.ts", "test/client/**/*.test.ts"],
     globals: false,
-    // Most tests target web crypto / fetch / TextEncoder — all
-    // available in Node 22. Explicitly pick jsdom only for
-    // state-machine tests that touch sessionStorage.
     environment: "node",
     environmentMatchGlobs: [["test/client/**/*.test.ts", "jsdom"]],
   },
