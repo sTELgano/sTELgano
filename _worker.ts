@@ -25,6 +25,8 @@
 // routing with DOs.
 
 import type { Env } from "./src/env";
+import { list as listCountryMetrics, type CountryRow } from "./src/lib/country_metrics";
+import { listRecent as listDailyRecent, type DailyRow } from "./src/lib/daily_metrics";
 import { createPending } from "./src/lib/extension_tokens";
 export { RoomDO } from "./src/room";
 
@@ -76,6 +78,13 @@ export default {
       return handlePaymentInitiate(request, env);
     }
 
+    // GET /admin — aggregate metrics dashboard. HTTP Basic Auth
+    // against ADMIN_USERNAME / ADMIN_PASSWORD. Shows only counts —
+    // never individual hashes, messages, or ciphertext.
+    if (url.pathname === "/admin" && request.method === "GET") {
+      return handleAdminDashboard(request, env);
+    }
+
     // Static assets fallthrough — Pages' ASSETS binding handles 404s
     // for missing files automatically (single-page-application mode is
     // off, so a missing /foo gets a normal 404 page rather than
@@ -83,6 +92,304 @@ export default {
     return env.ASSETS.fetch(request);
   },
 } satisfies ExportedHandler<Env>;
+
+// ---------------------------------------------------------------------------
+// Admin dashboard
+// ---------------------------------------------------------------------------
+
+/** Constant-time-ish string compare to avoid leaking the expected
+ *  password length via response-time differences. Not cryptographic —
+ *  just defence in depth against trivial timing oracles. */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+function checkBasicAuth(request: Request, env: Env): boolean {
+  if (!env.ADMIN_PASSWORD) return false;
+  const auth = request.headers.get("authorization");
+  if (!auth || !auth.startsWith("Basic ")) return false;
+  let decoded: string;
+  try {
+    decoded = atob(auth.slice(6));
+  } catch {
+    return false;
+  }
+  const sep = decoded.indexOf(":");
+  if (sep < 0) return false;
+  const user = decoded.slice(0, sep);
+  const pass = decoded.slice(sep + 1);
+  const expectedUser = env.ADMIN_USERNAME || "admin";
+  return (
+    timingSafeEqual(user, expectedUser) &&
+    timingSafeEqual(pass, env.ADMIN_PASSWORD)
+  );
+}
+
+function basicAuthChallenge(): Response {
+  return new Response("Unauthorized", {
+    status: 401,
+    headers: {
+      "www-authenticate": 'Basic realm="stelgano admin", charset="UTF-8"',
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function handleAdminDashboard(request: Request, env: Env): Promise<Response> {
+  if (!checkBasicAuth(request, env)) return basicAuthChallenge();
+
+  let country: CountryRow[] = [];
+  let daily: DailyRow[] = [];
+  try {
+    [country, daily] = await Promise.all([
+      listCountryMetrics(env.DB),
+      listDailyRecent(env.DB, 30),
+    ]);
+  } catch {
+    // D1 unavailable or schema not migrated — show an empty
+    // dashboard rather than 500.
+  }
+
+  // Derive the headline counters from what v2 can actually query.
+  // v1 also showed active_rooms + messages_today via full-table
+  // Postgres scans; v2's per-room state is DO-local and isn't
+  // cheaply aggregated, so those tiles show N/A with a clear note.
+  const today = new Date().toISOString().slice(0, 10);
+  const todayRow = daily.find((d) => d.day === today);
+  const newToday = todayRow ? todayRow.free_new + todayRow.paid_new : 0;
+  const sum30 = daily.reduce((a, r) => a + r.free_new + r.paid_new, 0);
+
+  const html = renderAdminHtml({
+    updated: new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC",
+    newToday,
+    sum30,
+    daily,
+    country,
+  });
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function renderAdminHtml(d: {
+  updated: string;
+  newToday: number;
+  sum30: number;
+  daily: DailyRow[];
+  country: CountryRow[];
+}): string {
+  const dailyRows = d.daily.length
+    ? d.daily
+        .map(
+          (r) => `
+          <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.day)}</td>
+            <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_new}</td>
+            <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_new}</td>
+            <td class="py-3 pr-8 text-right font-mono text-slate-400">${r.free_expired}</td>
+            <td class="py-3 text-right font-mono text-slate-400">${r.paid_expired}</td>
+          </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="5" class="py-4 text-sm text-slate-500 italic">No daily data yet.</td></tr>`;
+
+  const countryRows = d.country.length
+    ? d.country
+        .map(
+          (r) => `
+          <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.country_code)}</td>
+            <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_rooms}</td>
+            <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_rooms}</td>
+            <td class="py-3 text-right font-mono text-slate-400">${r.free_rooms + r.paid_rooms}</td>
+          </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="py-4 text-sm text-slate-500 italic">No country data yet.</td></tr>`;
+
+  const iconSvg = (name: string, cls = "size-4") =>
+    `<svg class="${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
+
+  return `<!DOCTYPE html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Admin — sTELgano</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body class="antialiased">
+  <div class="bg-grid-container">
+    <div class="bg-grid"></div>
+    <div class="noise-overlay"></div>
+  </div>
+
+  <main class="min-h-dvh w-full overflow-y-auto">
+    <div class="max-w-4xl mx-auto space-y-12 py-12 animate-in lg:pb-40">
+      <!-- Header -->
+      <div class="flex flex-col md:flex-row items-center justify-between gap-8 pb-8 border-b border-white/5 px-4">
+        <div class="text-center md:text-left space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.3em] mb-2">
+            ${iconSvg("terminal", "size-3")} System Status
+          </div>
+          <h1 class="text-4xl sm:text-6xl font-extrabold text-white font-display tracking-tighter uppercase leading-[0.9] sm:leading-none">
+            Admin <span class="text-gradient">Dashboard.</span>
+          </h1>
+          <p class="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest sm:tracking-[0.5em] leading-relaxed">
+            Total Stats Only · No Private Data ·
+            <span class="text-primary italic">Updated ${escapeAttr(d.updated)}</span>
+          </p>
+        </div>
+
+        <form method="get" action="/admin">
+          <button type="submit" class="w-full sm:w-auto btn-primary py-4 px-10 text-sm flex items-center justify-center gap-3 group">
+            ${iconSvg("refresh_cw", "size-5 group-hover:rotate-180 transition-transform duration-700")}
+            Refresh Stats
+          </button>
+        </form>
+      </div>
+
+      <!-- Metric cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        ${adminMetricCard("New Chats Today", d.newToday, "Last 24h", "plus_circle", true)}
+        ${adminMetricCard("Total (30d)", d.sum30, "New rooms, past 30d", "calendar")}
+        ${adminMetricCard("Active Chats", "—", "DO-local; not aggregated", "radio")}
+        ${adminMetricCard("Messages Today", "—", "DO-local; not aggregated", "message_circle")}
+      </div>
+
+      <!-- Per-day breakdown -->
+      <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
+        <div class="flex items-center gap-3 text-slate-300">
+          ${iconSvg("calendar", "size-5 text-primary")}
+          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Daily Breakdown · Last 30 Days</h4>
+        </div>
+        <p class="text-xs text-slate-500 font-medium leading-relaxed">
+          New free / new paid / expired free / expired paid counters per UTC day, across all countries. Expiries are not country-scoped because individual room records do not carry country metadata (by design).
+        </p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                <th class="py-3 pr-8">Day (UTC)</th>
+                <th class="py-3 pr-8 text-right">New free</th>
+                <th class="py-3 pr-8 text-right">New paid</th>
+                <th class="py-3 pr-8 text-right">Expired free</th>
+                <th class="py-3 text-right">Expired paid</th>
+              </tr>
+            </thead>
+            <tbody>${dailyRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Per-country breakdown -->
+      <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
+        <div class="flex items-center gap-3 text-slate-300">
+          ${iconSvg("globe", "size-5 text-primary")}
+          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Rooms by Country · Aggregate Only</h4>
+        </div>
+        <p class="text-xs text-slate-500 font-medium leading-relaxed">
+          Counters incremented on room creation and paid-tier upgrade. The country is never stored alongside any individual room record — these rows can answer "how many rooms from Kenya?" but never "which rooms from Kenya?".
+        </p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                <th class="py-3 pr-8">Country</th>
+                <th class="py-3 pr-8 text-right">Free rooms</th>
+                <th class="py-3 pr-8 text-right">Paid rooms</th>
+                <th class="py-3 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>${countryRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Admin notes -->
+      <div class="glass-card p-6 sm:p-10 space-y-8 border-white/5 bg-slate-950/40 relative overflow-hidden group mx-4 sm:mx-0">
+        <div class="flex items-center gap-3 text-slate-300 relative z-10">
+          ${iconSvg("help_circle", "size-5 text-primary")}
+          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Admin Information</h4>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 relative z-10">
+          ${[
+            "All values are counts derived from server data.",
+            "No private chat contents, keys, or IDs are shown.",
+            "Active rooms and message counts are DO-local in v2 and not cheaply aggregable. Tiles show —.",
+            "Country and daily counters are incremented on room creation / paid upgrade / expiry.",
+            "Refreshing the page hits GET /admin again — no client-side polling.",
+            "Access gated by ADMIN_USERNAME / ADMIN_PASSWORD env vars on Cloudflare Pages.",
+          ]
+            .map(
+              (note) => `
+              <div class="flex items-start gap-4">
+                <div class="size-1 rounded-full bg-primary/40 mt-1.5"></div>
+                <span class="text-xs text-slate-500 font-medium leading-relaxed">${escapeAttr(note)}</span>
+              </div>`,
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
+`;
+}
+
+function adminMetricCard(
+  label: string,
+  value: number | string,
+  note: string,
+  icon: string,
+  active = false,
+): string {
+  const activeDot = active
+    ? '<div class="size-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]"></div>'
+    : "";
+  return `
+    <div class="glass-card-premium p-6 sm:p-10 space-y-8 group hover:border-primary/50 transition-all duration-500 mx-4 sm:mx-0">
+      <div class="flex items-center justify-between">
+        <div class="size-12 sm:size-14 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all">
+          <svg class="size-6 sm:size-7 text-primary/40 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#${icon}"/></svg>
+        </div>
+        <div class="flex flex-col items-end gap-1">
+          <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-600">${escapeAttr(note)}</span>
+          ${activeDot}
+        </div>
+      </div>
+      <div class="space-y-3">
+        <div class="text-4xl sm:text-6xl font-mono font-black text-white group-hover:scale-110 transition-transform origin-left tracking-tighter">
+          ${escapeAttr(String(value))}
+        </div>
+        <div class="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-slate-500 group-hover:text-slate-400 transition-colors">
+          ${escapeAttr(label)}
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 async function handlePaymentInitiate(request: Request, env: Env): Promise<Response> {
   if (env.MONETIZATION_ENABLED !== "true") {
