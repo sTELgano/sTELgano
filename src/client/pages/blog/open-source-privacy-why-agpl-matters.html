@@ -1,0 +1,154 @@
+<!--
+  title: Open Source Privacy: Why AGPL-3.0 Matters — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <div class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#git_branch"/></svg>
+      Open Source
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-tight">
+      Open Source Privacy: Why AGPL-3.0 Matters
+    </h1>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-03-12</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 5 min read</span>
+    </div>
+  </div>
+
+  <div class="space-y-12 animate-in stagger-4">
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Trust Problem</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#help_circle"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>How do you trust privacy software? You <span class="text-white">cannot verify closed-source claims</span>. The company says they do not log your data. You just have to believe them.</p>
+          <p>Privacy policies are legal documents, not technical guarantees. They can be changed, reinterpreted, or quietly ignored. The only way to truly verify a privacy claim is to read the code that implements it.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Open Source as Verification</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#search"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>With open source, <span class="text-white">anyone can read the code</span>. Security researchers can audit the cryptographic implementation. Developers can verify the server-side logic. Users can compile from source and run a binary they built themselves.</p>
+          <p>This is not about trust &mdash; it is about <span class="text-primary font-semibold">verification</span>. We do not ask you to trust us. We ask you to read the code.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Why AGPL-3.0 Specifically?</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#scale"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>The <span class="text-white">AGPL (Affero General Public License)</span> has a key provision that MIT and Apache licences lack: if you modify the code and run it as a network service, you must publish your modifications.</p>
+          <p>This prevents a company from taking sTELgano, <span class="text-primary font-semibold">adding backdoors</span>, and offering it as a closed-source service. With MIT or Apache, they could do exactly that &mdash; take the code, modify it silently, and deploy it without anyone knowing what changed.</p>
+          <p>The AGPL closes the &ldquo;SaaS loophole&rdquo; that makes other open-source licences insufficient for privacy-critical software.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Self-Hosting Guarantee</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#server"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>You can <span class="text-white">always run your own instance</span>. The AGPL ensures that any improvements made to self-hosted versions benefit everyone. If someone fixes a bug or adds a feature to their self-hosted deployment, the community gets access to that improvement.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Your Rights and Responsibilities</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div class="glass-card p-8 space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">What You Can Do</h3>
+          <ul class="space-y-3 text-slate-400 text-sm leading-relaxed">
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Fork the code and run your own instance</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Audit every line of the cryptographic implementation</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Modify the UI, translate it, add features</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Contribute improvements back to the project</span></li>
+          </ul>
+        </div>
+
+        <div class="glass-card p-8 space-y-6 group hover:border-red-500/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20">
+            <svg class="size-5 text-red-400" aria-hidden="true"><use href="/icons.svg#x"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">What You Cannot Do</h3>
+          <ul class="space-y-3 text-slate-400 text-sm leading-relaxed">
+            <li class="flex items-start gap-2"><svg class="size-4 text-red-400 shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Take the code, add a backdoor, and distribute it without publishing the backdoor</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-red-400 shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Run a modified version as a service without sharing your changes</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-red-400 shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Strip the AGPL licence and relicence under a permissive licence</span></li>
+          </ul>
+          <p class="text-slate-500 text-xs font-medium">That is the protection AGPL provides.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Transparency as Security</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="premium_card border-primary/10 p-6 sm:p-10 md:p-12 space-y-6">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#eye"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>Every commit is public. Every design decision is documented. Every cryptographic constant is visible in the source code.</p>
+          <p>The security of sTELgano does not depend on obscurity &mdash; it depends on <span class="text-primary font-semibold">mathematics</span>. Even if an attacker reads every line of our code, the encryption remains unbreakable without the correct credentials. That is the definition of a properly designed cryptographic system.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="space-y-8 animate-in stagger-5">
+    <div class="flex items-center justify-between pt-8 border-t border-white/5">
+      <a href="/blog" class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+        Back to Blog
+      </a>
+    </div>
+
+    <div class="text-center space-y-6">
+      <p class="text-slate-500 text-sm font-medium">Verify the code yourself. Then try it.</p>
+      <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        Start a Private Chat
+        <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+  </div>
+</article>

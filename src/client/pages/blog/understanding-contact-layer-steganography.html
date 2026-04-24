@@ -1,0 +1,223 @@
+<!--
+  title: Understanding Contact-Layer Steganography — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <header class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#cpu"/></svg>
+      Technical
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+      Understanding <span class="text-gradient">Contact-Layer</span> Steganography.
+    </h1>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-10</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 8 min read</span>
+    </div>
+  </header>
+
+  <div class="space-y-16 animate-in stagger-4">
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What Is Steganography?</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Steganography is the art of hiding information in plain sight. Unlike cryptography, which makes a message unreadable, steganography makes the message invisible. The goal isn't to protect the content&mdash;it's to hide the fact that content exists at all.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">The practice is ancient. Historical examples include:</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-2">
+            <h4 class="text-sm font-bold text-white font-display">Invisible Ink</h4>
+            <p class="text-xs text-slate-500 leading-relaxed font-medium">Messages written with lemon juice or milk, invisible until heated. Used since ancient Greece through both World Wars.</p>
+          </div>
+          <div class="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-2">
+            <h4 class="text-sm font-bold text-white font-display">Microdots</h4>
+            <p class="text-xs text-slate-500 leading-relaxed font-medium">Photographs shrunk to the size of a period in a sentence. Used extensively in Cold War espionage.</p>
+          </div>
+          <div class="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-2">
+            <h4 class="text-sm font-bold text-white font-display">LSB Encoding</h4>
+            <p class="text-xs text-slate-500 leading-relaxed font-medium">Altering the least significant bits of image pixels to embed hidden data. A digital evolution of the same principle.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Classical Digital Steganography</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Most digital steganography works by hiding data inside a carrier medium&mdash;an image, an audio file, a video. You embed your secret message in the noise floor of a JPEG or the inaudible frequencies of an MP3.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">These techniques work, but they have significant limitations:</p>
+        <ul class="space-y-3">
+          <li class="flex items-start gap-4"><div class="size-1.5 rounded-full bg-slate-500 mt-2 shrink-0"></div><span class="text-slate-400 text-sm leading-relaxed font-medium">They require a carrier file. You need to send an image or audio file, which itself may be suspicious in context.</span></li>
+          <li class="flex items-start gap-4"><div class="size-1.5 rounded-full bg-slate-500 mt-2 shrink-0"></div><span class="text-slate-400 text-sm leading-relaxed font-medium">They're detectable with statistical analysis. Steganalysis tools can identify anomalies in file data.</span></li>
+          <li class="flex items-start gap-4"><div class="size-1.5 rounded-full bg-slate-500 mt-2 shrink-0"></div><span class="text-slate-400 text-sm leading-relaxed font-medium">They have limited capacity. You can only hide so much data before the carrier visibly degrades.</span></li>
+          <li class="flex items-start gap-4"><div class="size-1.5 rounded-full bg-slate-500 mt-2 shrink-0"></div><span class="text-slate-400 text-sm leading-relaxed font-medium">They require specialised software. Both sender and receiver need tools to embed and extract.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">A New Approach: The Contact Layer</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-8 md:p-10 animate-in space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Contact-layer steganography takes a fundamentally different approach. Instead of hiding data inside a file, we hide the communication channel inside a phone contact.</p>
+        <p class="text-slate-300 leading-relaxed font-medium">The carrier isn't a file&mdash;it's a database everyone already has: <span class="text-white font-bold">your phone's contact list.</span></p>
+        <p class="text-slate-400 leading-relaxed font-medium">A randomly generated phone number, saved as a contact, serves as the derivation seed for an encrypted channel. The steg number IS the carrier. It hides in plain sight among hundreds of other contacts, and it's indistinguishable from any of them.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">How It Works Technically</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">The steg number is a random phone number that serves as a cryptographic derivation seed. From this single number, the client derives everything needed for secure communication:</p>
+        <div class="space-y-4">
+          <div class="p-5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
+            <div class="flex items-center gap-3"><span class="font-mono text-sm font-bold text-primary">room_hash</span></div>
+            <div class="font-mono text-xs text-slate-500 bg-white/2 rounded-lg px-3 py-2 border border-white/5">SHA-256(phone + ROOM_SALT)</div>
+            <p class="text-xs text-slate-400 leading-relaxed font-medium">Unique room identity. The server uses this to route messages without knowing the phone number.</p>
+          </div>
+          <div class="p-5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
+            <div class="flex items-center gap-3"><span class="font-mono text-sm font-bold text-primary">access_hash</span></div>
+            <div class="font-mono text-xs text-slate-500 bg-white/2 rounded-lg px-3 py-2 border border-white/5">SHA-256(phone + PIN + ACCESS_SALT)</div>
+            <p class="text-xs text-slate-400 leading-relaxed font-medium">Access control. Proves you have the right PIN without revealing it.</p>
+          </div>
+          <div class="p-5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
+            <div class="flex items-center gap-3"><span class="font-mono text-sm font-bold text-primary">enc_key</span></div>
+            <div class="font-mono text-xs text-slate-500 bg-white/2 rounded-lg px-3 py-2 border border-white/5">PBKDF2(phone, room_id + ENC_SALT, 600K)</div>
+            <p class="text-xs text-slate-400 leading-relaxed font-medium">Encryption key. Derived with 600,000 iterations. Never leaves the browser.</p>
+          </div>
+          <div class="p-5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
+            <div class="flex items-center gap-3"><span class="font-mono text-sm font-bold text-primary">sender_hash</span></div>
+            <div class="font-mono text-xs text-slate-500 bg-white/2 rounded-lg px-3 py-2 border border-white/5">SHA-256(phone + access_hash + room_hash + SENDER_SALT)</div>
+            <p class="text-xs text-slate-400 leading-relaxed font-medium">Sender identity. Different for each user because their PINs (and thus access_hashes) differ.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Why Phone Numbers?</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div class="glass-card p-6 space-y-3 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#globe"/></svg>
+          </div>
+          <h4 class="text-sm font-bold text-white font-display">Universal</h4>
+          <p class="text-xs text-slate-400 leading-relaxed font-medium">Every phone has a contact list. Every person understands phone numbers. No technical barrier to entry.</p>
+        </div>
+        <div class="glass-card p-6 space-y-3 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
+          </div>
+          <h4 class="text-sm font-bold text-white font-display">Unsuspicious</h4>
+          <p class="text-xs text-slate-400 leading-relaxed font-medium">A phone number in a contact list raises zero questions. It's the most ordinary data on any device.</p>
+        </div>
+        <div class="glass-card p-6 space-y-3 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#users"/></svg>
+          </div>
+          <h4 class="text-sm font-bold text-white font-display">Easy to Exchange</h4>
+          <p class="text-xs text-slate-400 leading-relaxed font-medium">Two people can exchange numbers in person in seconds. No QR codes, no key exchange ceremonies.</p>
+        </div>
+        <div class="glass-card p-6 space-y-3 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#database"/></svg>
+          </div>
+          <h4 class="text-sm font-bold text-white font-display">Pre-existing Storage</h4>
+          <p class="text-xs text-slate-400 leading-relaxed font-medium">The contact list is a database everyone already maintains. No new app storage to explain.</p>
+        </div>
+        <div class="glass-card p-6 space-y-3 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#hash"/></svg>
+          </div>
+          <h4 class="text-sm font-bold text-white font-display">Sufficient Entropy</h4>
+          <p class="text-xs text-slate-400 leading-relaxed font-medium">E.164 phone numbers provide enough entropy for cryptographic key derivation when combined with salts.</p>
+        </div>
+        <div class="glass-card p-6 space-y-3 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#smartphone"/></svg>
+          </div>
+          <h4 class="text-sm font-bold text-white font-display">Cross-Platform</h4>
+          <p class="text-xs text-slate-400 leading-relaxed font-medium">Works identically on iOS, Android, and any device with a browser and a contact list.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Full Derivation Chain</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-0 animate-in overflow-hidden ring-1 ring-white/5 shadow-2xl">
+        <div class="bg-slate-950/90 p-6 sm:p-8 md:p-10 relative">
+          <div class="absolute top-0 right-0 p-4 opacity-5">
+            <svg class="size-32 text-white" aria-hidden="true"><use href="/icons.svg#cpu"/></svg>
+          </div>
+          <pre class="text-xs sm:text-sm overflow-x-auto leading-loose font-mono whitespace-pre text-slate-300 relative z-10">
+<span class="text-primary italic opacity-60">// Step 1: Normalise the phone number</span>
+phone = normalise("+1 (555) 012-3456")
+        → "+15550123456"
+
+<span class="text-primary italic opacity-60">// Step 2: Derive the room identity</span>
+room_hash = SHA-256(phone + ":" + ROOM_SALT)
+            → "a3f8c2...64 hex chars"
+
+<span class="text-primary italic opacity-60">// Step 3: Derive access control (with PIN)</span>
+access_hash = SHA-256(phone + ":" + PIN + ":" + ACCESS_SALT)
+              → "7b1e4d...64 hex chars"
+
+<span class="text-primary italic opacity-60">// Step 4: Derive encryption key (slow, intentionally)</span>
+enc_key = PBKDF2(phone, room_id + ENC_SALT, 600000, SHA-256, 256)
+          → 256-bit AES key (never transmitted)
+
+<span class="text-primary italic opacity-60">// Step 5: Derive sender identity</span>
+sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)
+              → "e9a2f1...64 hex chars"</pre>
+        </div>
+      </div>
+
+      <p class="text-slate-400 leading-relaxed font-medium px-2">Note that the PIN is <span class="text-white font-bold">not</span> part of the encryption key. Both users need the same key to communicate, but they have different PINs. The PIN is used exclusively for access control via the access_hash. The access_hash IS part of the sender_hash, ensuring two users with the same phone number but different PINs produce different sender identities.</p>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Advantages Over Traditional Approaches</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 md:p-10 space-y-4">
+        <ul class="space-y-4">
+          <li class="flex items-start gap-4"><svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><div><span class="text-white font-bold text-sm">No app to install.</span> <span class="text-slate-400 text-sm font-medium">Works in any browser. Nothing to download, nothing to appear in your app list.</span></div></li>
+          <li class="flex items-start gap-4"><svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><div><span class="text-white font-bold text-sm">No account to create.</span> <span class="text-slate-400 text-sm font-medium">No email, no username, no profile. You generate a number and go.</span></div></li>
+          <li class="flex items-start gap-4"><svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><div><span class="text-white font-bold text-sm">No metadata trail.</span> <span class="text-slate-400 text-sm font-medium">The server sees hashes and ciphertext. It cannot correlate rooms with identities.</span></div></li>
+          <li class="flex items-start gap-4"><svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><div><span class="text-white font-bold text-sm">The hiding place already exists.</span> <span class="text-slate-400 text-sm font-medium">Your contact list is already on your phone. No new data store to explain.</span></div></li>
+          <li class="flex items-start gap-4"><svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><div><span class="text-white font-bold text-sm">Plausible deniability.</span> <span class="text-slate-400 text-sm font-medium">Even if someone finds the sTELgano URL, the blank entry screen reveals nothing.</span></div></li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-white/5">
+    <a href="/blog" class="btn-ghost px-6 py-3 text-sm group">
+      <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+      Back to Blog
+    </a>
+    <a href="/chat" class="btn-primary px-8 py-3 text-sm group">
+      Open Chat
+      <svg class="size-4 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+    </a>
+  </div>
+</article>
