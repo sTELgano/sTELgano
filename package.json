@@ -13,11 +13,12 @@
     "test:watch": "vitest",
     "build:html": "node scripts/build-html.mjs",
     "build:icons": "node scripts/build-icons.mjs",
+    "build:csp_hashes": "node scripts/build-csp-hashes.mjs",
     "build:worker": "esbuild _worker.ts --bundle --format=esm --target=es2022 --external:cloudflare:* --outfile=public/_worker.js",
     "build:client": "esbuild src/client/chat.ts --bundle --minify --format=esm --target=es2022 --outfile=public/assets/chat.js",
     "build:pbkdf2_worker": "esbuild src/client/workers/pbkdf2.ts --bundle --minify --format=iife --target=es2022 --outfile=public/assets/pbkdf2_worker.js",
     "build:css": "tailwindcss -i src/client/app.css -o public/assets/app.css --minify",
-    "build": "npm run build:html && npm run build:icons && npm run build:worker && npm run build:client && npm run build:pbkdf2_worker && npm run build:css",
+    "build": "npm run build:html && npm run build:icons && npm run build:csp_hashes && npm run build:worker && npm run build:client && npm run build:pbkdf2_worker && npm run build:css",
     "d1:migrate:local": "wrangler d1 migrations apply stelgano --local",
     "d1:migrate:remote": "wrangler d1 migrations apply stelgano --remote"
   },

@@ -25,6 +25,7 @@
 // routing with DOs.
 
 import type { Env } from "./src/env";
+import { INLINE_SCRIPT_HASHES } from "./src/csp_hashes";
 import { list as listCountryMetrics, type CountryRow } from "./src/lib/country_metrics";
 import { listRecent as listDailyRecent, type DailyRow } from "./src/lib/daily_metrics";
 import { createPending, markPaid } from "./src/lib/extension_tokens";
@@ -49,7 +50,19 @@ function jsonResponse(body: unknown, status = 200): Response {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    // WebSocket upgrade responses MUST NOT be mangled with extra
+    // headers — Cloudflare's proxy rejects 101 responses that
+    // carry non-upgrade headers. So we short-circuit the
+    // security-header wrapper for the room WS path before routing.
+    if (request.headers.get("upgrade") === "websocket") {
+      return dispatch(request, env, url);
+    }
+    const response = await dispatch(request, env, url);
+    return applySecurityHeaders(response, url.pathname);
+  },
+} satisfies ExportedHandler<Env>;
 
+async function dispatch(request: Request, env: Env, url: URL): Promise<Response> {
     // GET /healthz — used by deploy smoke tests, not by users.
     if (url.pathname === "/healthz") {
       return new Response("ok", { headers: { "content-type": "text/plain" } });
@@ -128,8 +141,95 @@ export default {
     // off, so a missing /foo gets a normal 404 page rather than
     // index.html).
     return env.ASSETS.fetch(request);
-  },
-} satisfies ExportedHandler<Env>;
+}
+
+// ---------------------------------------------------------------------------
+// Security headers + CSP middleware
+//
+// Ports elixir/lib/stelgano_web/plugs/security_headers.ex and
+// elixir/lib/stelgano_web/plugs/csp_nonce.ex. Two notable
+// differences from v1:
+//
+//  1. CSP uses SHA-256 hashes of every inline <script> body
+//     (computed at build time by scripts/build-csp-hashes.mjs
+//     and imported from src/csp_hashes.ts), NOT a per-request
+//     nonce. v1 could issue a fresh nonce per request because
+//     LiveView re-rendered the layout on every request; v2
+//     serves static HTML from CF Pages' edge cache and the same
+//     bytes ship to every user, so nonce would have to flip
+//     dynamically on each request for every HTML — expensive
+//     per-request rewriting. Hashes are a static, cacheable
+//     allow-list that closes the same XSS hole.
+//
+//  2. Headers apply to EVERY response via fetch() wrapper — plug
+//     equivalent. WebSocket 101 responses are excluded (CF
+//     rejects non-upgrade headers on WS responses).
+// ---------------------------------------------------------------------------
+
+const SENSITIVE_PATHS = new Set(["/chat", "/admin", "/payment/callback"]);
+
+function buildCsp(): string {
+  const hashList = INLINE_SCRIPT_HASHES.map((h) => `'${h}'`).join(" ");
+  return [
+    "default-src 'self'",
+    `script-src 'self' ${hashList}`,
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
+    // WebSocket + HTTPS-only for /api/* fetches (same-origin).
+    // Paystack iframe isn't embedded — checkout happens via full-
+    // page navigation, so no connect-src exception is needed.
+    "connect-src 'self' wss: ws:",
+    "img-src 'self' data:",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    // form-action limited to same-origin. Paystack navigation is
+    // location.href (not form submission), so not restricted here.
+    "form-action 'self'",
+  ].join("; ");
+}
+
+const CSP_HEADER_VALUE = buildCsp();
+
+function applySecurityHeaders(response: Response, pathname: string): Response {
+  const h = new Headers(response.headers);
+
+  // Always-on headers.
+  h.set("strict-transport-security", "max-age=63072000; includeSubDomains; preload");
+  h.set("content-security-policy", CSP_HEADER_VALUE);
+  h.set("x-content-type-options", "nosniff");
+  h.set("x-frame-options", "DENY");
+  h.set("referrer-policy", "no-referrer");
+  // Locks down powerful features we never use so a compromised
+  // dependency can't silently request them. Matches the no-PWA,
+  // no-multimedia stance in CLAUDE.md.
+  h.set(
+    "permissions-policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), midi=(), gyroscope=(), accelerometer=(), magnetometer=()",
+  );
+  // Bar cross-origin resource loading of our pages — can't be
+  // embedded anywhere, consistent with frame-ancestors 'none'.
+  h.set("cross-origin-opener-policy", "same-origin");
+  h.set("cross-origin-resource-policy", "same-origin");
+
+  // Sensitive-path conditional headers.
+  if (SENSITIVE_PATHS.has(pathname)) {
+    // /chat, /admin, /payment/callback must never be indexed — a
+    // search engine crawling the chat entry screen leaks the URL
+    // and the app's intent. (Passcode Test: if the attacker reads
+    // the URL from history, they should learn nothing.)
+    h.set("x-robots-tag", "noindex, nofollow");
+    // No caching — a stale /chat in the disk cache could be found
+    // via Ctrl+H or browser cache inspection.
+    h.set("cache-control", "no-store, no-cache, must-revalidate, private");
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: h,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Admin dashboard

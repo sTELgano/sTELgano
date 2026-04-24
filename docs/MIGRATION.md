@@ -619,6 +619,34 @@ The user we don't serve (state-level adversaries) was never in scope.
 
 ---
 
+## Rate limiting
+
+v1's ETS-backed PlugAttack rules (20/IP/min on /admin, 30/IP/min on
+WebSocket upgrades, 200/IP/min globally) don't port directly — there's
+no cross-request in-memory store in Workers. Two options v2 can use:
+
+1. **Cloudflare dashboard Rate Limiting Rules** (recommended). Go to
+   the Pages project → Security → WAF → Rate Limiting Rules and add:
+   - `http.request.uri.path eq "/admin"` → 20 requests / minute / IP, block
+   - `http.request.uri.path matches "^/room/[a-f0-9]{64}/ws$"` →
+     30 requests / minute / IP, block
+   - (optional) `http.request.uri.path matches "^/api/"` →
+     200 requests / minute / IP, block
+
+   These run at CF's edge BEFORE the Worker executes, so they're
+   strictly better than an in-application limiter at the same budget.
+
+2. **DO-backed limiter** if you need finer-grained logic (e.g. per-
+   room-hash lockout). Each limiter instance is a tiny DO keyed by
+   `(rule, ip)`; it stores a count + window start and refuses over
+   budget. Adds latency (~1ms per request), only worth it if the
+   dashboard rules aren't enough.
+
+v2 ships with no application-level rate limiting — the CF dashboard
+rules are set up as part of the production deploy (Phase 10 smoke
+test + cutover). The Worker does not enforce anything rate-related
+itself.
+
 ## Vendor lock-in: explicit acknowledgement
 
 Durable Objects do not exist on any other platform. Migrating off Cloudflare
