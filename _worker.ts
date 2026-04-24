@@ -28,6 +28,7 @@ import type { Env } from "./src/env";
 import { list as listCountryMetrics, type CountryRow } from "./src/lib/country_metrics";
 import { listRecent as listDailyRecent, type DailyRow } from "./src/lib/daily_metrics";
 import { createPending } from "./src/lib/extension_tokens";
+import { initialize as paystackInitialize } from "./src/lib/paystack";
 export { RoomDO } from "./src/room";
 
 const ROOM_HASH_RE = /^[a-f0-9]{64}$/;
@@ -428,15 +429,25 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
     return jsonResponse({ error: "create_token_failed" }, 500);
   }
 
-  // Phase 7 wires the actual Paystack initialize call here:
-  //   const checkoutUrl = await Paystack.initialize(tokenHash, env);
-  //   return jsonResponse({ checkout_url: checkoutUrl });
-  return jsonResponse(
-    {
-      error: "paystack_not_configured",
-      detail:
-        "The Paystack adapter ports in Phase 7. Token row was created in D1, but no checkout URL is available.",
-    },
-    501,
-  );
+  // Hand off to the Paystack adapter for the actual checkout URL.
+  // The token_hash IS the transaction reference — when the user
+  // completes payment, Paystack webhooks us with this same hash,
+  // and we mark the row paid. No room_hash is ever sent to Paystack.
+  const initResult = await paystackInitialize(tokenHash, amountCents, env);
+  if (initResult.ok) {
+    return jsonResponse({ checkout_url: initResult.checkoutUrl });
+  }
+
+  // Map adapter error codes to client-visible codes. The client's
+  // paymentErrorCopy() only knows about a few well-known ones.
+  const errorCode =
+    initResult.reason === "missing_config"
+      ? "paystack_not_configured"
+      : initResult.reason === "fx_conversion_not_wired"
+        ? "paystack_not_configured"
+        : initResult.reason === "provider_unavailable"
+          ? "provider_unavailable"
+          : "provider_error";
+  const status = initResult.reason === "missing_config" ? 501 : 502;
+  return jsonResponse({ error: errorCode, detail: initResult.reason }, status);
 }

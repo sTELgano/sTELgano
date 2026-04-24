@@ -213,6 +213,10 @@ function paymentErrorCopy(code: string): string {
       return "Token generation failed. Try again.";
     case "create_token_failed":
       return "Could not create payment token. Try again.";
+    case "provider_unavailable":
+      return "Payment provider is unreachable. Check your connection and try again.";
+    case "provider_error":
+      return "Payment provider returned an error. Try again.";
     default:
       return "Payment could not start. Try again.";
   }
