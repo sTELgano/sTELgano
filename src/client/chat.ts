@@ -17,7 +17,24 @@
 // elixir/lib/stelgano_web/live/chat_live.ex so that nothing in the
 // shipped HTML drifts from what designers signed off on in v1.
 
-import { ChatState, type State, type PlainMessage } from "./state";
+import { generatePhoneNumber, CountryNames } from "phone-number-generator-js";
+
+import { ChatState, type GeneratorState, type State, type PlainMessage } from "./state";
+
+// Adapter from CountryNames enum to the value the generator
+// expects. The enum keys are snake_cased versions of the values
+// (values have spaces). Building the list once at module load
+// avoids per-render enumeration.
+const COUNTRY_LIST: Array<{ name: string; iso: string }> = Object.values(CountryNames)
+  // De-dupe — the enum has a couple of aliases (e.g. DR_Congo /
+  // The_Democratic_Republic_Of_The_Congo both map to "DR Congo").
+  .filter((v, i, a) => a.indexOf(v) === i)
+  .map((v) => ({ name: v, iso: "" }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+async function generateFor(countryName: string): Promise<string> {
+  return generatePhoneNumber({ countryName: countryName as CountryNames });
+}
 
 const root = document.getElementById("chat-root");
 if (!root) throw new Error("chat-root element missing");
@@ -60,6 +77,33 @@ root.addEventListener("click", (e) => {
   switch (action) {
     case "toggle-phone-visibility":
       state.togglePhoneVisibility();
+      break;
+    case "open-generator":
+      state.openGenerator();
+      break;
+    case "close-generator":
+      state.closeGenerator();
+      break;
+    case "select-country": {
+      const country = target.dataset.country ?? "";
+      if (country) void state.selectCountry(country, generateFor);
+      break;
+    }
+    case "regenerate":
+      void state.regenerate(generateFor);
+      break;
+    case "copy-generated": {
+      const number = target.dataset.number ?? "";
+      if (number) {
+        navigator.clipboard.writeText(number).catch(() => {});
+      }
+      break;
+    }
+    case "apply-generated":
+      state.applyGenerated();
+      break;
+    case "close-countries":
+      state.closeCountries();
       break;
     case "continue-free":
       void state.continueFree();
@@ -113,6 +157,8 @@ root.addEventListener("click", (e) => {
 
 // Textarea char counter + typing indicator + auto-resize. We update
 // these in-place (no re-render) so focus stays on the textarea.
+// The country search input triggers a re-render to filter the
+// dropdown; input loses focus but re-focuses via [data-autofocus].
 root.addEventListener(
   "input",
   (e) => {
@@ -121,6 +167,11 @@ root.addEventListener(
       state.typing();
       updateCharCount(target.value.length);
       autoResize(target);
+    } else if (
+      target instanceof HTMLInputElement &&
+      target.id === "drawer-country-input"
+    ) {
+      state.setCountrySearch(target.value, true);
     }
   },
   true,
@@ -372,15 +423,258 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
               </p>
               <button
                 type="button"
-                disabled
-                class="btn-secondary w-full py-4 sm:py-5 text-lg sm:text-xl inline-flex items-center justify-center gap-2 group opacity-60 cursor-not-allowed"
-                title="Generator drawer — Phase 6"
+                data-action="open-generator"
+                class="btn-secondary w-full py-4 sm:py-5 text-lg sm:text-xl inline-flex items-center justify-center gap-2 group"
               >
                 ${icon("sparkles", "size-5 text-primary group-hover:rotate-12 transition-transform")}
                 Generate New Number
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+    ${renderGeneratorDrawer(s.generator)}
+  `;
+}
+
+// -------------------------- generator drawer --------------------------
+
+function renderGeneratorDrawer(g: GeneratorState): string {
+  const containerVis = g.open ? "visible" : "invisible pointer-events-none";
+  const backdropOp = g.open ? "opacity-100" : "opacity-0";
+  const drawerSlide = g.open ? "translate-x-0" : "translate-x-full";
+
+  // Filter the country list by current search query (case-insensitive
+  // substring on the country name).
+  const filtered = g.searchQuery
+    ? COUNTRY_LIST.filter((c) =>
+        c.name.toLowerCase().includes(g.searchQuery.toLowerCase()),
+      )
+    : COUNTRY_LIST;
+  const countriesToShow = filtered.slice(0, 50); // cap UI list size
+
+  const dropdown = g.showCountries && countriesToShow.length > 0
+    ? `
+      <div class="absolute z-100 w-full mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+        ${countriesToShow
+          .map(
+            (c) => `
+              <button
+                type="button"
+                data-action="select-country"
+                data-country="${escapeHtml(c.name)}"
+                class="w-full px-6 py-4 text-left hover:bg-white/5 text-slate-300 hover:text-white transition-all border-b border-white/5 last:border-0 flex items-center justify-between group"
+              >
+                <span class="font-bold tracking-wide text-sm">${escapeHtml(c.name)}</span>
+                ${icon("chevron_right", "size-4 opacity-0 group-hover:opacity-100 transition-opacity")}
+              </button>`,
+          )
+          .join("")}
+      </div>`
+    : "";
+
+  const inputRightIcon = g.selectedCountry
+    ? icon("badge_check", "size-5 text-emerald-400")
+    : icon("search", "size-5");
+
+  const generatorPanel = g.generatedNumber
+    ? `
+      <div class="space-y-8 animate-in scale-in">
+        <div class="relative py-12 px-6 rounded-4xl bg-slate-950/50 border border-white/5 group">
+          <div class="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent"></div>
+          <div class="relative z-10 space-y-6 text-center">
+            <button
+              type="button"
+              data-action="copy-generated"
+              data-number="${escapeHtml(g.generatedNumber)}"
+              class="font-mono font-black text-white tracking-widest text-4xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] break-all px-2 block w-full hover:scale-105 transition-transform"
+              title="Copy to clipboard"
+            >
+              ${escapeHtml(g.generatedNumber)}
+            </button>
+
+            <div class="flex flex-col items-center gap-3">
+              <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                ${icon("sparkles", "size-3")} Identity Ready
+              </div>
+              <button
+                type="button"
+                data-action="regenerate"
+                ${g.generating ? "disabled" : ""}
+                class="text-[9px] font-black uppercase tracking-[0.3em] text-slate-600 hover:text-primary transition-colors flex items-center justify-center gap-1.5 mx-auto mt-4 ${g.generating ? "opacity-20 pointer-events-none" : ""}"
+              >
+                ${icon("refresh_cw", `size-3 ${g.generating ? "animate-spin" : ""}`)}
+                ${g.generating ? "Generating..." : "Re-Generate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>`
+    : `
+      <div class="flex flex-col items-center gap-6 py-12 text-center">
+        <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+          ${icon("globe", "size-9 text-slate-500")}
+        </div>
+        <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 max-w-[240px]">
+          Select a country above to generate a targeted identity
+        </p>
+      </div>`;
+
+  const applyBtn = g.generatedNumber
+    ? `
+      <button
+        type="button"
+        data-action="apply-generated"
+        class="btn-primary w-full py-4 uppercase tracking-widest text-sm"
+      >
+        Apply to Workspace ${icon("arrow_right", "size-4")}
+      </button>`
+    : `
+      <button
+        type="button"
+        disabled
+        class="w-full py-4 rounded-2xl bg-white/5 border border-white/5 text-slate-600 font-bold uppercase tracking-widest text-sm cursor-not-allowed italic"
+      >
+        Select Country First
+      </button>`;
+
+  const placeholder = g.selectedCountry ?? "Search country...";
+
+  return `
+    <div class="fixed inset-0 z-50 transition-all duration-500 ${containerVis}">
+      <!-- Backdrop -->
+      <div
+        data-action="close-generator"
+        class="absolute inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity duration-500 ${backdropOp}"
+      ></div>
+
+      <!-- Drawer Content -->
+      <div class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-500 ease-out ${drawerSlide} sm:h-full max-sm:top-auto max-sm:h-[85dvh] max-sm:rounded-t-[2.5rem] max-sm:border-l-0 max-sm:border-t">
+
+        <!-- Header -->
+        <div class="p-6 border-b border-white/5 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+              ${icon("sparkles", "size-5 text-primary")}
+            </div>
+            <div>
+              <h3 class="text-white font-bold tracking-tight uppercase text-sm">
+                Identity Generator
+              </h3>
+              <p class="text-[10px] text-slate-500 font-medium uppercase tracking-widest">
+                Derive a new steg number
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-action="close-generator"
+            class="size-10 rounded-xl hover:bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-all"
+          >
+            ${icon("x", "size-6")}
+          </button>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-6 sm:p-8 space-y-10 scrollbar-hide">
+
+          <!-- Country Selector -->
+          <div class="space-y-4">
+            <label class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 ml-1">
+              Select Preferred Country
+            </label>
+
+            <div class="relative group">
+              <div class="relative">
+                <input
+                  type="text"
+                  id="drawer-country-input"
+                  placeholder="${escapeHtml(placeholder)}"
+                  value="${escapeHtml(g.searchQuery)}"
+                  class="glass-input w-full bg-slate-950/40 border-white/10 text-white font-bold text-lg focus:border-primary/40 py-4 px-6 rounded-2xl pr-12 transition-all tracking-wider"
+                  autocomplete="off"
+                >
+                <div class="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500">
+                  ${inputRightIcon}
+                </div>
+              </div>
+              ${dropdown}
+            </div>
+          </div>
+
+          <!-- Generator output -->
+          <div class="w-full">
+            ${generatorPanel}
+          </div>
+
+          <!-- Forensic Safety -->
+          <div class="p-6 rounded-3xl bg-white/5 border border-white/5 space-y-4 text-left w-full max-w-sm mx-auto">
+            <div class="flex items-center gap-3">
+              <div class="size-8 rounded-xl bg-white/5 flex items-center justify-center border border-white/5">
+                ${icon("shield_check", "size-4 text-slate-400")}
+              </div>
+              <h4 class="text-xs font-black uppercase tracking-widest text-white">Forensic Safety</h4>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed font-medium">
+              Identities are <span class="text-white font-bold">volatile</span>. Share immediately. Closing this drawer after applying does not save the number to history.
+            </p>
+          </div>
+
+          <!-- Onboarding Instructions -->
+          <div class="space-y-8 pt-10">
+            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 text-center mb-6">
+              Protocol Onboarding &amp; Guidance
+            </h3>
+            <div class="space-y-6">
+              ${[
+                {
+                  icon: "user_minus",
+                  title: "1. Save in Phonebook",
+                  text: "Add this number to your partner's actual contact list.",
+                  guidance:
+                    "This camouflages the channel as a regular contact in your native address book.",
+                },
+                {
+                  icon: "arrow_up_right",
+                  title: "2. Share Channel ID",
+                  text: "Give this number to your partner.",
+                  guidance:
+                    "Communicate this number securely. Your PIN is personal and stays on your device.",
+                },
+                {
+                  icon: "shield_check",
+                  title: "3. Establishment",
+                  text: "Once both parties connect, a zero-trace link is armed.",
+                  guidance:
+                    "All messages are locally encrypted and wiped atomically upon reply.",
+                },
+              ]
+                .map(
+                  (s) => `
+                  <div class="glass-card p-8 flex flex-col md:flex-row gap-8 items-start relative group hover:border-white/10 transition-all duration-500">
+                    <div class="size-16 rounded-2xl bg-white/5 flex items-center justify-center text-primary border border-white/5 shadow-inner group-hover:scale-110 transition-transform duration-500">
+                      ${icon(s.icon, "size-8")}
+                    </div>
+                    <div class="flex-1 space-y-4">
+                      <div class="space-y-1">
+                        <h4 class="font-bold text-white text-xl font-display tracking-tight">${s.title}</h4>
+                        <p class="text-slate-400 leading-relaxed font-medium">${s.text}</p>
+                      </div>
+                      <div class="p-4 rounded-xl bg-slate-900/50 border border-white/5 text-xs text-slate-500 leading-relaxed italic">
+                        ${s.guidance}
+                      </div>
+                    </div>
+                  </div>`,
+                )
+                .join("")}
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-6 border-t border-white/5 bg-slate-900/50">
+          ${applyBtn}
         </div>
       </div>
     </div>

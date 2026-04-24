@@ -53,6 +53,24 @@ export type PlainMessage = {
   readAt: string | null;
 };
 
+/** Generator drawer state — orthogonal to the main flow but only
+ *  reachable from the entry surface (Phase 6 scope). */
+export type GeneratorState = {
+  open: boolean;
+  /** CountryNames enum value e.g. "United Arab Emirates", or null
+   *  when nothing's been picked yet. */
+  selectedCountry: string | null;
+  /** Live filter for the country dropdown. */
+  searchQuery: string;
+  /** Whether the country dropdown is visible (focus/click toggles it). */
+  showCountries: boolean;
+  /** Generated number in E.164. null until generate runs. */
+  generatedNumber: string | null;
+  /** True while the generator is running (brief — there's a
+   *  cosmetic 600ms delay v1 used for "calculating" feel). */
+  generating: boolean;
+};
+
 export type State =
   /** Initial. Form is empty (or the phone is pre-populated from
    *  sessionStorage / generator drawer / handoff). */
@@ -72,6 +90,8 @@ export type State =
       /** When error is a failed-auth, how many attempts remain
        *  before the 30-minute lockout. */
       attemptsRemaining: number | null;
+      /** Generator drawer state — opens over the entry form. */
+      generator: GeneratorState;
     }
   /** PBKDF2 in flight. The 600k iterations take ~1.5–2.5s. */
   | {
@@ -132,6 +152,29 @@ export type State =
   | { kind: "expired" };
 
 // ---------------------------------------------------------------------------
+// Generator helpers
+// ---------------------------------------------------------------------------
+
+const COUNTRY_PERSIST_KEY = "stelgano_selected_country";
+
+function initialGenerator(): GeneratorState {
+  let savedCountry: string | null = null;
+  try {
+    savedCountry = sessionStorage.getItem(COUNTRY_PERSIST_KEY);
+  } catch {
+    // sessionStorage disabled
+  }
+  return {
+    open: false,
+    selectedCountry: savedCountry,
+    searchQuery: "",
+    showCountries: false,
+    generatedNumber: null,
+    generating: false,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // SessionStorage keys (cleared on logout / panic / room expiry)
 // ---------------------------------------------------------------------------
 
@@ -188,14 +231,7 @@ export class ChatState {
     // user is returning from Paystack and we pre-populate the phone
     // (and lock the field) so they don't retype it.
     const handoff = readHandoffPhone();
-    this.state = {
-      kind: "entry",
-      phoneLocked: !!handoff,
-      phone: handoff,
-      phoneVisible: false,
-      error: null,
-      attemptsRemaining: null,
-    };
+    this.state = this.initialEntry(handoff, !!handoff);
   }
 
   private initialEntry(phone = "", phoneLocked = false): Extract<State, { kind: "entry" }> {
@@ -206,6 +242,7 @@ export class ChatState {
       phoneVisible: false,
       error: null,
       attemptsRemaining: null,
+      generator: initialGenerator(),
     };
   }
 
@@ -448,6 +485,115 @@ export class ChatState {
   togglePhoneVisibility(): void {
     if (this.state.kind !== "entry") return;
     this.setState({ ...this.state, phoneVisible: !this.state.phoneVisible });
+  }
+
+  // -------------------------------------------------------------------------
+  // Generator drawer (entry-state only)
+  // -------------------------------------------------------------------------
+
+  openGenerator(): void {
+    if (this.state.kind !== "entry") return;
+    this.setState({
+      ...this.state,
+      generator: { ...this.state.generator, open: true },
+    });
+  }
+
+  closeGenerator(): void {
+    if (this.state.kind !== "entry") return;
+    this.setState({
+      ...this.state,
+      generator: { ...this.state.generator, open: false, showCountries: false },
+    });
+  }
+
+  setCountrySearch(query: string, showDropdown = true): void {
+    if (this.state.kind !== "entry") return;
+    this.setState({
+      ...this.state,
+      generator: {
+        ...this.state.generator,
+        searchQuery: query,
+        showCountries: showDropdown,
+      },
+    });
+  }
+
+  closeCountries(): void {
+    if (this.state.kind !== "entry") return;
+    this.setState({
+      ...this.state,
+      generator: { ...this.state.generator, showCountries: false },
+    });
+  }
+
+  /** Pick a country from the dropdown. Persists to sessionStorage so
+   *  next visit pre-selects, and auto-fires generation. */
+  async selectCountry(
+    country: string,
+    generate: (countryName: string) => Promise<string>,
+  ): Promise<void> {
+    if (this.state.kind !== "entry") return;
+    try {
+      sessionStorage.setItem(COUNTRY_PERSIST_KEY, country);
+    } catch {
+      // ignore
+    }
+    this.setState({
+      ...this.state,
+      generator: {
+        ...this.state.generator,
+        selectedCountry: country,
+        searchQuery: "",
+        showCountries: false,
+        generating: true,
+        generatedNumber: null,
+      },
+    });
+    // v1 has a 600ms cosmetic delay for "calculating" feel.
+    await new Promise((r) => setTimeout(r, 600));
+    try {
+      const number = await generate(country);
+      if (this.state.kind !== "entry") return; // drawer closed mid-flight
+      this.setState({
+        ...this.state,
+        generator: {
+          ...this.state.generator,
+          generating: false,
+          generatedNumber: number,
+        },
+      });
+    } catch {
+      if (this.state.kind !== "entry") return;
+      this.setState({
+        ...this.state,
+        generator: { ...this.state.generator, generating: false },
+      });
+    }
+  }
+
+  /** Re-generate using the same country. */
+  async regenerate(generate: (countryName: string) => Promise<string>): Promise<void> {
+    if (this.state.kind !== "entry") return;
+    const country = this.state.generator.selectedCountry;
+    if (!country) return;
+    await this.selectCountry(country, generate);
+  }
+
+  /** Apply the generated number to the entry phone field. Locks the
+   *  phone (so the user can't edit a generated steg number) and
+   *  closes the drawer. */
+  applyGenerated(): void {
+    if (this.state.kind !== "entry") return;
+    const number = this.state.generator.generatedNumber;
+    if (!number) return;
+    this.setState({
+      ...this.state,
+      phone: number,
+      phoneLocked: true,
+      phoneVisible: true,
+      generator: { ...this.state.generator, open: false, showCountries: false },
+    });
   }
 
   /** Enter inline-edit mode for the current (own, unread) message. */

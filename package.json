@@ -31,5 +31,9 @@
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "libphonenumber-js": "^1.12.42",
+    "phone-number-generator-js": "^1.4.0"
   }
 }
