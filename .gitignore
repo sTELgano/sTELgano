@@ -1,56 +1,73 @@
-# The directory Mix will write compiled artifacts to.
-/_build/
+# =============================================================================
+# v1 — Phoenix/Elixir tree (kept under elixir/ on this branch as reference
+# during the v2 migration; see docs/MIGRATION.md). All Mix-generated
+# artefacts live under elixir/ now.
+# =============================================================================
 
-# If you run "mix test --cover", coverage assets end up here.
-/cover/
+# Mix compiled artifacts (also catch any stale copies left at root from
+# before the elixir/ move; pure build artefacts so anchoring is unnecessary)
+/elixir/_build/
+_build/
 
-# The directory Mix downloads your dependencies sources to.
-/deps/
+# `mix test --cover` output
+/elixir/cover/
+cover/
 
-# Where 3rd-party dependencies like ExDoc output generated docs.
-/doc/
+# Mix dependencies
+/elixir/deps/
+deps/
 
-# Ignore .fetch files in case you like to edit your project deps locally.
-/.fetch
+# ExDoc output
+/elixir/doc/
 
-# If the VM crashes, it generates a dump, let's ignore it too.
-erl_crash.dump
+# .fetch files (local dep edits)
+/elixir/.fetch
 
-# Also ignore archive artifacts (built via "mix archive.build").
-*.ez
+# Phoenix asset pipeline artefacts
+/elixir/priv/static/assets/
+/elixir/priv/static/cache_manifest.json
+/elixir/priv/static/**/*-????????????????????????????????.*
+/elixir/priv/static/**/*.gz
 
-# Temporary files, for example, from tests.
-/tmp/
-
-# Ignore package tarball (built via "mix hex.build").
-stelgano-*.tar
-
-# Ignore assets that are produced by build tools.
-/priv/static/assets/
-
-# Ignore digested assets cache.
-/priv/static/cache_manifest.json
-
-# `mix phx.digest` output — regenerated on every build.
-# Matches files with the 32-hex-char digest suffix (e.g. foo-abc123…def.ext)
-# and the gzipped companion files it emits for static compression.
-/priv/static/**/*-????????????????????????????????.*
-/priv/static/**/*.gz
-
-# In case you use Node.js/npm, you want to ignore these.
-npm-debug.log
-/assets/node_modules/
-
-
-# Dialyzer PLTs (large, rebuilt per-environment)
-/priv/plts/*.plt
-/priv/plts/*.plt.hash
-
-# Test coverage
-/cover/
+# Dialyzer PLTs
+/elixir/priv/plts/*.plt
+/elixir/priv/plts/*.plt.hash
 
 # ExCoveralls
-coveralls.json
+/elixir/coveralls.json
+
+# Phoenix-side npm
+/elixir/assets/node_modules/
+
+# =============================================================================
+# v2 — Cloudflare Workers / Node / Wrangler / TypeScript
+# =============================================================================
+
+/node_modules/
+/.wrangler/
+/dist/
+.dev.vars
+.dev.vars.*
+
+# =============================================================================
+# Cross-cutting (apply regardless of v1/v2 location)
+# =============================================================================
+
+# BEAM crash dumps (could land at root if `mix` is run from root by mistake)
+erl_crash.dump
+
+# Mix archive artefacts
+*.ez
+
+# Temporary files
+/tmp/
+
+# Hex tarball
+stelgano-*.tar
+
+# npm
+npm-debug.log
+*.log
 
 # OS
 .DS_Store
@@ -67,7 +84,7 @@ Thumbs.db
 .env
 .env.local
 
-# Lost/scratch code (not part of the project)
+# Lost/scratch code
 /lost_code/
 
 # Private project files (not for public repo)

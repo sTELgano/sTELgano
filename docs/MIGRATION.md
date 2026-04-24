@@ -41,7 +41,7 @@ The constraints that drove the decision, in priority order:
 4. **The N=1 invariant maps cleanly to a single-threaded actor.** Today the
    "at most one message per room" guarantee is enforced by a Postgres `UNIQUE`
    index plus a delete-then-insert transaction in
-   `lib/stelgano/rooms.ex:send_message/4`. A Durable Object is single-threaded
+   `elixir/lib/stelgano/rooms.ex:send_message/4`. A Durable Object is single-threaded
    by definition; the invariant becomes a property of the runtime instead of a
    guarded property of the database. This is the architectural argument for
    the rewrite — but it would not be sufficient on its own. Solo + no-ops +
@@ -85,18 +85,64 @@ rewrite cost) it would be the right call.
 - `v2-cloudflare` — this branch. CF Workers + DO + D1 rewrite. Active
   development. **Not yet deployed anywhere.**
 
+### Layout on `v2-cloudflare`
+
+The Phoenix tree lives entirely under `elixir/` on this branch. v2 code
+(Workers, DOs, client TS, public assets) lives at the repo root. This is
+deliberate — not just for visual cleanliness:
+
+- **Reference stays in reach.** Porting `elixir/lib/stelgano_web/channels/anon_room_channel.ex`
+  to a DO message handler is much easier when the Elixir source is one
+  `Read` away at `elixir/lib/...` rather than requiring `git show main:...`
+  every time.
+- **Cutover is one command.** When v2 is ready, the final pre-cutover
+  commit is just `git rm -r elixir/`. Everything else on `v2-cloudflare`
+  is already in its final shape for `main`.
+- **No accidental tooling crossover.** TypeScript compiler, Vitest,
+  Wrangler, esbuild, and Tailwind v4 all see only the v2 tree (the root
+  excludes `elixir/` in their respective configs). Mix tooling never gets
+  pointed at v2 paths.
+- **Disabled v1 CI on this branch.** GitHub Actions only reads workflows
+  from `.github/workflows/` at the repo root. The Phoenix CI and deploy
+  workflows have moved to `elixir/.github/workflows/`, where GitHub
+  ignores them. The v2 wrangler-deploy workflow lands at the root in
+  Phase 8.
+
+Files that stayed at root on `v2-cloudflare` (version-independent or v2
+governance):
+
+- `LICENSE`, `NOTICE`, `README.md`, `CLAUDE.md` (will be updated for v2 in
+  Phase 4 or so), `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, `COMMERCIAL.md`,
+  `CONTRIBUTING.md`, `SECURITY.md`
+- `docs/` (this file lives here)
+- `.well-known/` (security.txt etc., served by both v1 and v2)
+- `.github/dependabot.yml`, `.github/ISSUE_TEMPLATE/`
+- `.gitignore` (rewritten to cover both trees)
+
+### Cross-tree changes during development
+
 Cross-cutting changes (spec edits, threat-model wording, design system) made
-on `main` should be periodically merged forward into `v2-cloudflare`:
+on `main` should be periodically merged forward into `v2-cloudflare`. They
+will land under `elixir/` automatically on the v2 branch (since main's tree
+is now nested):
 
 ```bash
 git checkout v2-cloudflare
 git merge main
-# resolve any conflicts; usually only docs/ and CLAUDE.md are affected
+# resolve any conflicts — usually only docs/ and CLAUDE.md are touched.
+# Note: changes that landed on main at lib/foo.ex will appear in the merge
+# at elixir/lib/foo.ex on v2-cloudflare, which is what we want.
 ```
 
 Do this often enough that the merge is small. Quarterly at minimum, monthly
-ideally. A long-divergence merge with hundreds of conflicting Elixir/TS files
-is the failure mode to avoid.
+ideally. A long-divergence merge with hundreds of conflicting files is the
+failure mode to avoid.
+
+**Important:** `git merge main` from `v2-cloudflare` will try to merge the
+root-level Elixir files on `main` (e.g. `mix.exs`) with the moved versions
+on `v2-cloudflare` (e.g. `elixir/mix.exs`). Git's rename detection usually
+handles this, but for unusually large changes you may need to merge with
+`-X find-renames=50%` or resolve a few paths by hand.
 
 ### At cutover (when v2 is production-ready)
 
@@ -105,17 +151,31 @@ feature parity, has been smoke-tested on a `*.workers.dev` URL, and the
 production domain is ready to swap.
 
 ```bash
-# Step 1: snapshot v1 as a long-lived branch (NOT just a tag — we keep
+# Step 1: on v2-cloudflare, drop the elixir/ reference subtree.
+# This is the only "destructive" commit of the cutover and it's mechanical
+# — no logic changes, just the deletion of v1 reference material that
+# served its purpose during the rewrite.
+git checkout v2-cloudflare && git pull
+git rm -r elixir/
+git commit -m "Remove elixir/ reference subtree ahead of v2 cutover
+
+The Phoenix/Elixir tree was kept under elixir/ on this branch as
+reference material during the rewrite. With v2 ready to ship, the
+reference is no longer needed here — v1 lives on the v1-elixir
+branch (created in the next step) and at the v1-elixir-cutover tag."
+git push origin v2-cloudflare
+
+# Step 2: snapshot v1 as a long-lived branch (NOT just a tag — we keep
 # pushing commits to it after cutover for security/maintenance work)
 git checkout main && git pull
 git branch v1-elixir
 git push -u origin v1-elixir
 
-# Step 2: tag the cutover moment for permanent reference
+# Step 3: tag the cutover moment for permanent reference
 git tag -a v1-elixir-cutover -m "Final state of Phoenix/Elixir implementation when CF v2 became canonical"
 git push origin v1-elixir-cutover
 
-# Step 3: replace main's tree with v2-cloudflare's tree, single commit
+# Step 4: replace main's tree with v2-cloudflare's tree, single commit
 git checkout main
 git rm -rf .
 git checkout v2-cloudflare -- .
@@ -136,7 +196,7 @@ Architecture:
 See docs/MIGRATION.md for the full migration record."
 git push origin main
 
-# Step 4: optional — delete the v2-cloudflare branch since main now contains it
+# Step 5: optional — delete the v2-cloudflare branch since main now contains it
 git branch -d v2-cloudflare
 git push origin --delete v2-cloudflare
 ```
@@ -280,7 +340,7 @@ TypeScript code and may not realise the Elixir version exists at all.
 | Background jobs | Oban | Workers Cron Triggers + DO alarms |
 | Static assets | Phoenix `Plug.Static` from droplet | Workers Assets (or R2) |
 | Client UI | LiveView state machine + JS hooks | Static HTML shell + vanilla TS |
-| Crypto | Web Crypto API in `assets/js/crypto/anon.js` | **Same code, ported unchanged** |
+| Crypto | Web Crypto API in `elixir/assets/js/crypto/anon.js` | **Same code, ported unchanged** |
 | Rate limiting | PlugAttack (ETS) | Cloudflare native rate-limiting rules |
 | Security headers / CSP | `SecurityHeaders` plug + nonce plug | Workers middleware (same nonce strategy) |
 | Admin dashboard | LiveView + HTTP Basic Auth | Worker route + HTML + D1 query |
@@ -306,7 +366,7 @@ A DO has:
 The N=1 invariant is automatic: only one instance of the DO's code runs at a
 time, so concurrent senders serialise naturally. The `UNIQUE` index on
 `messages.room_id` and the delete-then-insert transaction in
-`lib/stelgano/rooms.ex:send_message/4` both disappear — they exist because
+`elixir/lib/stelgano/rooms.ex:send_message/4` both disappear — they exist because
 Postgres can't guarantee what a single-threaded actor gives for free.
 
 ### Hibernation behaviour
@@ -338,11 +398,11 @@ the platform.
 
 These survive the rewrite without modification:
 
-- **`assets/js/crypto/anon.js`** — the entire client-side crypto module. Same
+- **`elixir/assets/js/crypto/anon.js`** — the entire client-side crypto module. Same
   hashes, same key derivation, same constants, same protocol. Salts
   (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`) are unchanged so
   v1 and v2 produce identical hashes for the same `(phone, PIN)` input.
-- **`assets/js/workers/pbkdf2_worker.js`** — the Web Worker for PBKDF2 key
+- **`elixir/assets/js/workers/pbkdf2_worker.js`** — the Web Worker for PBKDF2 key
   derivation. Pure JS, no Phoenix dependency.
 - **The threat model and passcode test.** Unchanged. Every design decision
   in v2 must still pass: "A suspicious partner unlocks your phone and opens
@@ -354,7 +414,7 @@ These survive the rewrite without modification:
 - **Design system.** Tailwind v4 stays. Design tokens (`--color-primary`,
   `--bg-dark`, etc.), component classes (`.glass-panel`, `.bubble.sent`,
   etc.), and the chat bubble geometry all port verbatim. The font files in
-  `priv/static/fonts/` move to `public/fonts/` (Workers Assets) but are the
+  `elixir/priv/static/fonts/` move to `public/fonts/` (Workers Assets) but are the
   same WOFF2 files.
 - **No-PWA policy.** No manifest.json, no service worker, no theme-color
   meta. Same as today.
@@ -366,11 +426,11 @@ These survive the rewrite without modification:
 
 These have no semantic change but get rewritten in TypeScript:
 
-- LiveView state machine in `lib/stelgano_web/live/chat_live.ex` →
+- LiveView state machine in `elixir/lib/stelgano_web/live/chat_live.ex` →
   client-side TS state machine. The states (`:entry → :deriving →
   :new_channel → :connecting → :chat → :locked → :expired`) are unchanged.
 - Phoenix Channel handlers in
-  `lib/stelgano_web/channels/anon_room_channel.ex` → DO message handlers.
+  `elixir/lib/stelgano_web/channels/anon_room_channel.ex` → DO message handlers.
   Same events (`send_message`, `read_receipt`, `edit_message`,
   `delete_message`, `typing`, `expire_room`, `redeem_extension`).
 - `Stelgano.Rooms` context functions → DO methods + D1 queries (only
@@ -396,7 +456,7 @@ These have no semantic change but get rewritten in TypeScript:
 - Postgres (the database, the migrations, the connection pool)
 - ExUnit (replaced by vitest, bun:test, or similar)
 - DigitalOcean droplet + systemd unit + nginx + Let's Encrypt
-- The entire `.github/workflows/deploy.yml` scp-and-restart pipeline
+- The entire `elixir/.github/workflows/deploy.yml` scp-and-restart pipeline
 - BEAM-specific deployment artefacts (releases, runtime config eval)
 
 ---
@@ -580,14 +640,14 @@ a commit that compiles and runs (even if incomplete):
 - `CLAUDE.md` — project invariants that survive the rewrite (threat model,
   passcode test, design system, no-PWA policy, AGPL header convention,
   commit message convention).
-- `lib/stelgano/rooms.ex` — the v1 N=1 enforcement that the DO replaces.
-- `lib/stelgano_web/channels/anon_room_channel.ex` — the v1 channel
+- `elixir/lib/stelgano/rooms.ex` — the v1 N=1 enforcement that the DO replaces.
+- `elixir/lib/stelgano_web/channels/anon_room_channel.ex` — the v1 channel
   handlers that DO message handlers replace.
-- `assets/js/crypto/anon.js` — the crypto module that ports unchanged.
-- `lib/stelgano/monetization/providers/paystack.ex` — the Paystack adapter
+- `elixir/assets/js/crypto/anon.js` — the crypto module that ports unchanged.
+- `elixir/lib/stelgano/monetization/providers/paystack.ex` — the Paystack adapter
   to port to TS.
-- `priv/repo/migrations/` — the v1 schema, source for the D1 schema port.
-- `.github/workflows/deploy.yml` — the v1 deploy pipeline being replaced
+- `elixir/priv/repo/migrations/` — the v1 schema, source for the D1 schema port.
+- `elixir/.github/workflows/deploy.yml` — the v1 deploy pipeline being replaced
   by `wrangler deploy`.
 
 ---
