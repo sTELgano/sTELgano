@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Cloudflare Workers configuration for sTELgano v2.
+#
+# This file describes the v2 (CF Workers + Durable Objects + D1) deployment.
+# The v1 (Phoenix/Elixir) deployment lives on `main` and is unaffected by
+# anything in this file.
+#
+# See docs/MIGRATION.md for the broader architecture record.
+
+name = "stelgano"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets — public/ holds the unchanging marketing/legal pages, the
+# chat shell HTML, the bundled client TS, the Tailwind output, and the
+# self-hosted fonts. Workers Assets serves these from CF's edge with
+# automatic content hashing and caching.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# Durable Object: one instance per room_hash. Single-threaded execution
+# enforces the N=1 invariant by construction (no Postgres UNIQUE index
+# needed). Hibernatable WebSockets keep idle rooms cheap.
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "RoomDO"
+
+# DO migrations: introduce the RoomDO class on first deploy. SQLite-backed
+# storage gives us per-room transactional state.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDO"]
+
+# D1 database: aggregate metrics + extension tokens.
+# IDs are placeholders — `wrangler d1 create stelgano` will produce real
+# values that get pasted in here. Each environment (dev/preview/prod) has
+# its own database.
+[[d1_databases]]
+binding = "DB"
+database_name = "stelgano"
+database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
+migrations_dir = "migrations"
+
+# Observability: Workers Logs ingests stdout/stderr by default with no
+# sampling at low volumes. No third-party telemetry — keeps the
+# server-blindness invariant.
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# Production environment. Variables that hold secrets (PAYSTACK_*,
+# ADMIN_PASSWORD, SECRET_KEY_BASE) are set via `wrangler secret put`,
+# never committed.
+[vars]
+PHX_HOST = "set-at-deploy-time.example"
+PAYMENT_CURRENCY = "USD"
+PRICE_CENTS = "200"
+FREE_TTL_DAYS = "7"
+PAID_TTL_DAYS = "365"
+MONETIZATION_ENABLED = "false"
+
+# Local development — `wrangler dev` reads this section. D1 migrations
+# run against a local SQLite file under .wrangler/state.
+[env.dev]
+vars = { PHX_HOST = "localhost:8787", MONETIZATION_ENABLED = "false" }
