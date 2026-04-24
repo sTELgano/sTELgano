@@ -2,33 +2,43 @@
 //
 // Icon sprite assembler for sTELgano v2.
 //
-// Walks src/client/templates/ and src/client/pages/ for references of
-// the form `href="/icons.svg#<name>"`, looks up each name in
-// lucide-static, and emits public/icons.svg containing only the
-// <symbol>s actually referenced. The sprite stays minimal — adding
-// pages adds icons to the sprite automatically; deleting pages
-// removes them on the next build.
+// Walks src/client/ for references to icons in three forms:
+//   - HTML: href="/icons.svg#<name>"
+//   - TS/JS: icon("<name>", ...)
+//   - TS/JS: { icon: "<name>" }
 //
-// Naming convention: templates use snake_case names (matching v1's
-// HEEX `<.icon name="shield_check" />`). lucide-static ships the
-// underlying SVGs with kebab-case filenames. The script normalises
-// snake_case → kebab-case for the file lookup but keeps snake_case
-// for the symbol id, so v2 templates can be a near-verbatim port of
-// v1.
+// Looks up each name in lucide-static and emits public/icons.svg
+// containing only the <symbol>s actually referenced. The sprite stays
+// minimal — adding pages/components adds icons automatically.
 //
-// Usage in templates:
+// Naming convention: snake_case names (matching v1's HEEX
+// `<.icon name="shield_check" />`). lucide-static ships the underlying
+// SVGs with kebab-case filenames. The script normalises snake_case →
+// kebab-case for the file lookup but keeps snake_case for the symbol id.
+//
+// Usage in HTML templates:
 //   <svg class="size-4"><use href="/icons.svg#shield_check"/></svg>
+// Usage in TypeScript:
+//   icon("shield_check", "size-4")   →  same href rendered as a string
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const SCAN_DIRS = [join(ROOT, "src/client/templates"), join(ROOT, "src/client/pages")];
+const SCAN_DIR = join(ROOT, "src/client");
 const LUCIDE_DIR = join(ROOT, "node_modules/lucide-static/icons");
 const OUT = join(ROOT, "public/icons.svg");
 
-const REF_RE = /href=["']\/icons\.svg#([a-z][a-z0-9_-]*)["']/g;
+const SCAN_EXTS = new Set([".html", ".ts", ".js", ".mjs"]);
+
+// Three patterns that identify icon references:
+const PATTERNS = [
+  /href=["']\/icons\.svg#([a-z][a-z0-9_-]*)["']/g, // HTML <use href="/icons.svg#name">
+  /\bicon\(["']([a-z][a-z0-9_]+)["']/g, //           TS:  icon("name", ...)
+  /\bicon:\s*["']([a-z][a-z0-9_]+)["']/g, //         TS:  { icon: "name" }
+];
+
 const SVG_INNER_RE = /<svg\b[^>]*>([\s\S]*?)<\/svg>/;
 
 async function walk(dir) {
@@ -38,7 +48,7 @@ async function walk(dir) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await walk(full)));
-    } else if (entry.isFile() && (entry.name.endsWith(".html") || entry.name.endsWith(".ts"))) {
+    } else if (entry.isFile() && SCAN_EXTS.has(extname(entry.name))) {
       files.push(full);
     }
   }
@@ -47,13 +57,14 @@ async function walk(dir) {
 
 async function collectReferences() {
   const refs = new Set();
-  for (const dir of SCAN_DIRS) {
-    const files = await walk(dir);
-    for (const file of files) {
-      const content = await readFile(file, "utf8");
+  const files = await walk(SCAN_DIR);
+  for (const file of files) {
+    const content = await readFile(file, "utf8");
+    for (const re of PATTERNS) {
+      re.lastIndex = 0;
       let m;
       // biome-ignore lint/suspicious/noAssignInExpressions: standard regex exec loop
-      while ((m = REF_RE.exec(content)) !== null) refs.add(m[1]);
+      while ((m = re.exec(content)) !== null) refs.add(m[1]);
     }
   }
   return Array.from(refs).sort();
@@ -68,14 +79,8 @@ async function buildSymbol(snakeName) {
   const m = raw.match(SVG_INNER_RE);
   if (!m) return { kind: "malformed", name: snakeName };
 
-  // Strip the lucide license comment that comes before <svg> and any
-  // leading whitespace from the inner content.
   const inner = m[1].trim();
 
-  // viewBox + presentation attributes are pinned across all lucide
-  // icons (24x24, currentColor, stroke 2, round caps/joins). Putting
-  // them on the symbol means consumers only need to size the wrapping
-  // <svg>: <svg class="size-4"><use href="..."/></svg> works as-is.
   return {
     kind: "ok",
     name: snakeName,
@@ -86,7 +91,6 @@ async function buildSymbol(snakeName) {
 async function build() {
   const names = await collectReferences();
   if (names.length === 0) {
-    // Emit an empty (but valid) sprite so the file always exists.
     await writeFile(
       OUT,
       `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" style="display:none"></svg>\n`,

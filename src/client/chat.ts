@@ -17,6 +17,7 @@
 // elixir/lib/stelgano_web/live/chat_live.ex so that nothing in the
 // shipped HTML drifts from what designers signed off on in v1.
 
+import { AsYouType } from "libphonenumber-js";
 import { CountryNames, generatePhoneNumber } from "phone-number-generator-js";
 
 import { ChatState, type GeneratorState, type PlainMessage, type State } from "./state";
@@ -41,9 +42,23 @@ if (!root) throw new Error("chat-root element missing");
 
 const state = new ChatState();
 
+// Last country inferred from the phone input — preserved across re-renders
+// (e.g. visibility toggle) so the country badge doesn't flash away.
+let lastInferredCountry: string | null = null;
+
 state.onStateChange((s) => {
   root.innerHTML = render(s);
   focusFirstField();
+  // After any re-render of the entry screen, re-apply phone formatting so
+  // the country display and AsYouType formatting survive the innerHTML swap.
+  if (s.kind === "entry") {
+    const phoneInput = root.querySelector<HTMLInputElement>('input[name="s_num"]');
+    if (phoneInput?.value) {
+      formatPhoneInput(phoneInput);
+    } else {
+      updatePhoneCountry(lastInferredCountry);
+    }
+  }
 });
 
 // -----------------------------------------------------------------------------
@@ -75,9 +90,11 @@ root.addEventListener("click", (e) => {
   if (!action) return;
 
   switch (action) {
-    case "toggle-phone-visibility":
-      state.togglePhoneVisibility();
+    case "toggle-phone-visibility": {
+      const phoneInput = root.querySelector<HTMLInputElement>('input[name="s_num"]');
+      state.togglePhoneVisibility(phoneInput?.value);
       break;
+    }
     case "open-generator":
       state.openGenerator();
       break;
@@ -170,6 +187,8 @@ root.addEventListener(
       state.typing();
       updateCharCount(target.value.length);
       autoResize(target);
+    } else if (target instanceof HTMLInputElement && target.name === "s_num") {
+      formatPhoneInput(target);
     } else if (target instanceof HTMLInputElement && target.id === "drawer-country-input") {
       state.setCountrySearch(target.value, true);
     }
@@ -177,24 +196,12 @@ root.addEventListener(
   true,
 );
 
-// Send on Enter (without Shift) in the chat textarea. Mirrors v1's
-// AutoResize hook behaviour.
+// Escape cancels an active edit in the chat textarea.
+// Enter inserts a newline (standard textarea behaviour — v1 sent via button only).
 root.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
   if (!(target instanceof HTMLTextAreaElement) || target.id !== "chat-textarea") return;
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    const s = state.getState();
-    if (s.kind !== "chat") return;
-    if (s.editing) {
-      void state.saveEdit(target.value);
-    } else if (target.value.trim()) {
-      void state.sendMessage(target.value);
-      target.value = "";
-      updateCharCount(0);
-      autoResize(target);
-    }
-  } else if (e.key === "Escape") {
+  if (e.key === "Escape") {
     const s = state.getState();
     if (s.kind === "chat" && s.editing) state.cancelEdit();
   }
@@ -268,6 +275,35 @@ function updateCharCount(n: number) {
 function autoResize(ta: HTMLTextAreaElement) {
   ta.style.height = "auto";
   ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`;
+}
+
+function formatPhoneInput(input: HTMLInputElement): void {
+  let val = input.value;
+  if (val.length > 0 && !val.startsWith("+")) {
+    val = `+${val.replace(/\D/g, "")}`;
+  }
+  const formatter = new AsYouType();
+  const formatted = formatter.input(val);
+  if (formatted !== input.value) input.value = formatted;
+  const country = formatter.getCountry() ?? null;
+  lastInferredCountry = country;
+  updatePhoneCountry(country);
+}
+
+function updatePhoneCountry(country: string | null): void {
+  const el = document.getElementById("phone-country-display");
+  if (!el) return;
+  if (!country) {
+    el.textContent = "";
+    return;
+  }
+  // ISO 3166-1 alpha-2 → flag emoji (regional indicator letters)
+  const flag = country
+    .toUpperCase()
+    .split("")
+    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
+    .join("");
+  el.textContent = `${flag} ${country}`;
 }
 
 // -----------------------------------------------------------------------------
@@ -381,6 +417,11 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                     ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5 sm:size-6")}
                   </button>
                 </div>
+                <div
+                  id="phone-country-display"
+                  class="h-4 text-xs font-mono text-primary/70 px-1"
+                  aria-live="polite"
+                ></div>
               </div>
 
               <!-- PIN Input -->

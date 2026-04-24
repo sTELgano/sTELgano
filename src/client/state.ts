@@ -644,10 +644,12 @@ export class ChatState {
     this.logout();
   }
 
-  /** Toggle password-masking of the phone field on entry. */
-  togglePhoneVisibility(): void {
+  /** Toggle password-masking of the phone field on entry.
+   *  Pass the current DOM input value so it's preserved through the re-render. */
+  togglePhoneVisibility(currentPhone?: string): void {
     if (this.state.kind !== "entry") return;
-    this.setState({ ...this.state, phoneVisible: !this.state.phoneVisible });
+    const phone = currentPhone !== undefined ? currentPhone : this.state.phone;
+    this.setState({ ...this.state, phone, phoneVisible: !this.state.phoneVisible });
   }
 
   // -------------------------------------------------------------------------
