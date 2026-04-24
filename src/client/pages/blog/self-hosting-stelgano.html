@@ -1,0 +1,283 @@
+<!--
+  title: Self-Hosting sTELgano: Your Server, Your Rules — sTELgano Blog
+
+  TODO(v2): The deployment instructions reference Elixir/PostgreSQL/Oban
+  (v1 stack). After cutover this needs a parallel "Self-hosting on
+  Cloudflare Pages + Workers" guide, or this post should be relabelled
+  as the v1 self-hosting guide.
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <div class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#book_open"/></svg>
+      Guide
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-tight">
+      Self-Hosting sTELgano: Your Server, Your Rules
+    </h1>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-03-08</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 9 min read</span>
+    </div>
+  </div>
+
+  <div class="space-y-12 animate-in stagger-4">
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Why Self-Host?</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#shield"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>The ultimate trust boundary. When you run your own sTELgano instance, you control <span class="text-white">the server, the database, the network, and the logs</span>. You do not have to trust anyone &mdash; not even us.</p>
+          <p>Even though our hosted version is zero-knowledge by design, self-hosting removes the last remaining trust assumption: that we are actually running the code we publish. With your own instance, <span class="text-primary font-semibold">you verify by running</span>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What You Need</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#cpu"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">Elixir/Erlang Runtime</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">Elixir 1.17+ and Erlang/OTP 27+. Install via asdf, mise, or your system package manager.</p>
+        </div>
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#database"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">PostgreSQL</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">PostgreSQL 15+ with binary UUID support. The only external dependency besides the runtime.</p>
+        </div>
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#globe"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">Domain Name</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">A domain name pointed at your server. Required for TLS and for the WebSocket connection.</p>
+        </div>
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#lock"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">TLS Certificate</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">HTTPS is mandatory. Use Let's Encrypt for free automated certificates via certbot or Caddy.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Environment Variables</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#settings"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>The application requires a small set of environment variables to run in production:</p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-white/10">
+                <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">Variable</th>
+                <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">Required</th>
+                <th class="text-left py-3 px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">Purpose</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-400">
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">PHX_SERVER</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Set to <span class="font-mono">true</span> so the release binds the HTTP endpoint on boot</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">SECRET_KEY_BASE</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Phoenix session signing (64+ hex chars)</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">DATABASE_URL</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">PostgreSQL connection string</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">PHX_HOST</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Your production domain name</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">ADMIN_PASSWORD</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">HTTP Basic Auth password for <span class="font-mono">/admin</span></td></tr>
+              <tr><td class="py-3 px-4 font-mono text-primary text-xs">POOL_SIZE</td><td class="py-3 px-4">No</td><td class="py-3 px-4">DB connection pool size (default: 10)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p>Generate a secret key base with:</p>
+          <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>mix phx.gen.secret</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Custom Salts</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-red-500/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-red-400" aria-hidden="true"><use href="/icons.svg#alert_triangle"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>You can override the default cryptographic salts via environment variables: <span class="font-mono text-xs text-primary">ROOM_SALT</span>, <span class="font-mono text-xs text-primary">ACCESS_SALT</span>, <span class="font-mono text-xs text-primary">SENDER_SALT</span>, and <span class="font-mono text-xs text-primary">ENC_SALT</span>.</p>
+          <p class="text-red-400 font-semibold">WARNING: Changing salts after users have created rooms will make all existing rooms permanently inaccessible. The same phone number and PIN will produce different hashes with different salts. There is no migration path. This is a one-way, destructive operation.</p>
+          <p>Only set custom salts <span class="text-white">before your first user creates a room</span>. If you are unsure, leave them at the defaults.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Database Setup</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#database"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>PostgreSQL with <span class="text-white">binary UUIDs</span>. All table IDs are generated as binary UUIDs, and all timestamps use UTC. The setup is straightforward:</p>
+          <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>mix ecto.setup</code></pre>
+          <p>This single command creates the database, runs all migrations, and seeds initial data. Oban job tables are created alongside the application tables &mdash; no separate migration step is needed.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Deployment Options</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#terminal"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">Bare Metal</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">Build a release with <span class="font-mono text-xs text-primary">mix release</span> and run it directly. Simplest deployment, full control.</p>
+        </div>
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#box"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">Docker</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">Containerised deployment for consistent environments. Works with any container orchestrator.</p>
+        </div>
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#cloud"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">PaaS</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">Fly.io, Railway, or Render. Platform-managed infrastructure with minimal configuration.</p>
+        </div>
+      </div>
+      <div class="glass-card p-8 space-y-4">
+        <p class="text-slate-400 font-medium leading-relaxed text-base">The app is a <span class="text-white">single Elixir release</span>. One binary, one process tree. No microservices, no external message brokers, no Redis. PostgreSQL is the only infrastructure dependency.</p>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Security Considerations</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>The built-in security headers and Content Security Policy are configured by default. Out of the box, sTELgano ships with:</p>
+          <ul class="space-y-2">
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">HSTS</span> &mdash; enforces HTTPS for all connections</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">CSP</span> &mdash; strict Content Security Policy blocking inline scripts and external resources</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">Cache-Control: no-store</span> &mdash; prevents caching of sensitive pages</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">Rate limiting</span> &mdash; IP-based throttling via PlugAttack</span></li>
+          </ul>
+          <p>On your end: configure your firewall, keep Elixir and Erlang updated, and restrict SSH access to your server.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Monitoring</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#activity"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>The admin dashboard at <span class="font-mono text-xs text-primary">/admin</span> provides aggregate metrics about your instance. It is protected by <span class="text-white">HTTP Basic Auth</span> &mdash; set your credentials via environment variables.</p>
+          <p>The dashboard shows operational data only: room counts, message volumes, and system health. It never exposes individual room contents, user identifiers, or message content. The admin can see that the system is running; they cannot see what anyone is saying.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Maintenance</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#cog"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>Oban handles automatic cleanup with <span class="text-white">no manual intervention needed</span>:</p>
+          <ul class="space-y-2">
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Messages are hard-deleted immediately when a reply arrives (N=1 invariant)</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Every hour, expired TTL rooms are deactivated and their messages and (room_hash, access_hash) records are hard-deleted in the same transaction</span></li>
+          </ul>
+          <p>The maintenance queue runs with 2 workers, ensuring cleanup tasks complete without impacting real-time chat performance.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Upgrades</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="premium_card border-primary/10 p-6 sm:p-10 md:p-12 space-y-6">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#refresh_cw"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>Upgrading is straightforward:</p>
+          <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>git pull origin main
+mix deps.get
+mix ecto.migrate
+mix phx.server</code></pre>
+          <p>The protocol is designed for <span class="text-white">backward compatibility</span> within the same major version. Migrations are additive &mdash; they add columns and tables but do not remove or rename existing ones. Your data is safe across upgrades.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="space-y-8 animate-in stagger-5">
+    <div class="flex items-center justify-between pt-8 border-t border-white/5">
+      <a href="/blog" class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+        Back to Blog
+      </a>
+    </div>
+
+    <div class="text-center space-y-6">
+      <p class="text-slate-500 text-sm font-medium">Ready to run your own instance?</p>
+      <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        Open Chat
+        <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+  </div>
+</article>
