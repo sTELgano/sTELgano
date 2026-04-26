@@ -325,8 +325,8 @@
     </div>
   </div>
 
-  <!-- Payments -->
-  <div class="space-y-8 animate-in stagger-5">
+  <!-- Payments (hidden when monetization is disabled via config-patch.js) -->
+  <div class="space-y-8 animate-in stagger-5" data-monetization-only>
     <div class="flex items-center gap-4">
       <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Payments</h2>
       <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
@@ -344,3 +344,5 @@
     </div>
   </div>
 </div>
+
+<script type="module" src="/assets/config-patch.js"></script>

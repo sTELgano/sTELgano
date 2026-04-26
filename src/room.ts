@@ -19,8 +19,9 @@
 
 import type { Env } from "./env";
 import { incrementPaid as countryIncrementPaid } from "./lib/country_metrics";
-import { incrementPaidNew } from "./lib/daily_metrics";
+import { incrementMessagesSent, incrementPaidNew } from "./lib/daily_metrics";
 import { findByTokenHash, markRedeemed } from "./lib/extension_tokens";
+import { decrementActiveRooms, incrementActiveRooms } from "./lib/live_counters";
 import {
   type ClientEvent,
   type ErrorReason,
@@ -264,6 +265,7 @@ export class RoomDO implements DurableObject {
       }
     }
 
+    void decrementActiveRooms(this.env.DB);
     await this.state.storage.deleteAll();
     this.room = null;
   }
@@ -307,12 +309,16 @@ export class RoomDO implements DurableObject {
       };
       await this.persist();
       await this.state.storage.setAlarm(ttlMs);
+      void incrementActiveRooms(this.env.DB);
 
       ws.serializeAttachment({ joined: true, senderHash, accessHash } satisfies WsAttachment);
       await this.padJoin(start);
       this.send(ws, {
         ref: evt.ref,
-        ok: { room_id: this.room.roomId },
+        ok: {
+          room_id: this.room.roomId,
+          ttl_expires_at: new Date(this.room.ttlExpiresAtMs).toISOString(),
+        },
       });
       return;
     }
@@ -323,8 +329,9 @@ export class RoomDO implements DurableObject {
       await this.persist();
       ws.serializeAttachment({ joined: true, senderHash, accessHash } satisfies WsAttachment);
       await this.padJoin(start);
-      const reply: { room_id: string; current_message?: MessagePayload } = {
+      const reply: { room_id: string; current_message?: MessagePayload; ttl_expires_at: string } = {
         room_id: this.room.roomId,
+        ttl_expires_at: new Date(this.room.ttlExpiresAtMs).toISOString(),
       };
       if (this.room.currentMessage) {
         reply.current_message = this.toPayload(this.room.currentMessage);
@@ -382,6 +389,7 @@ export class RoomDO implements DurableObject {
 
     this.room.currentMessage = message;
     await this.persist();
+    void incrementMessagesSent(this.env.DB);
 
     const payload = this.toPayload(message);
     this.broadcastAll({ event: "new_message", data: payload });
@@ -481,6 +489,7 @@ export class RoomDO implements DurableObject {
       }
     }
 
+    void decrementActiveRooms(this.env.DB);
     await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
     this.room = null;

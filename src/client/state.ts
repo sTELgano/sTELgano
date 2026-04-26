@@ -21,7 +21,6 @@
 // handle_event clause and produces 0+ setState() calls before
 // resolving.
 
-import { parsePhoneNumberFromString } from "libphonenumber-js";
 import type { JoinReply, MessagePayload } from "../protocol";
 import {
   decrypt,
@@ -53,6 +52,25 @@ export type PlainMessage = {
   insertedAt: string;
   /** ISO timestamp when the recipient marked it read, or null. */
   readAt: string | null;
+  /** True after the sender has edited this message. */
+  edited: boolean;
+};
+
+/** Server-side monetization + TTL settings fetched from /api/config. */
+export type Config = {
+  monetizationEnabled: boolean;
+  freeTtlDays: number;
+  paidTtlDays: number;
+  priceCents: number;
+  currency: string;
+};
+
+const DEFAULT_CONFIG: Config = {
+  monetizationEnabled: false,
+  freeTtlDays: 7,
+  paidTtlDays: 365,
+  priceCents: 200,
+  currency: "USD",
 };
 
 /** Generator drawer state — orthogonal to the main flow but only
@@ -71,6 +89,8 @@ export type GeneratorState = {
   /** True while the generator is running (brief — there's a
    *  cosmetic 600ms delay v1 used for "calculating" feel). */
   generating: boolean;
+  /** True for 2 seconds after auto-copying the generated number. */
+  copiedNumber: boolean;
 };
 
 export type State =
@@ -119,6 +139,12 @@ export type State =
       /** Error banner copy after a failed payment init, null
        *  otherwise. Cleared when the user clicks a tier again. */
       paymentError: string | null;
+      /** Free TTL in days from server config — rendered in the Free button. */
+      freeTtlDays: number;
+      /** Price in minor currency units (e.g. cents). */
+      priceCents: number;
+      /** ISO 4217 currency code (e.g. "USD"). */
+      currency: string;
     }
   /** Opening the WebSocket and joining. Brief — under a second
    *  typically. */
@@ -141,6 +167,12 @@ export type State =
       editing: boolean;
       /** Destruction modal: renders over the chat when true. */
       confirmExpire: boolean;
+      /** ISO timestamp when the room TTL expires. null = no TTL (or unknown). */
+      ttlExpiresAt: string | null;
+      /** True while a payment redirect is in flight from the Extend button. */
+      paymentLoading: boolean;
+      /** Error copy after a failed extend attempt. */
+      paymentError: string | null;
     }
   /** Wrong PIN OR 30-min lockout. PIN re-entry only — phone stays
    *  the same. Splits from v1 into two sub-flows keyed by `reason`. */
@@ -179,6 +211,7 @@ function initialGenerator(): GeneratorState {
     showCountries: false,
     generatedNumber: null,
     generating: false,
+    copiedNumber: false,
   };
 }
 
@@ -283,25 +316,37 @@ export class ChatState {
     accessHash: string;
     senderHash: string;
   } | null = null;
+  private config: Config = DEFAULT_CONFIG;
 
   constructor() {
     // On mount, check for the post-payment handoff. If present, the
     // user is returning from Paystack and we pre-populate the phone
     // (and lock the field) so they don't retype it.
     const handoff = readHandoffPhone();
-    this.state = this.initialEntry(handoff, !!handoff);
+    // phoneVisible=true when phone comes from handoff — user should see the
+    // number they're returning to without having to toggle it.
+    this.state = this.initialEntry(handoff, !!handoff, !!handoff);
   }
 
-  private initialEntry(phone = "", phoneLocked = false): Extract<State, { kind: "entry" }> {
+  private initialEntry(
+    phone = "",
+    phoneLocked = false,
+    phoneVisible = false,
+  ): Extract<State, { kind: "entry" }> {
     return {
       kind: "entry",
       phoneLocked,
       phone,
-      phoneVisible: false,
+      phoneVisible,
       error: null,
       attemptsRemaining: null,
       generator: initialGenerator(),
     };
+  }
+
+  /** Apply server-side configuration fetched from /api/config. */
+  updateConfig(c: Config): void {
+    this.config = c;
   }
 
   // -------------------------------------------------------------------------
@@ -336,32 +381,13 @@ export class ChatState {
   // Action: submit the entry form
   // -------------------------------------------------------------------------
 
-  /** Validates inputs, derives the room/access/sender hashes,
-   *  derives the AES key (PBKDF2, off-thread), opens the WS, joins.
-   *  Routes to new_channel/connecting/chat/locked based on the join
-   *  reply. */
+  /** Derives the room/access/sender hashes, derives the AES key
+   *  (PBKDF2, off-thread), opens the WS, joins. Routes to
+   *  new_channel/connecting/chat/locked based on the join reply.
+   *  Callers are responsible for validating inputs before calling. */
   async submit(phone: string, pin: string): Promise<void> {
-    // Validate before hashing. parsePhoneNumberFromString understands
-    // every country's numbering plan; anything it rejects is junk.
-    const parsed = parsePhoneNumberFromString(phone);
-    if (!parsed?.isValid()) {
-      if (this.state.kind === "entry") {
-        this.setState({
-          ...this.state,
-          error:
-            "That doesn't look like a valid steg number. Use the generator drawer to make one.",
-        });
-      }
-      return;
-    }
-
     const normalisedPhone = normalise(phone);
-    if (!pin) {
-      if (this.state.kind === "entry") {
-        this.setState({ ...this.state, error: "Enter your PIN." });
-      }
-      return;
-    }
+    if (!normalisedPhone || !pin) return;
 
     // Phase 1: derive identifiers (instant — three SHA-256 calls).
     // room_hash and access_hash can derive in parallel; sender_hash
@@ -410,7 +436,7 @@ export class ChatState {
     // Paystack first.
     const exists = await probeRoomExists(roomHash);
     const handoffTier = readHandoffTier();
-    if (exists || handoffTier === "free") {
+    if (exists || handoffTier === "free" || !this.config.monetizationEnabled) {
       await this.connectAndJoin(normalisedPhone, roomHash, accessHash, senderHash);
     } else {
       this.setState({
@@ -422,6 +448,9 @@ export class ChatState {
         senderHash,
         paymentLoading: false,
         paymentError: null,
+        freeTtlDays: this.config.freeTtlDays,
+        priceCents: this.config.priceCents,
+        currency: this.config.currency,
       });
     }
   }
@@ -467,8 +496,16 @@ export class ChatState {
   // -------------------------------------------------------------------------
 
   async initiatePayment(): Promise<void> {
-    if (this.state.kind !== "new_channel" || this.state.paymentLoading) return;
-    this.setState({ ...this.state, paymentLoading: true, paymentError: null });
+    const s = this.state;
+    if (s.kind !== "new_channel" && s.kind !== "chat") return;
+    if (s.paymentLoading) return;
+
+    const phone = s.phone;
+    if (s.kind === "new_channel") {
+      this.setState({ ...s, paymentLoading: true, paymentError: null });
+    } else {
+      this.setState({ ...s, paymentLoading: true, paymentError: null });
+    }
 
     const { secret, tokenHash } = await generateExtensionToken();
 
@@ -478,7 +515,7 @@ export class ChatState {
     // when the channel joins.
     try {
       sessionStorage.setItem("stelegano_extension_secret", secret);
-      sessionStorage.setItem("stelegano_handoff_phone", this.state.phone);
+      sessionStorage.setItem("stelegano_handoff_phone", phone);
       // v1 also stashed handoff_tier=free so the return path
       // auto-creates the room as free (the extension upgrades it
       // on redeem). Match.
@@ -497,12 +534,20 @@ export class ChatState {
         body: JSON.stringify({ token_hash: tokenHash }),
       });
     } catch {
-      if (this.state.kind !== "new_channel") return;
-      this.setState({
-        ...this.state,
-        paymentLoading: false,
-        paymentError: "Network error. Check your connection and try again.",
-      });
+      const cs = this.state;
+      if (cs.kind === "new_channel") {
+        this.setState({
+          ...cs,
+          paymentLoading: false,
+          paymentError: "Network error. Check your connection and try again.",
+        });
+      } else if (cs.kind === "chat") {
+        this.setState({
+          ...cs,
+          paymentLoading: false,
+          paymentError: "Network error. Check your connection and try again.",
+        });
+      }
       return;
     }
 
@@ -511,12 +556,20 @@ export class ChatState {
     try {
       parsed = (await response.json()) as InitiateResponse;
     } catch {
-      if (this.state.kind !== "new_channel") return;
-      this.setState({
-        ...this.state,
-        paymentLoading: false,
-        paymentError: "Server returned an unparseable response.",
-      });
+      const cs = this.state;
+      if (cs.kind === "new_channel") {
+        this.setState({
+          ...cs,
+          paymentLoading: false,
+          paymentError: "Server returned an unparseable response.",
+        });
+      } else if (cs.kind === "chat") {
+        this.setState({
+          ...cs,
+          paymentLoading: false,
+          paymentError: "Server returned an unparseable response.",
+        });
+      }
       return;
     }
 
@@ -527,14 +580,14 @@ export class ChatState {
     }
 
     // Error response — map the known codes to user copy.
-    if (this.state.kind !== "new_channel") return;
     const errorKey = "error" in parsed ? parsed.error : "unknown_error";
     const copy = paymentErrorCopy(errorKey);
-    this.setState({
-      ...this.state,
-      paymentLoading: false,
-      paymentError: copy,
-    });
+    const cs = this.state;
+    if (cs.kind === "new_channel") {
+      this.setState({ ...cs, paymentLoading: false, paymentError: copy });
+    } else if (cs.kind === "chat") {
+      this.setState({ ...cs, paymentLoading: false, paymentError: copy });
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -664,6 +717,13 @@ export class ChatState {
     this.logout();
   }
 
+  /** Set an error banner on the entry screen. Used by the view layer
+   *  after client-side validation (e.g. invalid phone format). */
+  setEntryError(error: string): void {
+    if (this.state.kind !== "entry") return;
+    this.setState({ ...this.state, error });
+  }
+
   /** Toggle password-masking of the phone field on entry.
    *  Pass the current DOM input value so it's preserved through the re-render. */
   togglePhoneVisibility(currentPhone?: string): void {
@@ -740,14 +800,37 @@ export class ChatState {
     try {
       const number = await generate(country);
       if (this.state.kind !== "entry") return; // drawer closed mid-flight
+
+      // Auto-copy to clipboard for quick sharing.
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(number);
+        copied = true;
+      } catch {
+        // clipboard API unavailable — proceed without copying
+      }
+
       this.setState({
         ...this.state,
         generator: {
           ...this.state.generator,
           generating: false,
           generatedNumber: number,
+          copiedNumber: copied,
         },
       });
+
+      if (copied) {
+        setTimeout(() => {
+          if (this.state.kind !== "entry") return;
+          if (this.state.generator.generatedNumber === number) {
+            this.setState({
+              ...this.state,
+              generator: { ...this.state.generator, copiedNumber: false },
+            });
+          }
+        }, 2000);
+      }
     } catch {
       if (this.state.kind !== "entry") return;
       this.setState({
@@ -839,6 +922,7 @@ export class ChatState {
       onMessageDeleted: (id) => this.onMessageDeleted(id),
       onCounterpartyTyping: () => this.onCounterpartyTyping(),
       onRoomExpired: () => this.onRoomExpired(),
+      onTtlExtended: (ttl) => this.onTtlExtended(ttl),
       onClose: (code) => this.onSocketClose(code),
     });
 
@@ -908,6 +992,9 @@ export class ChatState {
       counterpartyTyping: false,
       editing: false,
       confirmExpire: false,
+      ttlExpiresAt: joinReply.ttl_expires_at ?? null,
+      paymentLoading: false,
+      paymentError: null,
     });
 
     // If we returned from a Paystack checkout, the
@@ -972,7 +1059,7 @@ export class ChatState {
     }
     this.setState({
       ...this.state,
-      current: { ...this.state.current, plaintext },
+      current: { ...this.state.current, plaintext, edited: true },
     });
   }
 
@@ -1004,6 +1091,11 @@ export class ChatState {
     this.setState({ kind: "expired" });
   }
 
+  private onTtlExtended(ttlExpiresAt: string): void {
+    if (this.state.kind !== "chat") return;
+    this.setState({ ...this.state, ttlExpiresAt });
+  }
+
   private onSocketClose(code: number): void {
     // 1000 = normal (we initiated). Ignore — the action that closed
     // it has already set the appropriate state.
@@ -1033,6 +1125,7 @@ export class ChatState {
         plaintext,
         insertedAt: msg.inserted_at,
         readAt: msg.read_at,
+        edited: false,
       };
     } catch {
       // Decryption failed — wrong key, tampered ciphertext, or a

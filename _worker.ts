@@ -27,6 +27,7 @@ import type { Env } from "./src/env";
 import { type CountryRow, list as listCountryMetrics } from "./src/lib/country_metrics";
 import { type DailyRow, listRecent as listDailyRecent } from "./src/lib/daily_metrics";
 import { createPending, deleteExpired, markPaid } from "./src/lib/extension_tokens";
+import { getActiveRooms } from "./src/lib/live_counters";
 import {
   hmacSha512Hex,
   initialize as paystackInitialize,
@@ -115,6 +116,14 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
     if (request.headers.get("upgrade") !== "websocket") {
       return new Response("expected websocket upgrade", { status: 426 });
     }
+    const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    const wsRl = await env.RATE_LIMITER_WS.limit({ key: ip }).catch(() => ({ success: true }));
+    if (!wsRl.success) {
+      return new Response("Too Many Requests", {
+        status: 429,
+        headers: { "retry-after": "60" },
+      });
+    }
     const id = env.ROOM.idFromName(roomHash);
     const stub = env.ROOM.get(id);
     return stub.fetch(request);
@@ -161,10 +170,33 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
     return handlePaystackWebhook(request, env);
   }
 
+  // GET /api/config — exposes monetization/TTL settings to the
+  // client. Used by chat.ts to render correct prices/TTL copy and
+  // to decide whether to show the new_channel tier-selection screen.
+  if (url.pathname === "/api/config" && request.method === "GET") {
+    return jsonResponse({
+      monetization_enabled: env.MONETIZATION_ENABLED === "true",
+      free_ttl_days: parseInt(env.FREE_TTL_DAYS ?? "7", 10) || 7,
+      paid_ttl_days: parseInt(env.PAID_TTL_DAYS ?? "365", 10) || 365,
+      price_cents: parseInt(env.PRICE_CENTS ?? "200", 10) || 200,
+      currency: env.PAYMENT_CURRENCY ?? "USD",
+    });
+  }
+
   // GET /admin — aggregate metrics dashboard. HTTP Basic Auth
   // against ADMIN_USERNAME / ADMIN_PASSWORD. Shows only counts —
   // never individual hashes, messages, or ciphertext.
   if (url.pathname === "/admin" && request.method === "GET") {
+    const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    const adminRl = await env.RATE_LIMITER_ADMIN.limit({ key: ip }).catch(() => ({
+      success: true,
+    }));
+    if (!adminRl.success) {
+      return new Response("Too Many Requests", {
+        status: 429,
+        headers: { "retry-after": "60", "content-type": "text/plain" },
+      });
+    }
     return handleAdminDashboard(request, env);
   }
 
@@ -320,27 +352,33 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 
   let country: CountryRow[] = [];
   let daily: DailyRow[] = [];
+  let activeRooms = 0;
   try {
-    [country, daily] = await Promise.all([listCountryMetrics(env.DB), listDailyRecent(env.DB, 30)]);
+    [country, daily, activeRooms] = await Promise.all([
+      listCountryMetrics(env.DB),
+      listDailyRecent(env.DB, 90),
+      getActiveRooms(env.DB),
+    ]);
   } catch {
     // D1 unavailable or schema not migrated — show an empty
     // dashboard rather than 500.
   }
 
-  // Derive the headline counters from what v2 can actually query.
-  // v1 also showed active_rooms + messages_today via full-table
-  // Postgres scans; v2's per-room state is DO-local and isn't
-  // cheaply aggregated, so those tiles show N/A with a clear note.
   const today = new Date().toISOString().slice(0, 10);
   const todayRow = daily.find((d) => d.day === today);
   const newToday = todayRow ? todayRow.free_new + todayRow.paid_new : 0;
-  const sum30 = daily.reduce((a, r) => a + r.free_new + r.paid_new, 0);
+  const sum90 = daily.reduce((a, r) => a + r.free_new + r.paid_new, 0);
+  const messagesThisDay = todayRow?.messages_sent ?? 0;
+  // Per-day table shows last 30 days for readability.
+  const dailyTable = daily.slice(0, 30);
 
   const html = renderAdminHtml({
     updated: `${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`,
     newToday,
-    sum30,
-    daily,
+    sum90,
+    activeRooms,
+    messagesThisDay,
+    daily: dailyTable,
     country,
   });
 
@@ -356,7 +394,9 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 function renderAdminHtml(d: {
   updated: string;
   newToday: number;
-  sum30: number;
+  sum90: number;
+  activeRooms: number;
+  messagesThisDay: number;
   daily: DailyRow[];
   country: CountryRow[];
 }): string {
@@ -369,11 +409,12 @@ function renderAdminHtml(d: {
             <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_new}</td>
             <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_new}</td>
             <td class="py-3 pr-8 text-right font-mono text-slate-400">${r.free_expired}</td>
-            <td class="py-3 text-right font-mono text-slate-400">${r.paid_expired}</td>
+            <td class="py-3 pr-8 text-right font-mono text-slate-400">${r.paid_expired}</td>
+            <td class="py-3 text-right font-mono text-slate-300">${r.messages_sent ?? 0}</td>
           </tr>`,
         )
         .join("")
-    : `<tr><td colspan="5" class="py-4 text-sm text-slate-500 italic">No daily data yet.</td></tr>`;
+    : `<tr><td colspan="6" class="py-4 text-sm text-slate-500 italic">No daily data yet.</td></tr>`;
 
   const countryRows = d.country.length
     ? d.country
@@ -399,6 +440,7 @@ function renderAdminHtml(d: {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
+  <meta http-equiv="refresh" content="30">
   <title>Admin — sTELgano</title>
   <link rel="stylesheet" href="/assets/app.css">
 </head>
@@ -435,10 +477,10 @@ function renderAdminHtml(d: {
 
       <!-- Metric cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-        ${adminMetricCard("New Chats Today", d.newToday, "Last 24h", "plus_circle", true)}
-        ${adminMetricCard("Total (30d)", d.sum30, "New rooms, past 30d", "calendar")}
-        ${adminMetricCard("Active Chats", "—", "DO-local; not aggregated", "radio")}
-        ${adminMetricCard("Messages Today", "—", "DO-local; not aggregated", "message_circle")}
+        ${adminMetricCard("Active Chats", d.activeRooms, "Live count, pushed by DO", "radio", true)}
+        ${adminMetricCard("New Chats Today", d.newToday, "Last 24h", "plus_circle")}
+        ${adminMetricCard("Messages Today", d.messagesThisDay, "Encrypted, current UTC day", "message_circle")}
+        ${adminMetricCard("Total (90d)", d.sum90, "New rooms, past 90 days", "calendar")}
       </div>
 
       <!-- Per-day breakdown -->
@@ -458,7 +500,8 @@ function renderAdminHtml(d: {
                 <th class="py-3 pr-8 text-right">New free</th>
                 <th class="py-3 pr-8 text-right">New paid</th>
                 <th class="py-3 pr-8 text-right">Expired free</th>
-                <th class="py-3 text-right">Expired paid</th>
+                <th class="py-3 pr-8 text-right">Expired paid</th>
+                <th class="py-3 text-right">Messages</th>
               </tr>
             </thead>
             <tbody>${dailyRows}</tbody>

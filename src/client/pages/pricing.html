@@ -42,7 +42,7 @@
 
       <div class="space-y-1">
         <div class="text-5xl font-extrabold text-white font-display">Free</div>
-        <p class="text-slate-500 text-sm font-medium">7 days, then recycled</p>
+        <p class="text-slate-500 text-sm font-medium" data-config="free-ttl">7 days, then recycled</p>
       </div>
 
       <ul class="space-y-3">
@@ -90,9 +90,9 @@
 
       <div class="relative space-y-1">
         <div class="text-5xl font-extrabold text-primary font-display">
-          $2.00<span class="text-lg text-slate-500 font-bold">/year</span>
+          <span data-config="price">$2.00</span><span class="text-lg text-slate-500 font-bold">/year</span>
         </div>
-        <p class="text-slate-500 text-sm font-medium">365 days, your number alone</p>
+        <p class="text-slate-500 text-sm font-medium" data-config="paid-ttl">365 days, your number alone</p>
       </div>
 
       <ul class="relative space-y-3">
@@ -189,3 +189,5 @@
     </a>
   </div>
 </div>
+
+<script type="module" src="/assets/config-patch.js"></script>

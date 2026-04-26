@@ -45,7 +45,7 @@
       </li>
       <li class="flex items-start gap-3">
         <span class="text-primary font-bold">3.</span>
-        <span>Your number is now secured for 365 days</span>
+        <span>Your number is now secured for <span data-config="paid-ttl-days">365</span> days</span>
       </li>
     </ol>
 
@@ -73,6 +73,8 @@
     <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
   </a>
 </div>
+
+<script type="module" src="/assets/config-patch.js"></script>
 
 <!-- Reads ?reference=… from the URL and writes it into the page.
      Inline because it runs once on load and there's no need to

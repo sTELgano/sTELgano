@@ -105,6 +105,8 @@ export type MessagePayload = {
 export type JoinReply = {
   room_id: string;
   current_message?: MessagePayload;
+  /** ISO 8601 timestamp when the room TTL expires. Present on all joins. */
+  ttl_expires_at?: string;
 };
 
 // ---------------------------------------------------------------------------

@@ -2,10 +2,6 @@
   title: sTELgano-std-1 Protocol Specification
 
   Ported from elixir/lib/stelgano_web/controllers/page_html/spec.html.heex.
-
-  TODO(v2): "Phoenix Channels" in the Transport section names the v1
-  transport. Post-cutover this should read "Hibernatable WebSockets on
-  Cloudflare Durable Objects" but the wire protocol is unchanged.
 -->
 
 <div class="max-w-5xl mx-auto space-y-16 py-12 animate-in pb-40">
@@ -217,8 +213,8 @@
           <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#radio"/></svg>
         </div>
         <div class="space-y-3">
-          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">Phoenix Channels</h4>
-          <p class="text-sm text-slate-400 leading-relaxed font-medium">Real-time communication over WebSocket using Phoenix Channels. The socket is fully anonymous &mdash; no session cookie, no authentication token, no user identity. Connection state is entirely ephemeral.</p>
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">Durable Object WebSockets</h4>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium">Real-time communication over hibernatable WebSockets on Cloudflare Durable Objects. The socket is fully anonymous &mdash; no session cookie, no authentication token, no user identity. Connection state is entirely ephemeral.</p>
           <div class="font-mono text-xs text-slate-500 bg-white/2 rounded-lg px-4 py-3 border border-white/5">Topic: anon_room:{room_hash} (64-char lowercase hex)</div>
         </div>
       </div>
@@ -432,7 +428,7 @@
                 <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary">std-1</span>
               </td>
               <td class="p-8 font-mono text-xs font-black text-white tracking-[0.2em]">April 2026</td>
-              <td class="p-8 text-sm text-slate-400 font-medium">Initial release. Defines contact-layer steganographic messaging with SHA-256 identifiers, AES-256-GCM encryption, PBKDF2 key derivation, Phoenix Channel transport, and N=1 message invariant.</td>
+              <td class="p-8 text-sm text-slate-400 font-medium">Initial release. Defines contact-layer steganographic messaging with SHA-256 identifiers, AES-256-GCM encryption, PBKDF2 key derivation, WebSocket transport, and N=1 message invariant.</td>
             </tr>
           </tbody>
         </table>

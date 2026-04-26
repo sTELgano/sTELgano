@@ -51,6 +51,20 @@ class_name = "RoomDO"
 tag = "v1"
 new_sqlite_classes = ["RoomDO"]
 
+# Native rate limiting — one binding per rule, limit/period are static config.
+# Cheaper than a DO-per-IP approach: no extra compute, no class registration.
+[[unsafe.bindings]]
+name = "RATE_LIMITER_ADMIN"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
+[[unsafe.bindings]]
+name = "RATE_LIMITER_WS"
+type = "ratelimit"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
+
 # D1 database: aggregate metrics + extension tokens.
 # IDs are placeholders — `wrangler d1 create stelgano` produces real
 # values that get pasted in here.

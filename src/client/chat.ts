@@ -17,10 +17,16 @@
 // elixir/lib/stelgano_web/live/chat_live.ex so that nothing in the
 // shipped HTML drifts from what designers signed off on in v1.
 
-import { AsYouType } from "libphonenumber-js";
+import { AsYouType, parsePhoneNumberFromString } from "libphonenumber-js";
 import { CountryNames, generatePhoneNumber } from "phone-number-generator-js";
 
-import { ChatState, type GeneratorState, type PlainMessage, type State } from "./state";
+import {
+  ChatState,
+  type Config,
+  type GeneratorState,
+  type PlainMessage,
+  type State,
+} from "./state";
 
 // Adapter from CountryNames enum to the value the generator
 // expects. The enum keys are snake_cased versions of the values
@@ -42,12 +48,45 @@ if (!root) throw new Error("chat-root element missing");
 
 const state = new ChatState();
 
+// Fetch server-side config and apply it to the state machine.
+// Failure is soft — defaults in DEFAULT_CONFIG are safe.
+let serverConfig: Config = {
+  monetizationEnabled: false,
+  freeTtlDays: 7,
+  paidTtlDays: 365,
+  priceCents: 200,
+  currency: "USD",
+};
+fetch("/api/config")
+  .then((r) => r.json())
+  .then((c) => {
+    const raw = c as Record<string, unknown>;
+    serverConfig = {
+      monetizationEnabled: raw.monetization_enabled === true,
+      freeTtlDays: typeof raw.free_ttl_days === "number" ? raw.free_ttl_days : 7,
+      paidTtlDays: typeof raw.paid_ttl_days === "number" ? raw.paid_ttl_days : 365,
+      priceCents: typeof raw.price_cents === "number" ? raw.price_cents : 200,
+      currency: typeof raw.currency === "string" ? raw.currency : "USD",
+    };
+    state.updateConfig(serverConfig);
+  })
+  .catch(() => {});
+
 // Last country inferred from the phone input — preserved across re-renders
 // (e.g. visibility toggle) so the country badge doesn't flash away.
 let lastInferredCountry: string | null = null;
 
+// Track the previous state kind so entrance animations only fire when
+// transitioning between states, not on intra-state updates (e.g. eye
+// toggle, typing indicator, copiedNumber). Without this every
+// root.innerHTML swap restarts all animate-in CSS animations and looks
+// like a full page reload to the user.
+let prevKind: string | null = null;
+
 state.onStateChange((s) => {
-  root.innerHTML = render(s);
+  const kindsChanged = s.kind !== prevKind;
+  prevKind = s.kind;
+  root.innerHTML = render(s, kindsChanged);
   focusFirstField();
   // After any re-render of the entry screen, re-apply phone formatting so
   // the country display and AsYouType formatting survive the innerHTML swap.
@@ -76,6 +115,16 @@ root.addEventListener("submit", (e) => {
   if (action === "submit-entry") {
     const phone = String(form.get("s_num") ?? "");
     const pin = String(form.get("s_key") ?? "");
+    if (!parsePhoneNumberFromString(phone)?.isValid()) {
+      state.setEntryError(
+        "That doesn't look like a valid steg number. Use the generator drawer to make one.",
+      );
+      return;
+    }
+    if (!pin) {
+      state.setEntryError("Enter your PIN.");
+      return;
+    }
     void state.submit(phone, pin);
   } else if (action === "submit-locked") {
     const pin = String(form.get("s_key") ?? "");
@@ -170,7 +219,10 @@ root.addEventListener("click", (e) => {
       state.clearSession();
       break;
     case "back-to-entry":
-      location.reload();
+      state.logout();
+      break;
+    case "extend-room":
+      void state.initiatePayment();
       break;
   }
 });
@@ -218,13 +270,15 @@ function armReadObserver() {
     (entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) {
-          state.markCurrentRead();
-          ioObserver?.disconnect();
-          ioObserver = null;
+          setTimeout(() => {
+            state.markCurrentRead();
+            ioObserver?.disconnect();
+            ioObserver = null;
+          }, 500);
         }
       }
     },
-    { threshold: 0.5 },
+    { threshold: 0.8 },
   );
   ioObserver.observe(el);
 }
@@ -274,7 +328,7 @@ function updateCharCount(n: number) {
 
 function autoResize(ta: HTMLTextAreaElement) {
   ta.style.height = "auto";
-  ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`;
+  ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`;
 }
 
 function formatPhoneInput(input: HTMLInputElement): void {
@@ -310,12 +364,12 @@ function updatePhoneCountry(country: string | null): void {
 // Render — one function per state kind
 // -----------------------------------------------------------------------------
 
-function render(s: State): string {
+function render(s: State, animate: boolean): string {
   switch (s.kind) {
     case "entry":
-      return renderEntry(s);
+      return renderEntry(s, animate);
     case "deriving":
-      return renderDeriving();
+      return renderDeriving(s);
     case "new_channel":
       return renderNewChannel(s);
     case "connecting":
@@ -331,7 +385,8 @@ function render(s: State): string {
 
 // -------------------------------- :entry --------------------------------
 
-function renderEntry(s: Extract<State, { kind: "entry" }>): string {
+function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): string {
+  const a = animate ? " animate-in" : "";
   const phoneType = s.phoneVisible ? "text" : "password";
   const phoneTrackClass = s.phoneVisible ? "tracking-wider" : "tracking-widest";
   const phoneLockedOpacity = s.phoneLocked ? "opacity-80" : "";
@@ -362,7 +417,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
     : "";
 
   return `
-    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] animate-in">
+    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)]${a}">
       <div class="w-full max-w-xl space-y-12">
         <!-- Branding -->
         <div class="text-center space-y-4">
@@ -380,7 +435,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
           </div>
         </div>
 
-        <div class="glass-card-premium p-1 sm:p-1 animate-in overflow-hidden">
+        <div class="glass-card-premium p-1 sm:p-1${a} overflow-hidden">
           <div class="p-5 sm:p-10 space-y-10">
             ${errorBanner}
 
@@ -536,7 +591,11 @@ function renderGeneratorDrawer(g: GeneratorState): string {
 
             <div class="flex flex-col items-center gap-3">
               <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest text-emerald-400">
-                ${icon("sparkles", "size-3")} Identity Ready
+                ${
+                  g.copiedNumber
+                    ? `${icon("check", "size-3")} Copied to Clipboard`
+                    : `${icon("sparkles", "size-3")} Identity Ready`
+                }
               </div>
               <button
                 type="button"
@@ -669,7 +728,7 @@ function renderGeneratorDrawer(g: GeneratorState): string {
             <div class="space-y-6">
               ${[
                 {
-                  icon: "user_minus",
+                  icon: "user_plus",
                   title: "1. Save in Phonebook",
                   text: "Add this number to your partner's actual contact list.",
                   guidance:
@@ -722,7 +781,8 @@ function renderGeneratorDrawer(g: GeneratorState): string {
 
 // ------------------------------ :deriving -------------------------------
 
-function renderDeriving(): string {
+function renderDeriving(s: Extract<State, { kind: "deriving" }>): string {
+  const pct = Math.round(s.progress);
   return `
     <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 animate-in">
       <div class="w-full max-w-sm text-center space-y-16">
@@ -732,7 +792,14 @@ function renderDeriving(): string {
           <div class="absolute inset-8 rounded-full border-2 border-primary/5 border-l-primary animate-spin duration-3000"></div>
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="size-24 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center shadow-2xl">
-              ${icon("cpu", "size-12 text-primary animate-pulse drop-shadow-[0_0_15px_var(--color-primary-glow)]")}
+              ${
+                pct > 0
+                  ? `<span class="font-mono font-black text-primary text-xl">${pct}%</span>`
+                  : icon(
+                      "cpu",
+                      "size-12 text-primary animate-pulse drop-shadow-[0_0_15px_var(--color-primary-glow)]",
+                    )
+              }
             </div>
           </div>
         </div>
@@ -762,6 +829,10 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
   const paidDisabled = s.paymentLoading ? "disabled" : "";
   const paidClass = s.paymentLoading ? "opacity-50 cursor-not-allowed" : "";
   const paidLabel = s.paymentLoading ? "Opening checkout…" : "Dedicated Tier";
+  const priceDisplay = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: s.currency,
+  }).format(s.priceCents / 100);
 
   const errorBanner = s.paymentError
     ? `
@@ -801,7 +872,7 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
               <div>
                 <h3 class="text-white font-bold text-sm">Temporary (Free)</h3>
                 <p class="text-slate-400 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
-                  Expires in 7 days
+                  Expires in ${s.freeTtlDays} days
                 </p>
               </div>
             </div>
@@ -823,7 +894,7 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
               <div>
                 <h3 class="text-primary font-bold text-sm">${escapeHtml(paidLabel)}</h3>
                 <p class="text-primary/80 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
-                  1 Year &mdash; $2.00
+                  1 Year &mdash; ${escapeHtml(priceDisplay)}
                 </p>
               </div>
             </div>
@@ -863,6 +934,35 @@ function renderConnecting(): string {
 }
 
 // -------------------------------- :chat ---------------------------------
+
+function renderTtlWarning(ttlExpiresAt: string | null, monetizationEnabled: boolean): string {
+  if (!ttlExpiresAt) return "";
+  const remainingMs = new Date(ttlExpiresAt).getTime() - Date.now();
+  if (remainingMs <= 0) return "";
+  const remainingHours = remainingMs / 3_600_000;
+  if (remainingHours > 48) return "";
+
+  const isDanger = remainingHours <= 12;
+  const colorClass = isDanger
+    ? "bg-danger/10 border-b border-danger/20 text-danger"
+    : "bg-amber-500/10 border-b border-amber-500/20 text-amber-400";
+
+  const hrs = Math.floor(remainingHours);
+  const mins = Math.floor((remainingMs % 3_600_000) / 60_000);
+  const countdown = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+
+  const extendBtn = monetizationEnabled
+    ? `<button data-action="extend-room" class="ml-3 text-[10px] font-bold uppercase tracking-widest underline hover:no-underline">Extend</button>`
+    : "";
+
+  return `
+    <div class="px-4 sm:px-6 py-2 flex items-center gap-3 text-xs font-bold ${colorClass}">
+      ${icon("alert_triangle", "size-4 shrink-0")}
+      <span>Channel expires in ${countdown}</span>
+      ${extendBtn}
+    </div>
+  `;
+}
 
 function renderChat(s: Extract<State, { kind: "chat" }>): string {
   const canType = !s.current || s.current.senderHash !== s.senderHash;
@@ -917,6 +1017,20 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
         </div>
       </div>
 
+      <!-- TTL expiry warning (amber < 48h, danger < 12h) -->
+      ${renderTtlWarning(s.ttlExpiresAt, serverConfig.monetizationEnabled)}
+
+      <!-- Payment error banner (extend button errors) -->
+      ${
+        s.paymentError
+          ? `
+      <div class="px-4 sm:px-6 py-2 flex items-center gap-3 text-xs font-bold bg-danger/10 border-b border-danger/20 text-danger">
+        ${icon("alert_circle", "size-4 shrink-0")}
+        <span>${escapeHtml(s.paymentError)}</span>
+      </div>`
+          : ""
+      }
+
       <!-- TTL (Session Entropy) Bar -->
       <div class="h-1 w-full bg-slate-900 border-b border-white/5 overflow-hidden">
         <div
@@ -967,6 +1081,12 @@ function renderMessageBubble(msg: PlainMessage, senderHash: string): string {
         </span>`
     : "";
 
+  const editedBadge = msg.edited
+    ? `<span class="flex items-center gap-1 py-0.5 px-1.5 rounded-md bg-white/5 border border-white/5">
+        <span class="text-[8px] font-black uppercase tracking-widest text-slate-500">Edited</span>
+      </span>`
+    : "";
+
   return `
     <div class="flex w-full animate-in ${justify}" ${dataAttr}>
       <div class="max-w-[85%] sm:max-w-[80%] group space-y-3 ${flex}">
@@ -974,7 +1094,7 @@ function renderMessageBubble(msg: PlainMessage, senderHash: string): string {
           <p class="relative z-10 whitespace-pre-wrap text-sm sm:text-lg leading-relaxed font-medium tracking-tight">${escapeHtml(msg.plaintext)}</p>
         </div>
         <div class="flex items-center gap-4 px-2 mt-1">
-          ${isMine ? `<div class="flex items-center gap-2">${readBadge}</div>` : ""}
+          ${isMine ? `<div class="flex items-center gap-2">${readBadge}${editedBadge}</div>` : editedBadge}
         </div>
       </div>
     </div>
@@ -1044,7 +1164,7 @@ function renderInputArea(opts: { editing: boolean; value: string }): string {
         <textarea
           id="chat-textarea"
           data-autofocus
-          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 focus:outline-none py-2 sm:py-4 px-2 resize-none max-h-60 min-h-12 sm:min-h-14 scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
+          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 focus:outline-none py-2 sm:py-4 px-2 resize-none max-h-36 min-h-12 sm:min-h-14 scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
           placeholder="${placeholder}"
           rows="1"
           maxlength="${MAX_CHARS}"
