@@ -435,7 +435,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
           </div>
         </div>
 
-        <div class="glass-card-premium p-1 sm:p-1${a} overflow-hidden">
+        <div class="glass-card-premium p-8 sm:p-10${a} overflow-hidden">
           <div class="p-5 sm:p-10 space-y-10">
             ${errorBanner}
 
@@ -1354,7 +1354,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
 function renderExpired(): string {
   return `
     <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-2xl">
-      <div class="glass-card-premium max-w-md w-full text-center border-danger/20 animate-in p-10">
+      <div class="glass-card-premium max-w-md w-full text-center border-danger/20 animate-in p-8 sm:p-10">
         <div class="size-20 rounded-3xl bg-danger/10 flex items-center justify-center mx-auto mb-8 border border-danger/20">
           ${icon("trash_2", "size-10 text-danger")}
         </div>
