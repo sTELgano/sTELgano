@@ -351,13 +351,7 @@ function updatePhoneCountry(country: string | null): void {
     el.textContent = "";
     return;
   }
-  // ISO 3166-1 alpha-2 → flag emoji (regional indicator letters)
-  const flag = country
-    .toUpperCase()
-    .split("")
-    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
-    .join("");
-  el.textContent = `${flag} ${country}`;
+  el.textContent = `(${country})`;
 }
 
 // -----------------------------------------------------------------------------
@@ -444,7 +438,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
               <div class="space-y-4">
                 <div class="flex items-center justify-between px-1">
                   <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.3em] text-slate-500">
-                    Secret Number
+                    Secret Number <span id="phone-country-display" class="text-primary/60 normal-case tracking-normal font-normal" aria-live="polite"></span>
                   </label>
                   ${lockedBadge}
                 </div>
@@ -472,11 +466,6 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
                     ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5 sm:size-6")}
                   </button>
                 </div>
-                <div
-                  id="phone-country-display"
-                  class="h-4 text-xs font-mono text-primary/70 px-1"
-                  aria-live="polite"
-                ></div>
               </div>
 
               <!-- PIN Input -->
