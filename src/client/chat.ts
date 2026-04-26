@@ -1017,6 +1017,14 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
         </div>
       </div>
 
+      <!-- TTL (Session Entropy) Bar -->
+      <div class="h-1 w-full bg-slate-900 border-b border-white/5 overflow-hidden">
+        <div
+          class="h-full bg-linear-to-r from-primary via-emerald-400 to-primary/40 transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(0,255,163,0.5)]"
+          style="width: 100%;"
+        ></div>
+      </div>
+
       <!-- TTL expiry warning (amber < 48h, danger < 12h) -->
       ${renderTtlWarning(s.ttlExpiresAt, serverConfig.monetizationEnabled)}
 
@@ -1030,14 +1038,6 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
       </div>`
           : ""
       }
-
-      <!-- TTL (Session Entropy) Bar -->
-      <div class="h-1 w-full bg-slate-900 border-b border-white/5 overflow-hidden">
-        <div
-          class="h-full bg-linear-to-r from-primary via-emerald-400 to-primary/40 transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(0,255,163,0.5)]"
-          style="width: 100%;"
-        ></div>
-      </div>
 
       <!-- Workspace Message Area -->
       <div

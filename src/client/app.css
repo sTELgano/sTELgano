@@ -166,11 +166,16 @@
   --color-primary-hover: var(--color-primary-hover);
   --color-primary-glow: var(--color-primary-glow);
   --color-primary-soft: var(--color-primary-soft);
-  
+
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  
+
   --color-warning: var(--warning);
+
+  /* Register custom fonts so Tailwind v4 generates font-mono / font-display
+     utilities with the project fonts instead of the system-default stacks. */
+  --font-mono: "JetBrains Mono", monospace;
+  --font-display: "Outfit", "Inter", system-ui, sans-serif;
 }
 
 /* ===========================================================================
@@ -274,16 +279,22 @@ body {
   color: var(--bg-dark);
 }
 
-.font-display {
-  font-family: var(--font-display);
-}
-.font-mono {
-  font-family: var(--font-mono);
+@layer utilities {
+  .font-display { font-family: var(--font-display); }
+  .font-mono    { font-family: var(--font-mono); }
 }
 
 /* ===========================================================================
    Hyper-Glass Components
+   ---------------------------------------------------------------------------
+   All component rules live in @layer components so that Tailwind utility
+   classes (text-4xl, py-6, bg-slate-950/40, …) can override the base
+   defaults. Without this, Tailwind v4 utilities — generated inside
+   @layer utilities — lose to unlayered CSS, which is the opposite of the
+   intended cascade (and the opposite of Tailwind v3's behaviour).
    =========================================================================== */
+@layer components {
+
 .glass-card {
   background: var(--bg-surface);
   backdrop-filter: blur(20px) saturate(180%);
@@ -512,8 +523,10 @@ body {
   }
 }
 
+} /* end @layer components */
+
 /* ===========================================================================
-   Animations
+   Animations — @keyframes must be outside @layer (browsers ignore them inside)
    =========================================================================== */
 @keyframes orbFloat {
   0% {
@@ -571,46 +584,37 @@ body {
   }
 }
 
-.animate-spin-reverse {
-  animation: spin-reverse 3s linear infinite;
-}
+@layer utilities {
+  .animate-spin-reverse {
+    animation: spin-reverse 3s linear infinite;
+  }
 
-.animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
-}
+  .animate-pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
 
-.animate-in {
-  animation: fadeIn 0.8s ease-out forwards;
-}
+  .animate-in {
+    animation: fadeIn 0.8s ease-out forwards;
+  }
 
-.stagger-1 {
-  animation-delay: 0.1s;
-}
-.stagger-2 {
-  animation-delay: 0.2s;
-}
-.stagger-3 {
-  animation-delay: 0.3s;
-}
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
 
-/* ===========================================================================
-   Utilities
-   =========================================================================== */
-.glow-primary {
-  box-shadow: 0 0 25px rgba(0, 255, 163, 0.15);
-}
+  .glow-primary {
+    box-shadow: 0 0 25px rgba(0, 255, 163, 0.15);
+  }
 
-.text-gradient {
-  background: linear-gradient(to right, white, #94a3b8);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
+  .text-gradient {
+    background: linear-gradient(to right, white, #94a3b8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
