@@ -287,14 +287,14 @@ body {
 /* ===========================================================================
    Hyper-Glass Components
    ---------------------------------------------------------------------------
-   All component rules live in @layer components so that Tailwind utility
-   classes (text-4xl, py-6, bg-slate-950/40, …) can override the base
-   defaults. Without this, Tailwind v4 utilities — generated inside
-   @layer utilities — lose to unlayered CSS, which is the opposite of the
-   intended cascade (and the opposite of Tailwind v3's behaviour).
+   These rules are intentionally left OUTSIDE any @layer so they share the
+   same cascade behaviour as v1 (Elixir/Phoenix), which also keeps glass-input
+   etc. unlayered. The practical effect: glass-input's font-size (0.9375 rem)
+   and padding (0.875 rem / 1.125 rem) are the authoritative defaults;
+   Tailwind utilities like text-4xl / py-6 applied on top are overridden by
+   these unlayered rules and therefore act as no-ops for those specific
+   properties — which matches v1 exactly.
    =========================================================================== */
-@layer components {
-
 .glass-card {
   background: var(--bg-surface);
   backdrop-filter: blur(20px) saturate(180%);
@@ -523,10 +523,8 @@ body {
   }
 }
 
-} /* end @layer components */
-
 /* ===========================================================================
-   Animations — @keyframes must be outside @layer (browsers ignore them inside)
+   Animations
    =========================================================================== */
 @keyframes orbFloat {
   0% {
