@@ -604,7 +604,7 @@ function renderGeneratorDrawer(g: GeneratorState): string {
         <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
           ${icon("globe", "size-9 text-slate-500")}
         </div>
-        <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 max-w-[240px]">
+        <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 max-w-60">
           Select a country above to generate a targeted identity
         </p>
       </div>`;
@@ -1290,7 +1290,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
           <h1 class="text-4xl font-extrabold text-white font-display tracking-tight uppercase">
             Workspace <span class="text-gradient">Locked.</span>
           </h1>
-          <p class="text-slate-500 font-medium text-sm leading-relaxed max-w-[280px] mx-auto">
+          <p class="text-slate-500 font-medium text-sm leading-relaxed max-w-70 mx-auto">
             Encryption artifacts are suspended. Re-derive the key matrix to restore the link.
           </p>
         </div>

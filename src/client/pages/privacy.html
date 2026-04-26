@@ -200,28 +200,28 @@
       </div>
       <div class="space-y-4">
         <div class="flex items-start gap-6 py-4 border-b border-white/5 last:border-0 group/item">
-          <div class="min-w-[140px]"><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">Messages</span></div>
+          <div class="min-w-35"><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">Messages</span></div>
           <div class="space-y-1">
             <span class="text-sm font-mono font-bold text-white">Deleted on reply</span>
             <p class="text-xs text-slate-500 leading-relaxed font-medium">Hard-deleted immediately when a reply is sent (N=1 invariant). The previous message row is permanently removed from the database in the same transaction. No deferred cleanup.</p>
           </div>
         </div>
         <div class="flex items-start gap-6 py-4 border-b border-white/5 last:border-0 group/item">
-          <div class="min-w-[140px]"><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">Rooms</span></div>
+          <div class="min-w-35"><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">Rooms</span></div>
           <div class="space-y-1">
             <span class="text-sm font-mono font-bold text-white">TTL-based expiry</span>
             <p class="text-xs text-slate-500 leading-relaxed font-medium">Rooms expire based on their configured time-to-live. An hourly job deactivates expired rooms and, in the same transaction, hard-deletes their messages and every stored (room_hash, access_hash) record.</p>
           </div>
         </div>
         <div class="flex items-start gap-6 py-4 border-b border-white/5 last:border-0 group/item">
-          <div class="min-w-[140px]"><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">IP Logs</span></div>
+          <div class="min-w-35"><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">IP Logs</span></div>
           <div class="space-y-1">
             <span class="text-sm font-mono font-bold text-white">48 hours maximum</span>
             <p class="text-xs text-slate-500 leading-relaxed font-medium">Stored only in volatile memory for rate limiting. Never persisted to disk or database.</p>
           </div>
         </div>
         <div class="flex items-start gap-6 py-4 border-b border-white/5 last:border-0 group/item">
-          <div class="min-w-[140px]"><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">Everything Else</span></div>
+          <div class="min-w-35"><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover/item:text-primary transition-colors">Everything Else</span></div>
           <div class="space-y-1">
             <span class="text-sm font-mono font-bold text-white">Not applicable</span>
             <p class="text-xs text-slate-500 leading-relaxed font-medium">Email, phone numbers, names, profiles, chat history, encryption keys &mdash; none of these are collected, so there is nothing to retain.</p>
