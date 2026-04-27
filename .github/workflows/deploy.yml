@@ -43,6 +43,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run build:html && npm run build:csp_hashes
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
