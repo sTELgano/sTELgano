@@ -63,5 +63,15 @@ PAYMENT_CURRENCY = "USD"
 PRICE_CENTS = "200"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
-MONETIZATION_ENABLED = "false"
+# Enable monetization so the paid-tier code paths (webhook, payment
+# initiate, extension_secret join) are exercised in the test suite.
+MONETIZATION_ENABLED = "true"
 CF_ACCOUNT_ID = ""
+# Admin credentials — test-only values matching the admin.test.ts expectations.
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "letmein"
+# Paystack test credentials — must match the constants in paystack_webhook.test.ts.
+PAYSTACK_SECRET_KEY = "sk_test_REPLACE_ME"
+PAYSTACK_PUBLIC_KEY = "pk_test_REPLACE_ME"
+PAYSTACK_CALLBACK_URL = "http://localhost:8788/payment/callback"
+PAYSTACK_RECEIPT_EMAIL_DOMAIN = "localhost"
