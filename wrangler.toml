@@ -85,13 +85,11 @@ simple = { limit = 3, period = 60 }
 binding = "ANALYTICS"
 dataset = "stelgano_events"
 
-# D1 database: aggregate metrics + extension tokens.
-# IDs are placeholders — `wrangler d1 create stelgano` produces real
-# values that get pasted in here.
+# D1 database: extension tokens + live_counters snapshot.
 [[d1_databases]]
 binding = "DB"
 database_name = "stelgano"
-database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
+database_id = "8dc2edd6-cde2-49cb-a1bb-fffb33c6e274"
 migrations_dir = "migrations"
 
 # KV namespace for exchange rate caching. Written daily by the
@@ -100,7 +98,7 @@ migrations_dir = "migrations"
 # Create with: wrangler kv:namespace create RATE_CACHE
 [[kv_namespaces]]
 binding = "RATE_CACHE"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "7eb3e58ecdba426e9dc583b8aff0e042"
 
 # Cron Triggers:
 #   "0 3 * * *" — daily token cleanup (deleteExpired, ports v1 ExpireUnredeemedTokens)
@@ -117,7 +115,7 @@ head_sampling_rate = 1.0
 # Production environment variables. Secrets (PAYSTACK_*, ADMIN_PASSWORD)
 # are set via `wrangler secret put`, never committed.
 [vars]
-PHX_HOST = "set-at-deploy-time.example"
+PHX_HOST = "staging.stelgano.com"
 PAYMENT_CURRENCY = "USD"
 PRICE_CENTS = "200"
 FREE_TTL_DAYS = "7"
@@ -126,4 +124,73 @@ MONETIZATION_ENABLED = "false"
 # Cloudflare account ID — needed by the admin dashboard to query Analytics
 # Engine via the GraphQL API. Not a secret: safe to commit. Get it from
 # the Cloudflare dashboard URL or `wrangler whoami`.
-CF_ACCOUNT_ID = "REPLACE_WITH_CF_ACCOUNT_ID"
+CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
+
+# ---------------------------------------------------------------------------
+# Staging environment (v2-cloudflare branch → stelgano-staging Worker)
+#
+# Resources already provisioned:
+#   D1:  wrangler d1 create stelgano-staging  → f7a9b60a-0fea-43fd-94d2-66fa76ec2287
+#   KV:  wrangler kv:namespace create RATE_CACHE_STAGING → 59542bfc5ca040e180b5a52fcd436b4f
+#
+# Secrets (set once per env, not in this file):
+#   wrangler secret put ADMIN_PASSWORD --env staging
+#   wrangler secret put PAYSTACK_SECRET_KEY --env staging
+#   wrangler secret put PAYSTACK_PUBLIC_KEY --env staging
+#   wrangler secret put PAYSTACK_CALLBACK_URL --env staging
+#   wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN --env staging
+#   wrangler secret put CF_AE_API_TOKEN --env staging
+#
+# After secrets are set, push to v2-cloudflare — CI deploys automatically.
+# ---------------------------------------------------------------------------
+[env.staging]
+name = "stelgano-staging"
+
+# DO bindings are not inherited — must be repeated for each env.
+[[env.staging.durable_objects.bindings]]
+name = "ROOM"
+class_name = "RoomDO"
+
+# Rate limiters are not inherited — repeat all three for staging.
+[[env.staging.unsafe.bindings]]
+name = "RATE_LIMITER_ADMIN"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RATE_LIMITER_WS"
+type = "ratelimit"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RATE_LIMITER_ROOM_CREATE"
+type = "ratelimit"
+namespace_id = "1003"
+simple = { limit = 3, period = 60 }
+
+# Analytics Engine not inherited — repeat for staging (shares the same dataset).
+[[env.staging.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "stelgano_events"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "stelgano-staging"
+database_id = "f7a9b60a-0fea-43fd-94d2-66fa76ec2287"
+migrations_dir = "migrations"
+
+[[env.staging.kv_namespaces]]
+binding = "RATE_CACHE"
+id = "59542bfc5ca040e180b5a52fcd436b4f"
+
+[env.staging.vars]
+PHX_HOST = "staging.stelgano.com"
+PAYMENT_CURRENCY = "USD"
+PRICE_CENTS = "200"
+FREE_TTL_DAYS = "7"
+PAID_TTL_DAYS = "365"
+# Enable monetization in staging so the full paid-tier flow can be exercised.
+MONETIZATION_ENABLED = "true"
+CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"

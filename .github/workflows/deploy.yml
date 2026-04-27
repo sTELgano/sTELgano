@@ -4,18 +4,20 @@
 #
 # Replaces Cloudflare Pages' git integration after the flip from Pages
 # Advanced Mode to Workers + Assets (see docs/MIGRATION.md → "Why
-# Workers + Assets"). Runs on every push to main plus manual dispatch.
-# Pull requests and the v2-cloudflare branch run test + build only —
-# no auto-deploy. When the v2-cloudflare branch becomes main at
-# cutover, this workflow picks up the deploy job automatically.
+# Workers + Assets").
 #
-# Required secrets on the repo:
+# Branch behaviour:
+#   v2-cloudflare → deploys to stelgano-staging (wrangler --env staging)
+#   main          → deploys to stelgano (production)
+#   pull_request  → test + build only, no deploy
+#
+# Required GitHub secrets on the repo:
 #   - CLOUDFLARE_API_TOKEN   (Account → API Tokens → "Edit Cloudflare
 #                             Workers" template)
 #   - CLOUDFLARE_ACCOUNT_ID  (from the CF dashboard URL)
-# Plus Worker secrets set via `wrangler secret put` (not in GitHub):
+# Worker secrets set via `wrangler secret put` (staging + prod separately):
 #   ADMIN_PASSWORD, PAYSTACK_SECRET_KEY, PAYSTACK_PUBLIC_KEY,
-#   PAYSTACK_CALLBACK_URL, PAYSTACK_RECEIPT_EMAIL_DOMAIN.
+#   PAYSTACK_CALLBACK_URL, PAYSTACK_RECEIPT_EMAIL_DOMAIN, CF_AE_API_TOKEN.
 
 name: Deploy
 
@@ -45,12 +47,35 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  deploy:
-    name: Deploy to Cloudflare
+  deploy-staging:
+    name: Deploy to staging
     needs: test
-    # Only deploy from main — the v2-cloudflare branch still runs the
-    # test job above, but doesn't auto-ship. Flip this to also include
-    # v2-cloudflare if you want preview deploys before cutover.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/v2-cloudflare'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Apply D1 migrations (staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply stelgano-staging --remote --env staging
+      - name: Deploy Worker (staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env staging
+
+  deploy:
+    name: Deploy to production
+    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
