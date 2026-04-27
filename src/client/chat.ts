@@ -680,7 +680,7 @@ function renderGeneratorDrawer(g: GeneratorState): string {
               class="font-mono font-black text-white tracking-widest text-4xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] break-all px-2 block w-full hover:scale-105 transition-transform"
               title="Copy to clipboard"
             >
-              ${escapeHtml(g.generatedNumber)}
+              ${escapeHtml(new AsYouType().input(g.generatedNumber))}
             </button>
 
             <div class="flex flex-col items-center gap-3">
