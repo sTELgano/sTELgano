@@ -1,0 +1,151 @@
+<!--
+  title: One Room, One Thread — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <header class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#cpu"/></svg>
+      Engineering
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+      One Room, <span class="text-gradient">One Thread.</span>
+    </h1>
+
+    <p class="text-slate-400 text-lg font-medium max-w-2xl mx-auto animate-in stagger-3 leading-relaxed">
+      How Cloudflare Durable Objects enforce the N=1 invariant without database-level locking, and why the actor model is the right primitive for private messaging.
+    </p>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-24</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 8 min read</span>
+    </div>
+  </header>
+
+  <div class="space-y-16 animate-in stagger-4">
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Concurrency Problem</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">The N=1 invariant&mdash;at most one message per room at any time&mdash;sounds simple. Implementing it correctly under concurrent load is not.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">If two users send a message at the same moment, you need a guarantee that exactly one of their messages wins and the other is rejected. In a traditional relational database, you achieve this with a transaction: begin, delete old message, insert new one, commit. The database ensures serial execution through locking, and a <span class="font-mono text-sm text-slate-300">UNIQUE</span> constraint on the messages table as a second guard against any race that READ COMMITTED might permit.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">That works. It&rsquo;s also relatively expensive: two lock acquisitions, a write amplification under contention, and the overhead of coordinating with a remote database on every message send.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What Is a Durable Object?</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">A Durable Object is a stateful actor that lives on Cloudflare&rsquo;s edge network. Each DO has a unique ID, its own durable SQLite storage, and a single-threaded JavaScript execution context. There is only one active instance of a given DO ID anywhere in the world at any moment.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">That last property is the key one. <span class="text-white font-semibold">Single-threaded serial execution</span> means concurrent writes are structurally impossible. Not serialized by a lock&mdash;structurally impossible by the runtime model. Two requests arriving simultaneously are queued and processed one at a time, in order.</p>
+        <div class="p-5 rounded-2xl bg-primary/5 border border-primary/20 flex items-start gap-3">
+          <svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+          <p class="text-sm text-slate-300 font-medium leading-relaxed">No transaction needed. No lock. The room&rsquo;s DO processes one request at a time. The N=1 invariant falls out of the execution model for free.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">One DO Per Room</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Each sTELgano room is identified by a <span class="font-mono text-sm text-slate-300">room_hash</span>&mdash;a SHA-256 hex string derived from the steg number. When a user opens a channel, the Worker uses this hash as the DO ID. Cloudflare routes the request to a single DO instance, creating it if it doesn&rsquo;t exist yet.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">The DO stores the room&rsquo;s state in its own SQLite: the current message (ciphertext + IV), the sender hash, the room tier, the TTL expiry timestamp, and the access hashes for the two participants. All of this state is colocated with the execution context. Reads are local, writes are local. No remote database round-trip for the hot path.</p>
+
+        <div class="font-mono text-xs text-slate-400 bg-slate-950/60 rounded-xl p-5 border border-white/5 leading-relaxed space-y-1">
+          <div><span class="text-slate-600">// Worker: route to room's DO</span></div>
+          <div><span class="text-primary">const</span> id = env.ROOM_DO.<span class="text-white">idFromName</span>(room_hash);</div>
+          <div><span class="text-primary">const</span> stub = env.ROOM_DO.<span class="text-white">get</span>(id);</div>
+          <div><span class="text-primary">const</span> res = <span class="text-primary">await</span> stub.<span class="text-white">fetch</span>(request);</div>
+          <div class="pt-2 text-slate-600">// Inside the DO: single-threaded, no locking needed</div>
+          <div><span class="text-primary">async</span> <span class="text-white">handleSendMessage</span>(<span class="text-slate-300">event</span>) &#123;</div>
+          <div class="pl-4"><span class="text-primary">this</span>.storage.<span class="text-white">delete</span>(<span class="text-amber-400">"message"</span>);</div>
+          <div class="pl-4"><span class="text-primary">this</span>.storage.<span class="text-white">put</span>(<span class="text-amber-400">"message"</span>, event.ciphertext);</div>
+          <div>&#125;</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Hibernatable WebSockets</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">A naïve WebSocket implementation on serverless infrastructure is expensive: the DO must stay fully active&mdash;executing JavaScript, holding in-memory state&mdash;for the entire duration of every open connection. For a privacy messaging app where users may keep a tab open for hours between messages, that&rsquo;s a lot of idle compute.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Cloudflare&rsquo;s <span class="text-white font-semibold">Hibernatable WebSockets API</span> solves this. When no messages are in flight, the DO can hibernate: the JavaScript context is evicted, but the WebSocket connections are maintained by the Cloudflare runtime. When a message arrives, the DO is woken up, its state is restored from durable storage, and the event is processed. From the client&rsquo;s perspective, the connection never dropped.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">The result: a room with two connected users who haven&rsquo;t sent a message in an hour costs essentially nothing. The idle cost scales with active rooms, not connected rooms.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Alarms for TTL Expiry</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">In v1, an Oban job ran hourly to find and expire rooms whose TTL had passed. In v2, each room&rsquo;s DO schedules its own <span class="text-white font-semibold">alarm</span>&mdash;a timer that wakes the DO at a specific timestamp. When the alarm fires, the DO hard-deletes its state, broadcasts the expiry event to any connected WebSocket clients, and marks itself as expired.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">This is cleaner than a polling job. Expiry is exact (not hourly ± runtime jitter), colocated with the room&rsquo;s own execution context, and requires no external job queue infrastructure. The alarm is stored durably&mdash;if the DO hibernates between now and the alarm time, Cloudflare will still fire it.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Comparison: BEAM Processes vs Durable Objects</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div class="glass-card p-8 space-y-4">
+          <h3 class="text-white font-display font-bold text-lg">BEAM Process (v1)</h3>
+          <ul class="space-y-2 text-sm text-slate-400 font-medium leading-relaxed">
+            <li>One process per WebSocket connection</li>
+            <li>Supervised by OTP supervisor tree</li>
+            <li>In-memory state, lost on crash (supervisor restarts)</li>
+            <li>PostgreSQL as shared state store</li>
+            <li>Transactions for N=1 enforcement</li>
+            <li>Oban for TTL expiry scheduling</li>
+          </ul>
+        </div>
+        <div class="glass-card p-8 space-y-4 border-primary/20">
+          <h3 class="text-primary font-display font-bold text-lg">Durable Object (v2)</h3>
+          <ul class="space-y-2 text-sm text-slate-400 font-medium leading-relaxed">
+            <li>One DO per room (all connections share it)</li>
+            <li>Managed by Cloudflare runtime</li>
+            <li>Durable SQLite storage, survives restarts</li>
+            <li>Local storage, no remote DB for hot path</li>
+            <li>Serial execution for N=1 (no locks needed)</li>
+            <li>DO alarms for exact TTL expiry</li>
+          </ul>
+        </div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 space-y-4">
+        <p class="text-slate-400 font-medium leading-relaxed text-sm">Neither model is universally better. The BEAM&rsquo;s process isolation is more granular&mdash;a bug in one connection does not affect others. Durable Objects give you durable storage colocated with execution, which eliminates a class of distributed-state bugs entirely. For sTELgano&rsquo;s workload (one room = one unit of state), the DO model is an exceptionally clean fit.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="space-y-8 animate-in stagger-5">
+    <div class="flex items-center justify-between pt-8 border-t border-white/5">
+      <a href="/blog" class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+        Back to Blog
+      </a>
+    </div>
+
+    <div class="text-center space-y-6">
+      <p class="text-slate-500 text-sm font-medium">Open a channel and see the N=1 invariant in action.</p>
+      <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        Start a Private Chat
+        <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+  </div>
+</article>

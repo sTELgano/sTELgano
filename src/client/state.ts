@@ -21,6 +21,7 @@
 // handle_event clause and produces 0+ setState() calls before
 // resolving.
 
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 import type { JoinReply, MessagePayload } from "../protocol";
 import {
   decrypt,
@@ -386,8 +387,18 @@ export class ChatState {
    *  new_channel/connecting/chat/locked based on the join reply.
    *  Callers are responsible for validating inputs before calling. */
   async submit(phone: string, pin: string): Promise<void> {
+    if (!pin) return;
+    // Validate that the phone is a valid international number with a
+    // resolvable country. Two-attempt parse: raw input first (handles
+    // "+1 555 012 3456"), then digits-with-plus (handles the re-auth
+    // path where state stores the already-normalised form "15550123456").
+    const parsed =
+      parsePhoneNumberFromString(phone) ??
+      parsePhoneNumberFromString(`+${normalise(phone)}`);
+    if (!parsed?.isValid() || !parsed.country) return;
+
     const normalisedPhone = normalise(phone);
-    if (!normalisedPhone || !pin) return;
+    if (!normalisedPhone) return;
 
     // Phase 1: derive identifiers (instant — three SHA-256 calls).
     // room_hash and access_hash can derive in parallel; sender_hash
@@ -936,9 +947,30 @@ export class ChatState {
       return;
     }
 
+    // phone is the normalised (digits-only) form; +prefix restores E.164.
+    // submit() already validated the number is international, so country
+    // will always be a non-empty string on this path.
+    const countryIso = parsePhoneNumberFromString(`+${phone}`)?.country ?? "";
+
+    // Read the extension secret before joining so we can pass it in the
+    // join payload. For a new paid room the server creates it as paid
+    // atomically; for an existing room the server ignores it and we fall
+    // through to the post-join redeemExtension call below.
+    let pendingSecret: string | null = null;
+    try {
+      pendingSecret = sessionStorage.getItem("stelegano_extension_secret");
+    } catch {
+      // sessionStorage disabled
+    }
+
     let joinReply: JoinReply | undefined;
     try {
-      joinReply = await this.client.join(senderHash, accessHash);
+      joinReply = await this.client.join(
+        senderHash,
+        accessHash,
+        countryIso,
+        pendingSecret ?? undefined,
+      );
     } catch (err) {
       const e = err as RoomClientError;
       if (e.reason === "locked" || e.reason === "unauthorized") {
@@ -997,27 +1029,19 @@ export class ChatState {
       paymentError: null,
     });
 
-    // If we returned from a Paystack checkout, the
-    // stelegano_extension_secret key is sitting in sessionStorage.
-    // Redeem it now — fire-and-forget; the server broadcasts
-    // ttl_extended to everyone on success and that's the signal
-    // the UI uses. We clean up the key regardless of outcome so a
-    // failed redeem doesn't keep re-firing on subsequent joins.
-    let pendingSecret: string | null = null;
-    try {
-      pendingSecret = sessionStorage.getItem("stelegano_extension_secret");
-    } catch {
-      // sessionStorage disabled
-    }
+    // If we returned from a Paystack checkout, attempt to redeem the
+    // extension secret. For new paid rooms the server already handled it
+    // atomically during join (via extension_secret in the join payload),
+    // so this call will return invalid_token and be silently swallowed.
+    // For existing-room extends (the "Extend" button in chat), this is
+    // the primary redemption path — the join ignored the secret and this
+    // call does the actual upgrade.
     if (pendingSecret && this.client) {
       try {
         sessionStorage.removeItem("stelegano_extension_secret");
       } catch {
         // ignore
       }
-      // Best-effort; ignore errors. The server authoritatively decides
-      // whether the token is valid, and on success it broadcasts
-      // ttl_extended which we handle below.
       this.client.redeemExtension(pendingSecret).catch(() => {});
     }
   }

@@ -12,7 +12,27 @@ breaking protocol change increments the major version and requires a migration.
 
 ## [Unreleased]
 
-### Added
+### Added (v2 — Cloudflare Workers, `v2-cloudflare` branch)
+
+- **Cloudflare Analytics Engine** — replaces D1 `country_metrics` / `daily_metrics` UPSERT tables with fire-and-forget `writeDataPoint()` calls; no row locking, scales to concurrent bursts. Events: `room_free`, `room_paid`, `room_expired_free`, `room_expired_paid`, `message_sent`. Country ISO code in `blob2`, never co-located with any `room_hash`.
+- **Admin dashboard AE reads** — `queryCountryMetrics()` and `queryDailyMetrics()` in `src/lib/analytics.ts` query the CF GraphQL API using `CF_ACCOUNT_ID` (var) and `CF_AE_API_TOKEN` (secret); both return `[]` gracefully when credentials are absent.
+- **Room creation rate limiting** — `RATE_LIMITER_ROOM_CREATE` CF native rate-limiter binding (3/IP/min) checked inside `RoomDO.handleJoin()` on first join only; fail-open; client IP forwarded from Worker via `X-Client-IP` header.
+- **`wrangler.test.toml`** — separate test config omitting `[[analytics_engine_datasets]]` to sidestep an esbuild deadlock in wrangler 3.x's mock-AE middleware.
+
+### Changed (v2 — Cloudflare Workers, `v2-cloudflare` branch)
+
+- D1 migrations 0002 (`country_metrics`) and 0003 (`daily_metrics`) deleted; replaced by Analytics Engine.
+- `RATE_LIMITER_ROOM_CREATE` period corrected from invalid `3600` to `60` (CF Workers Rate Limiting only supports `period: 10 | 60`).
+- Test pool now references `wrangler.test.toml`; test rate limiter uses `limit = 9999` to prevent false hits.
+
+### Removed (v2 — Cloudflare Workers, `v2-cloudflare` branch)
+
+- `src/lib/country_metrics.ts`, `src/lib/daily_metrics.ts` — replaced by `src/lib/analytics.ts`.
+- `test/worker/country_metrics.test.ts`, `test/worker/daily_metrics.test.ts` — tests for deleted modules.
+
+---
+
+### Added (v1 — Phoenix/Elixir, `main` branch)
 - Initial implementation of sTELgano-std-1 protocol
 - Room creation and access control with brute-force lockout (10 attempts, 30-minute lockout)
 - N=1 atomic messaging invariant enforced at database transaction level

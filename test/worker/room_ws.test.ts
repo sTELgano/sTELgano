@@ -25,10 +25,19 @@
 //      not_editable.
 
 // @ts-expect-error — see healthz.test.ts
-import { SELF } from "cloudflare:test";
+import { env, SELF } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
+import { createPending, findByTokenHash, markPaid } from "../../src/lib/extension_tokens";
+
 // ---- helpers --------------------------------------------------------------
+
+async function sha256hex(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 function hex64(tag: string): string {
   // Deterministic 64-char hex from a tag. Uses repetition + padding so
@@ -172,6 +181,62 @@ describe("RoomDO — join", () => {
     b.close();
   });
 
+  it("accepts a join event that includes country_iso", async () => {
+    const room = hex64("room-join-country-iso");
+    const ws = await openSocket(room);
+    send(ws, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("sender-a"), access_hash: hex64("access-a"), country_iso: "KE" },
+    });
+    const reply = await waitRef(ws, "1");
+    expect("ok" in reply && reply.ok).toBeTruthy();
+    ws.close();
+  });
+
+  it("creates room as paid when a valid paid extension_secret is supplied", async () => {
+    // Arrange: insert a paid extension token in D1.
+    const secret = "a".repeat(64); // raw secret the client would stash in sessionStorage
+    const tokenHash = await sha256hex(secret);
+    const expires = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    await createPending(env.DB, {
+      tokenHash,
+      amountCents: 200,
+      currency: "USD",
+      expiresAt: expires,
+    });
+    await markPaid(env.DB, tokenHash);
+
+    // Act: first join with extension_secret — monetization is enabled via .dev.vars.
+    const room = hex64("room-join-paid");
+    const ws = await openSocket(room);
+    send(ws, {
+      event: "join",
+      ref: "1",
+      data: {
+        sender_hash: hex64("sender-paid"),
+        access_hash: hex64("access-paid"),
+        extension_secret: secret,
+      },
+    });
+    const reply = await waitRef(ws, "1");
+    expect("ok" in reply).toBe(true);
+
+    // The TTL in the reply should be approximately PAID_TTL_DAYS (365 days)
+    // from now, not FREE_TTL_DAYS (7 days). Allow ±60s for test execution.
+    const ok = (reply as { ok: { ttl_expires_at: string } }).ok;
+    const ttlMs = new Date(ok.ttl_expires_at).getTime();
+    const expectedPaidMs = Date.now() + 365 * 86_400_000;
+    expect(ttlMs).toBeGreaterThan(expectedPaidMs - 60_000);
+    expect(ttlMs).toBeLessThan(expectedPaidMs + 60_000);
+
+    // The token must now be redeemed in D1.
+    const token = await findByTokenHash(env.DB, tokenHash);
+    expect(token?.status).toBe("redeemed");
+
+    ws.close();
+  });
+
   it("returns unauthorized + attempts_remaining on wrong access_hash", async () => {
     const room = hex64("room-wrong-access");
     // Seat both access slots with two different hashes.
@@ -216,7 +281,7 @@ describe("RoomDO — messaging", () => {
     send(ws, {
       event: "join",
       ref: "j",
-      data: { sender_hash: hex64(who), access_hash: hex64(`${who}-pin`) },
+      data: { sender_hash: hex64(who), access_hash: hex64(`${who}-pin`), country_iso: "US" },
     });
     await waitRef(ws, "j");
     return ws;

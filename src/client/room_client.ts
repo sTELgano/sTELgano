@@ -103,9 +103,28 @@ export class RoomClient {
   /** Sends the `join` event as the first message and awaits its
    *  reply. Resolves with the join payload (room_id, optional
    *  current_message). Rejects with RoomClientError on locked /
-   *  unauthorized / not_found / invalid_*. */
-  join(senderHash: string, accessHash: string): Promise<JoinReply> {
-    return this.request<JoinReply>("join", { sender_hash: senderHash, access_hash: accessHash });
+   *  unauthorized / not_found / invalid_*.
+   *
+   *  extensionSecret: raw secret stashed before a Paystack redirect.
+   *  When present on a new room, the server creates it as paid atomically. */
+  join(
+    senderHash: string,
+    accessHash: string,
+    countryIso?: string,
+    extensionSecret?: string,
+  ): Promise<JoinReply> {
+    const data: {
+      sender_hash: string;
+      access_hash: string;
+      country_iso?: string;
+      extension_secret?: string;
+    } = {
+      sender_hash: senderHash,
+      access_hash: accessHash,
+    };
+    if (countryIso) data.country_iso = countryIso;
+    if (extensionSecret) data.extension_secret = extensionSecret;
+    return this.request<JoinReply>("join", data);
   }
 
   /** Closes the socket cleanly. After this, no further events fire. */

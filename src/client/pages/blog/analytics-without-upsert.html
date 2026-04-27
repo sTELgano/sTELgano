@@ -1,0 +1,161 @@
+<!--
+  title: Analytics Without UPSERT — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <header class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#bar_chart"/></svg>
+      Engineering
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+      Analytics Without <span class="text-gradient">UPSERT.</span>
+    </h1>
+
+    <p class="text-slate-400 text-lg font-medium max-w-2xl mx-auto animate-in stagger-3 leading-relaxed">
+      Why we replaced D1 UPSERT counters with Cloudflare Analytics Engine, how fire-and-forget events scale better than row locking, and how we kept country data out of room records.
+    </p>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-21</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 6 min read</span>
+    </div>
+  </header>
+
+  <div class="space-y-16 animate-in stagger-4">
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The UPSERT Problem</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">The initial v2 port tracked metrics the same way v1 did: a <span class="font-mono text-sm text-slate-300">country_metrics</span> table and a <span class="font-mono text-sm text-slate-300">daily_metrics</span> table in D1, each incremented via <span class="font-mono text-sm text-slate-300">INSERT ... ON CONFLICT DO UPDATE SET count = count + 1</span>.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">This works fine at low throughput. Under concurrent load, it becomes a bottleneck. SQLite UPSERT on a counter row acquires a write lock for the duration of the operation. Two concurrent room creates targeting the same <span class="font-mono text-sm text-slate-300">(country, date)</span> row will serialize. At burst load&mdash;many users creating rooms in the same country on the same day&mdash;these counter rows become a global lock point.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">D1 is a distributed SQLite service. Write contention is exactly the kind of problem it&rsquo;s not designed to absorb well. We needed a different model.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Cloudflare Analytics Engine</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Cloudflare Analytics Engine (AE) is a time-series event store built into the Workers platform. You write events via <span class="font-mono text-sm text-primary/80">writeDataPoint()</span>&mdash;a fire-and-forget call that appends to an append-only log. There are no transactions, no locks, no rows to contend on. Each call is independent.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Aggregates are computed at query time via the Cloudflare GraphQL API, not stored as pre-computed counters. This shifts the cost: writes are cheap (no locking), reads are slightly more expensive (they aggregate on the fly). For our access pattern&mdash;many writes (every room create, every message), few reads (admin dashboard on demand)&mdash;this is the right trade.</p>
+        <div class="p-5 rounded-2xl bg-primary/5 border border-primary/20 flex items-start gap-3">
+          <svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#zap"/></svg>
+          <p class="text-sm text-slate-300 font-medium leading-relaxed">Fire-and-forget means concurrent room creates never contend. A thousand rooms created simultaneously produce a thousand independent writeDataPoint calls. No serialisation, no lock waits, no latency spikes.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Our Event Schema</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">AE data points carry named blob and double fields. Our schema is minimal:</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm font-mono">
+            <thead>
+              <tr class="border-b border-white/10">
+                <th class="text-left py-3 pr-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Field</th>
+                <th class="text-left py-3 pr-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Value</th>
+                <th class="text-left py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Notes</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5">
+              <tr>
+                <td class="py-3 pr-6 text-primary/80">blobs[0]</td>
+                <td class="py-3 pr-6 text-slate-300">EventType</td>
+                <td class="py-3 text-slate-500 text-xs font-sans">room_free · room_paid · room_rejoin · room_expired_free · room_expired_paid · message_sent</td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-6 text-primary/80">blobs[1]</td>
+                <td class="py-3 pr-6 text-slate-300">country ISO</td>
+                <td class="py-3 text-slate-500 text-xs font-sans">Alpha-2 code derived client-side from the E.164 steg number (libphonenumber-js); always present for <code>room_free</code>, <code>room_rejoin</code>, <code>room_paid</code>, <code>message_sent</code></td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-6 text-primary/80">blobs[2]</td>
+                <td class="py-3 pr-6 text-slate-300">CF-IPCountry</td>
+                <td class="py-3 text-slate-500 text-xs font-sans">Alpha-2 code from Cloudflare's IP geolocation; differs from blobs[1] for diaspora users, travellers, and VPN users</td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-6 text-primary/80">doubles[0]</td>
+                <td class="py-3 pr-6 text-slate-300">1</td>
+                <td class="py-3 text-slate-500 text-xs font-sans">Always 1 — count by SUM at query time</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-slate-400 leading-relaxed font-medium text-sm">One data point covers both per-country and per-day breakdowns. Country is carried in the event itself. Date is implicit in the AE timestamp. The GraphQL query aggregates on both dimensions simultaneously.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Server-Blindness Preserved</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">A key constraint of the sTELgano privacy model: the server must never store a country code alongside a room hash. If it did, an attacker with database access could learn that a specific room was created from a specific country&mdash;narrowing the anonymity set for that room&rsquo;s participants.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">In v1, the <span class="font-mono text-sm text-slate-300">rooms</span> table had no country column. Country data lived in the aggregated <span class="font-mono text-sm text-slate-300">country_metrics</span> table, which held only totals per country per day&mdash;no per-room linkage.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">In v2, the AE event carries a country code in <span class="font-mono text-sm text-slate-300">blobs[1]</span>. The <span class="font-mono text-sm text-slate-300">rooms</span> table in D1 still has no country column. The country is in the event stream alongside millions of other events, unlinked to any specific room hash. Room expiry events deliberately <span class="text-white font-semibold">do not carry a country code</span>&mdash;individual room records do not carry country metadata, so we cannot include it at expiry time either. Expiry events are global-only.</p>
+        <div class="p-5 rounded-2xl bg-primary/5 border border-primary/20 flex items-start gap-3">
+          <svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
+          <p class="text-sm text-slate-300 font-medium leading-relaxed">The country in an AE event is correlation-resistant by design: it appears alongside millions of other events with no room hash present. The room hash never appears in any AE event. The two datasets cannot be joined.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Reading the Data</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">The admin dashboard reads AE data via the Cloudflare GraphQL API at <span class="font-mono text-sm text-slate-300">api.cloudflare.com/client/v4/graphql</span>. The <span class="font-mono text-sm text-slate-300">queryCountryMetrics()</span> and <span class="font-mono text-sm text-slate-300">queryDailyMetrics()</span> functions in <span class="font-mono text-sm text-slate-300">src/lib/analytics.ts</span> issue authenticated GraphQL queries against the <span class="font-mono text-sm text-slate-300">stelgano_eventsAdaptiveGroups</span> dataset.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Both functions return <span class="font-mono text-sm text-slate-300">[]</span> gracefully when credentials are absent&mdash;a self-hoster who doesn&rsquo;t configure <span class="font-mono text-sm text-slate-300">CF_AE_API_TOKEN</span> gets a dashboard with live counters but no historical charts. The live counters (active rooms) come from D1&rsquo;s <span class="font-mono text-sm text-slate-300">live_counters</span> table, which is still maintained.</p>
+      </div>
+    </section>
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Diaspora Analysis</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Because each event carries both a steg-number country (<span class="font-mono text-sm text-slate-300">blobs[1]</span>) and a CF-IPCountry (<span class="font-mono text-sm text-slate-300">blobs[2]</span>), a single GraphQL query grouped on both dimensions answers questions that neither dimension alone can:</p>
+        <ul class="space-y-3 text-slate-400 font-medium leading-relaxed list-none">
+          <li class="flex items-start gap-3"><span class="text-primary mt-1">→</span> "How many rooms were created by Kenyan-number users connecting from outside Kenya?" (diaspora adoption)</li>
+          <li class="flex items-start gap-3"><span class="text-primary mt-1">→</span> "Which countries have the largest gap between steg-number origin and physical connection?" (expat communities)</li>
+          <li class="flex items-start gap-3"><span class="text-primary mt-1">→</span> "Do users in a given country tend to use local or foreign steg numbers?" (import vs. domestic usage)</li>
+        </ul>
+        <p class="text-slate-400 leading-relaxed font-medium text-sm">The <span class="font-mono text-sm text-slate-300">queryDiasporaMetrics()</span> function in <span class="font-mono text-sm text-slate-300">src/lib/analytics.ts</span> issues this cross-dimension query and surfaces the results in the admin dashboard's Diaspora Breakdown table. Rows where the two country codes match represent domestic usage; mismatched rows are the diaspora signal.</p>
+        <div class="p-5 rounded-2xl bg-primary/5 border border-primary/20 flex items-start gap-3">
+          <svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
+          <p class="text-sm text-slate-300 font-medium leading-relaxed">No individual identity is at risk: the query returns aggregate counts per (steg_country, cf_country) pair. No room hash, no access hash, no phone number ever enters the AE event stream.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="space-y-8 animate-in stagger-5">
+    <div class="flex items-center justify-between pt-8 border-t border-white/5">
+      <a href="/blog" class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+        Back to Blog
+      </a>
+    </div>
+
+    <div class="text-center space-y-6">
+      <p class="text-slate-500 text-sm font-medium">A private channel. No history, no logs, no counters linked to your room.</p>
+      <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        Start a Private Chat
+        <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+  </div>
+</article>

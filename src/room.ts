@@ -12,14 +12,11 @@
 // next event. State survives via DO Storage; per-connection state
 // survives via serializeAttachment().
 //
-// Phase 2 implements the full v1 channel protocol minus redeem_extension
-// (which needs D1 and lands in Phase 7). See
-// elixir/lib/stelgano_web/channels/anon_room_channel.ex for the v1
-// reference behaviour we are porting.
+// Ports the full v1 channel protocol from
+// elixir/lib/stelgano_web/channels/anon_room_channel.ex.
 
 import type { Env } from "./env";
-import { incrementPaid as countryIncrementPaid } from "./lib/country_metrics";
-import { incrementMessagesSent, incrementPaidNew } from "./lib/daily_metrics";
+import { type EventType, writeEvent } from "./lib/analytics";
 import { findByTokenHash, markRedeemed } from "./lib/extension_tokens";
 import { decrementActiveRooms, incrementActiveRooms } from "./lib/live_counters";
 import {
@@ -71,7 +68,9 @@ type RoomState = {
    *  state.id.toString() so we don't bind the protocol to the CF DO id
    *  scheme (which is also deterministic from room_hash). */
   roomId: string;
-  /** "free" or "paid". Phase 2 only creates "free" rooms. */
+  /** "free" or "paid". Paid rooms are created atomically on first join
+   *  when a valid paid extension_secret is supplied, or upgraded later
+   *  via a redeem_extension event (existing-room extend path). */
   tier: "free" | "paid";
   /** epoch ms — when the alarm fires, the room self-destructs. */
   ttlExpiresAtMs: number;
@@ -102,6 +101,13 @@ type WsAttachment = {
   joined: boolean;
   senderHash?: string;
   accessHash?: string;
+  /** CF-IPCountry forwarded by the main Worker as X-CF-Country before
+   *  the stub.fetch() call. Stored in the attachment so it survives
+   *  DO hibernation and is available in later event handlers. */
+  cfCountry?: string;
+  /** Steg-number country (ISO alpha-2) from evt.data.country_iso on join.
+   *  Stored so message_sent events carry the same country dimension as join events. */
+  stegCountry?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -114,6 +120,11 @@ export class RoomDO implements DurableObject {
 
   /** In-memory copy of persisted state, hydrated on first access. */
   private room: RoomState | null = null;
+
+  /** Client IP injected by the main Worker via the X-Client-IP header
+   *  before calling stub.fetch(). Used to rate-limit room creation per IP.
+   *  Populated in fetch() and available throughout the request lifetime. */
+  private clientIp = "unknown";
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -130,6 +141,7 @@ export class RoomDO implements DurableObject {
   // -------------------------------------------------------------------------
 
   async fetch(request: Request): Promise<Response> {
+    this.clientIp = request.headers.get("X-Client-IP") ?? "unknown";
     const url = new URL(request.url);
 
     // GET /exists — probe whether this room has been initialised.
@@ -156,7 +168,10 @@ export class RoomDO implements DurableObject {
 
     // Initial attachment marks the connection as not-yet-joined. The
     // first event must be `join` — anything else replies with not_joined.
-    server.serializeAttachment({ joined: false } satisfies WsAttachment);
+    // CF-IPCountry is stored here so it survives hibernation and is
+    // available when handleJoin() and handleRedeemExtension() fire.
+    const cfCountry = request.headers.get("X-CF-Country") ?? "";
+    server.serializeAttachment({ joined: false, cfCountry } satisfies WsAttachment);
 
     this.state.acceptWebSocket(server);
 
@@ -265,7 +280,10 @@ export class RoomDO implements DurableObject {
       }
     }
 
+    const expiredType: EventType =
+      this.room.tier === "paid" ? "room_expired_paid" : "room_expired_free";
     void decrementActiveRooms(this.env.DB);
+    writeEvent(this.env.ANALYTICS, expiredType);
     await this.state.storage.deleteAll();
     this.room = null;
   }
@@ -283,6 +301,10 @@ export class RoomDO implements DurableObject {
     const senderHash = evt.data.sender_hash;
     const accessHash = evt.data.access_hash;
 
+    // Read CF country from the attachment set during WebSocket upgrade.
+    // Falls back to "" if missing (old clients, test environments).
+    const cfCountry = (ws.deserializeAttachment() as WsAttachment | null)?.cfCountry ?? "";
+
     if (!HEX64_RE.test(senderHash)) {
       await this.padJoin(start);
       this.send(ws, { ref: evt.ref, error: { reason: "invalid_sender" } });
@@ -294,15 +316,44 @@ export class RoomDO implements DurableObject {
       return;
     }
 
-    // Auto-initialise on first join with default free tier.
-    // Phase 3+ will add an explicit create-room HTTP entry that lets
-    // the client pick a tier (free vs. paid) before the WebSocket join.
+    // Auto-initialise on first join. Tier defaults to "free"; if the
+    // client supplies a valid paid extension_secret we claim it atomically
+    // and start the room as "paid" — no separate redeem_extension needed.
     if (!this.room?.isInitialized) {
-      const ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
+      // Rate-limit room creation per client IP. Fail-open: if the rate
+      // limiter is unavailable, we allow the request through. Checked
+      // only on new-room creation (not on join of existing rooms).
+      const rl = await this.env.RATE_LIMITER_ROOM_CREATE.limit({ key: this.clientIp }).catch(
+        () => ({ success: true }),
+      );
+      if (!rl.success) {
+        await this.padJoin(start);
+        this.send(ws, { ref: evt.ref, error: { reason: "rate_limited" } });
+        return;
+      }
+
+      // Attempt to claim a paid extension token atomically with room creation.
+      // Only runs when monetization is enabled and the client sent a secret.
+      let tier: "free" | "paid" = "free";
+      let ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
+      const rawSecret = typeof evt.data.extension_secret === "string"
+        ? evt.data.extension_secret : null;
+      if (rawSecret && this.env.MONETIZATION_ENABLED === "true") {
+        const tokenHash = await sha256hex(rawSecret);
+        const token = await findByTokenHash(this.env.DB, tokenHash);
+        if (token?.status === "paid") {
+          const changed = await markRedeemed(this.env.DB, tokenHash);
+          if (changed > 0) {
+            tier = "paid";
+            ttlMs = Date.now() + PAID_TTL_DAYS * 86_400_000;
+          }
+        }
+      }
+
       this.room = {
         isInitialized: true,
         roomId: crypto.randomUUID(),
-        tier: "free",
+        tier,
         ttlExpiresAtMs: ttlMs,
         accessRecords: [{ accessHash, failedAttempts: 0, lockedUntilMs: null }],
         currentMessage: null,
@@ -310,8 +361,11 @@ export class RoomDO implements DurableObject {
       await this.persist();
       await this.state.storage.setAlarm(ttlMs);
       void incrementActiveRooms(this.env.DB);
+      // Telemetry: blob2 = steg-number country (client-derived),
+      // blob3 = CF-IPCountry (server-side IP geolocation).
+      writeEvent(this.env.ANALYTICS, tier === "paid" ? "room_paid" : "room_free", evt.data.country_iso ?? "", cfCountry);
 
-      ws.serializeAttachment({ joined: true, senderHash, accessHash } satisfies WsAttachment);
+      ws.serializeAttachment({ joined: true, senderHash, accessHash, cfCountry, stegCountry: evt.data.country_iso ?? "" } satisfies WsAttachment);
       await this.padJoin(start);
       this.send(ws, {
         ref: evt.ref,
@@ -327,7 +381,8 @@ export class RoomDO implements DurableObject {
     const result = this.checkAccess(accessHash);
     if (result.kind === "ok") {
       await this.persist();
-      ws.serializeAttachment({ joined: true, senderHash, accessHash } satisfies WsAttachment);
+      writeEvent(this.env.ANALYTICS, "room_rejoin", evt.data.country_iso ?? "", cfCountry);
+      ws.serializeAttachment({ joined: true, senderHash, accessHash, cfCountry, stegCountry: evt.data.country_iso ?? "" } satisfies WsAttachment);
       await this.padJoin(start);
       const reply: { room_id: string; current_message?: MessagePayload; ttl_expires_at: string } = {
         room_id: this.room.roomId,
@@ -389,7 +444,7 @@ export class RoomDO implements DurableObject {
 
     this.room.currentMessage = message;
     await this.persist();
-    void incrementMessagesSent(this.env.DB);
+    writeEvent(this.env.ANALYTICS, "message_sent", att.stegCountry ?? "", att.cfCountry ?? "");
 
     const payload = this.toPayload(message);
     this.broadcastAll({ event: "new_message", data: payload });
@@ -489,7 +544,10 @@ export class RoomDO implements DurableObject {
       }
     }
 
+    const expiredType: EventType =
+      this.room?.tier === "paid" ? "room_expired_paid" : "room_expired_free";
     void decrementActiveRooms(this.env.DB);
+    writeEvent(this.env.ANALYTICS, expiredType);
     await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
     this.room = null;
@@ -557,14 +615,11 @@ export class RoomDO implements DurableObject {
     await this.persist();
     await this.state.storage.setAlarm(newTtlMs);
 
-    // Bump telemetry. country_iso is optional — the client derives
-    // it from libphonenumber-js, never stored alongside any
-    // individual room or token.
-    const iso = evt.data.country_iso;
-    await Promise.all([
-      iso ? countryIncrementPaid(this.env.DB, iso) : Promise.resolve(),
-      incrementPaidNew(this.env.DB),
-    ]);
+    // Telemetry: blob2 = steg-number country, blob3 = CF-IPCountry.
+    // cfCountry survives hibernation via WsAttachment.cfCountry.
+    const iso = evt.data.country_iso ?? "";
+    const cfCountry = (ws.deserializeAttachment() as WsAttachment | null)?.cfCountry ?? "";
+    writeEvent(this.env.ANALYTICS, "room_paid", iso, cfCountry);
 
     const ttlIso = new Date(newTtlMs).toISOString();
     this.broadcastAll({

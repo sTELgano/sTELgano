@@ -1,0 +1,130 @@
+<!--
+  title: Zero Ops at the Edge — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <header class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#globe"/></svg>
+      Operations
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+      Zero Ops at <span class="text-gradient">the Edge.</span>
+    </h1>
+
+    <p class="text-slate-400 text-lg font-medium max-w-2xl mx-auto animate-in stagger-3 leading-relaxed">
+      What it means to deploy globally without managing a single server, and how Cloudflare Workers turns &ldquo;wrangler deploy&rdquo; into a 330-city rollout.
+    </p>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-18</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 7 min read</span>
+    </div>
+  </header>
+
+  <div class="space-y-16 animate-in stagger-4">
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What Zero Ops Actually Means</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">&ldquo;Zero ops&rdquo; does not mean zero work. It means the work you do is on the product, not on the infrastructure that runs it. Let&rsquo;s be specific about what we used to own that we no longer do.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="p-5 rounded-2xl bg-red-500/5 border border-red-500/20 space-y-3">
+            <div class="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">v1 — What We Managed</div>
+            <ul class="space-y-1.5 text-sm text-slate-400 font-medium">
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">•</span>OS security patches</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">•</span>Erlang/OTP version upgrades</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">•</span>PostgreSQL vacuuming and index bloat</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">•</span>Let&rsquo;s Encrypt renewal</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">•</span>nginx configuration and logs</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">•</span>Disk capacity monitoring</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">•</span>Capacity planning for burst load</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">•</span>Backup strategy and recovery drills</li>
+            </ul>
+          </div>
+          <div class="p-5 rounded-2xl bg-primary/5 border border-primary/20 space-y-3">
+            <div class="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">v2 — What We Manage</div>
+            <ul class="space-y-1.5 text-sm text-slate-400 font-medium">
+              <li class="flex items-start gap-2"><span class="text-primary shrink-0">•</span>The TypeScript source code</li>
+              <li class="flex items-start gap-2"><span class="text-primary shrink-0">•</span>D1 schema migrations</li>
+              <li class="flex items-start gap-2"><span class="text-primary shrink-0">•</span><span class="font-mono text-xs">wrangler.toml</span> configuration</li>
+              <li class="flex items-start gap-2"><span class="text-slate-600 shrink-0">—</span><span class="text-slate-600">Everything else: Cloudflare</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">wrangler deploy Is the Entire Pipeline</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Deploying v1 to production involved: building an Elixir release in CI, scp-ing the tarball to the droplet, extracting it, running <span class="font-mono text-sm text-slate-300">Stelgano.Release.migrate()</span>, and bouncing the systemd unit. Multiple steps, multiple failure modes, a rollback procedure that required keeping the previous release tarball around.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Deploying v2:</p>
+        <div class="font-mono text-sm text-slate-300 bg-slate-950/60 rounded-xl p-5 border border-white/5">
+          <span class="text-slate-600">$ </span>wrangler deploy
+        </div>
+        <p class="text-slate-400 leading-relaxed font-medium">That&rsquo;s the whole pipeline. Wrangler bundles the Worker, uploads it to Cloudflare&rsquo;s asset store, and propagates it to every PoP. Within seconds, the new code is live globally. Rollback is <span class="font-mono text-sm text-slate-300">wrangler rollback</span>.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Database migrations run separately with <span class="font-mono text-sm text-slate-300">wrangler d1 migrations apply stelgano --remote</span>. That&rsquo;s the only manual step, and it&rsquo;s idempotent.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Global by Default</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">v1 ran in a single DigitalOcean region. A user in Nairobi connecting to a server in Frankfurt experienced 150ms+ of baseline latency before any application logic ran. WebSocket connections amplify this: every message round-trip is at least two of those latencies.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Workers runs at Cloudflare&rsquo;s global network: 330+ cities, spanning every continent. A user in Nairobi connects to Cloudflare&rsquo;s Nairobi PoP. A user in São Paulo connects to a PoP in São Paulo. The Worker that handles the initial request runs close to the user by default.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Durable Objects are an important nuance here: because a DO must be globally unique, it lives in one specific Cloudflare datacenter. The first request to a room&rsquo;s DO determines where it lives. Subsequent requests from geographically distant users are routed to that datacenter. For a two-person privacy channel, both parties are typically in the same region, so the DO naturally colocates with them.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Cold Starts: The V8 Advantage</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Cold starts are the common objection to serverless compute. In container-based FaaS, a cold start means spinning up a container, loading a runtime, and initialising an application&mdash;hundreds of milliseconds to seconds. That&rsquo;s a real problem.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Workers uses V8 isolates, not containers. An isolate is a lightweight JavaScript execution context&mdash;no OS process, no container image, no network stack bootstrapping. Cold start on a new isolate is <span class="text-white font-semibold">measured in single-digit milliseconds</span>, not hundreds. For our WebSocket upgrade path, this is inconsequential.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Durable Objects warm further because they hibernate rather than terminate. A room that hasn&rsquo;t had activity for an hour will wake from hibernation&mdash;faster than a cold start because the DO&rsquo;s durable state is preserved and doesn&rsquo;t need to be re-initialised from scratch.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Observability Without a Monitoring Stack</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Running your own server means running your own observability. Prometheus, Grafana, alerting rules, on-call rotation for a small team. Or you pay for a SaaS monitoring platform and add another credential rotation to the ops burden.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">On Workers, the Cloudflare dashboard gives you request rates, error rates, CPU time, and latency distributions out of the box. Our custom metrics&mdash;rooms created, messages sent, country breakdown&mdash;live in Analytics Engine and are queryable via GraphQL from the admin dashboard. No Prometheus, no Grafana, no alerting configuration.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">This isn&rsquo;t a compromise. For a product at our scale, the built-in visibility is sufficient. We added instrumentation where the platform didn&rsquo;t already provide it; everything else comes for free.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="space-y-8 animate-in stagger-5">
+    <div class="flex items-center justify-between pt-8 border-t border-white/5">
+      <a href="/blog" class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+        Back to Blog
+      </a>
+    </div>
+
+    <div class="text-center space-y-6">
+      <p class="text-slate-500 text-sm font-medium">Deployed globally. Ready to use.</p>
+      <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        Start a Private Chat
+        <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+  </div>
+</article>

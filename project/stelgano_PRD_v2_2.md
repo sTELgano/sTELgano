@@ -656,14 +656,16 @@ Analytics are replaced by **server-side aggregate metrics only** — no individu
 
 | Metric | How collected | Retained |
 |--------|--------------|---------|
-| Active rooms count | DB query | Real-time |
-| Messages sent per day | DB aggregate | 90 days |
-| Rooms created per day | DB aggregate | 90 days |
-| Peak concurrent WebSocket connections | OTP telemetry | 90 days |
-| Error rates by type | Logger aggregation | 30 days |
-| Page load p50/p95 latency | Phoenix Telemetry | 30 days |
+| Active rooms count | `live_counters` table — snapshot counter, +1 on room init, −1 on expiry | Real-time |
+| Messages sent per day | Analytics Engine event (`message_sent`) — aggregated at query time via CF GraphQL API | Per AE policy |
+| Rooms created per day | Analytics Engine events (`room_free`, `room_paid`) | Per AE policy |
+| Rooms expired per day | Analytics Engine events (`room_expired_free`, `room_expired_paid`) | Per AE policy |
+| Free/paid rooms by country | Analytics Engine events — `country_iso` field carries ISO-3166 alpha-2 code; **never stored alongside any room_hash** | Per AE policy |
+| Peak concurrent WebSocket connections | Not yet implemented | — |
+| Error rates by type | Not yet implemented | — |
+| Page load p50/p95 latency | Not yet implemented | — |
 
-All metrics are computed server-side from existing operational data. No client-side instrumentation. No external requests. No user identifiers in any metric.
+All metrics are computed server-side. No client-side instrumentation. No external requests from the client. No user identifiers in any metric. The Analytics Engine write (`writeDataPoint`) is fire-and-forget — no row locking, no write contention at scale.
 
 ### 13.4 Plausible Analytics — considered and rejected
 
@@ -1276,8 +1278,9 @@ jobs:
 | CSP compliance | Strict nonce-based | No unsafe-inline or unsafe-eval |
 | HTTPS enforcement | HSTS preload | max-age ≥ 2 years |
 | Analytics third-party | None | Server-side aggregates only |
-| Country telemetry | `country_metrics` table: lifetime counters per ISO-3166 alpha-2, no room link | Self-hosted replacement for Google Analytics: shows operators *how many* rooms per country without revealing *which* rooms |
-| Daily telemetry | `daily_metrics` table: per-UTC-day counters for `free_new`, `paid_new`, `free_expired`, `paid_expired` | Trend visibility for operators. Expiry is global (no country) because per-room country metadata is deliberately absent from the `rooms` table |
+| Country telemetry | Analytics Engine events with ISO-3166 alpha-2 country code in `blob2` — never stored alongside any `room_hash` | Shows operators *how many* rooms per country without revealing *which* rooms; query-time aggregation via CF GraphQL |
+| Daily telemetry | Analytics Engine events — `room_free`, `room_paid`, `room_expired_free`, `room_expired_paid`, `message_sent` — aggregated by UTC day at query time | Trend visibility. Expiry events are global (no country dimension) because per-room country metadata is deliberately absent |
+| Room creation rate limit | 3 new rooms/IP/minute (CF native rate limiter, enforced inside RoomDO on first join only) | Fail-open — CF outage never blocks existing-room access |
 
 ---
 
@@ -1493,22 +1496,33 @@ The PRD originally specified TOTP authentication. This is planned as a future up
 
 ### 23.3 Privacy-Safe Metrics (current implementation)
 
-All metrics are computed server-side from existing database operational data via `Stelgano.Rooms.aggregate_metrics/0`. No client-side instrumentation. No user identifiers in any metric.
+All metrics are computed server-side. No client-side instrumentation. No user identifiers in any metric.
 
-#### 23.3.1 Implemented metrics (AdminDashboardLive)
+#### 23.3.1 Implemented metrics
 
-The admin dashboard currently displays four aggregate metric cards:
+**v2 (Cloudflare Workers — `v2-cloudflare` branch):**
 
-| Metric | Query | Privacy note |
-|--------|-------|--------------|
-| Active chats | `COUNT(*) FROM rooms WHERE is_active = TRUE` | Count only, no identifiers |
-| New chats today | Rooms created in last 24 hours | Count only |
-| Messages sent today | Messages inserted in last 24 hours | Count only, encrypted content |
-| Total chats (90 days) | Rooms created in last 90 days | Count only |
+The admin dashboard (`GET /admin` in `_worker.ts`) queries two data sources in parallel:
 
-- Auto-refresh: 30-second timer with manual refresh button
-- Info panel: lists operational guidelines and data retention policy
-- No individual room identifiers, hashes, or content visible anywhere
+| Source | Metrics | Implementation |
+|--------|---------|---------------|
+| D1 `live_counters` table | Active rooms (real-time snapshot) | `getActiveRooms(env.DB)` from `src/lib/live_counters.ts` |
+| CF Analytics Engine (GraphQL) | Country breakdown (free/paid rooms by ISO-3166 country) | `queryCountryMetrics(accountId, apiToken)` from `src/lib/analytics.ts` |
+| CF Analytics Engine (GraphQL) | Daily trend: free_new, paid_new, free_expired, paid_expired, messages_sent (90-day window) | `queryDailyMetrics(accountId, apiToken, 90)` from `src/lib/analytics.ts` |
+
+Credentials required: `CF_ACCOUNT_ID` (var in `wrangler.toml`) and `CF_AE_API_TOKEN` (secret). Both AE query functions return `[]` gracefully when either is absent — the dashboard renders with empty tables rather than crashing.
+
+**v1 (Phoenix/Elixir — `main` branch):**
+
+`AdminDashboardLive` LiveView. Four aggregate metric cards (active chats, new today, messages today, total 90 days) computed via `Stelgano.Rooms.aggregate_metrics/0` against the PostgreSQL `rooms` and `messages` tables. Auto-refresh every 30 seconds.
+
+#### 23.3.2 Future metrics (not yet implemented)
+
+- Room lifetime distribution (bucketed)
+- WebSocket connection tracking (peak/current)
+- Error rate breakdown by type
+- Message delivery latency p50/p95
+- PIN verification failure rates
 
 #### 23.3.2 Future metrics (not yet implemented)
 

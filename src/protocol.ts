@@ -49,7 +49,27 @@ export const HEX64_RE = /^[a-f0-9]{64}$/;
 // ---------------------------------------------------------------------------
 
 export type ClientEvent =
-  | { event: "join"; ref: string; data: { sender_hash: string; access_hash: string } }
+  | {
+      event: "join";
+      ref: string;
+      data: {
+        sender_hash: string;
+        access_hash: string;
+        /** ISO-3166 alpha-2 derived client-side from the E.164 steg number
+         *  via libphonenumber-js. All legitimate clients always send this
+         *  because the UI rejects non-international numbers before submit.
+         *  The server treats it as optional for defence-in-depth — older
+         *  clients and direct wire tests may omit it. Never stored alongside
+         *  any individual room or access record. */
+        country_iso?: string;
+        /** Raw extension secret (64-char hex) stashed in sessionStorage
+         *  before the Paystack redirect. When present on a first join, the
+         *  server atomically creates the room as paid and marks the token
+         *  redeemed, skipping the separate redeem_extension round-trip.
+         *  Ignored when the room already exists or the token is not paid. */
+        extension_secret?: string;
+      };
+    }
   | { event: "send_message"; ref: string; data: { ciphertext: string; iv: string } }
   | { event: "read_receipt"; ref?: string; data: { message_id: string } }
   | {
@@ -132,4 +152,5 @@ export type ErrorReason =
   | "invalid_token"
   | "monetization_disabled"
   | "invalid_topic"
-  | "internal_error";
+  | "internal_error"
+  | "rate_limited";

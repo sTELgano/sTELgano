@@ -59,7 +59,8 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 
 - **Worker** (`_worker.ts`) — routes all requests, applies security headers (CSP, HSTS), handles HTTP API and WebSocket upgrades. `run_worker_first = true` ensures even static assets pass through the security-header middleware.
 - **RoomDO** (Durable Object) — one instance per room, single-threaded. Enforces the N=1 invariant by construction. Uses hibernatable WebSockets to keep idle rooms cheap. SQLite-backed storage for per-room state.
-- **D1** — extension tokens, country metrics, daily metrics. No per-room country metadata — server-blindness invariant preserved.
+- **D1** — extension tokens, `live_counters` (active-room snapshot). No per-room country metadata — server-blindness invariant preserved.
+- **Analytics Engine** — event telemetry (`room_free`, `room_paid`, `room_expired_*`, `message_sent`). Fire-and-forget `writeDataPoint()` with no row locking. Country ISO code carried per event; never stored alongside a room hash. Admin dashboard queries aggregate counts via the CF GraphQL API.
 - **Static assets** (`public/`) — HTML pages, bundled JS, CSS, fonts. Uploaded to Cloudflare's asset store on deploy.
 
 **Real-time:** WebSocket connections upgrade to the room's Durable Object. The client sends `join`, `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, and `redeem_extension` events.
@@ -77,13 +78,13 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 - **Panic route** — `GET /x` instantly clears all session data, redirects to `/?p=1`
 - **Steg number generator** — integrated one-click generator drawer inside `/chat`; 19 curated countries, strict E.164 formatting with real-time country inference
 - **Admin dashboard** — aggregate metrics at `/admin` (HTTP Basic Auth)
-- **Privacy-preserving telemetry** — lifetime per-country counters + daily global counters; no per-room country metadata, no third-party analytics
+- **Privacy-preserving telemetry** — Cloudflare Analytics Engine events (country + daily breakdowns); no per-room country metadata, no third-party analytics, no row-locking UPSERT contention
 - **Blog** — technical articles at `/blog`
 - **Protocol spec** — sTELgano-std-1 specification at `/spec`
 - **Pure web app** — no PWA, no service worker, no installable icon (see the passcode test rationale in the blog)
 - **Self-hosted fonts** — Inter / Outfit / JetBrains Mono ship from `public/fonts/`; no Google Fonts CDN pings
 - **Nonce-based CSP** — per-request nonce injected into the HTML at the Worker level; no `'unsafe-inline'` for scripts
-- **Rate limiting** — IP-based, tighter limits for `/admin` and WebSocket upgrades
+- **Rate limiting** — three native CF rate-limiter bindings: 20/IP/min on `/admin`, 30/IP/min on WebSocket upgrades, 3/IP/min on new room creation (checked inside the Durable Object; existing-room joins bypass the check)
 - **Security headers** — CSP, HSTS, X-Frame-Options, X-Robots-Tag
 - **Configurable monetization** — optional paid tier for extended steg number TTL, pluggable payment providers (Paystack ships built-in)
 - **Privacy-preserving payments** — blind token protocol; the server cannot link a payment to a specific room

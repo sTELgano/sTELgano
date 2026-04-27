@@ -30,6 +30,91 @@
 
   <!-- Post Grid -->
   <div class="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in stagger-4">
+    <a href="/blog/from-elixir-to-the-edge" class="glass-card p-6 sm:p-8 md:p-10 group hover:border-primary/30 transition-all duration-500 flex flex-col gap-6">
+      <div class="flex items-center gap-3"><span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em]">Engineering</span></div>
+      <div class="space-y-3 flex-1">
+        <h2 class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight group-hover:text-primary transition-colors leading-tight">From BEAM to the Edge: Why We Rewrote sTELgano in TypeScript</h2>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium line-clamp-3">The operational reality that pushed us from Elixir/Phoenix to Cloudflare Workers and Durable Objects, what changed, what stayed the same, and the future of the Elixir branch.</p>
+      </div>
+      <div class="flex items-center justify-between pt-4 border-t border-white/5">
+        <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-27</span>
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 10 min read</span>
+        </div>
+        <div class="size-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+          <svg class="size-4 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/blog/durable-objects-one-room-one-thread" class="glass-card p-6 sm:p-8 md:p-10 group hover:border-primary/30 transition-all duration-500 flex flex-col gap-6">
+      <div class="flex items-center gap-3"><span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em]">Engineering</span></div>
+      <div class="space-y-3 flex-1">
+        <h2 class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight group-hover:text-primary transition-colors leading-tight">One Room, One Thread: Inside sTELgano's Durable Object Architecture</h2>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium line-clamp-3">How Cloudflare Durable Objects enforce the N=1 invariant through serial execution rather than database locking, and why the actor model is the right primitive for private messaging.</p>
+      </div>
+      <div class="flex items-center justify-between pt-4 border-t border-white/5">
+        <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-24</span>
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 8 min read</span>
+        </div>
+        <div class="size-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+          <svg class="size-4 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/blog/analytics-without-upsert" class="glass-card p-6 sm:p-8 md:p-10 group hover:border-primary/30 transition-all duration-500 flex flex-col gap-6">
+      <div class="flex items-center gap-3"><span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em]">Engineering</span></div>
+      <div class="space-y-3 flex-1">
+        <h2 class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight group-hover:text-primary transition-colors leading-tight">Analytics Without UPSERT: How We Use Cloudflare Analytics Engine</h2>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium line-clamp-3">Replacing D1 UPSERT counters with fire-and-forget Analytics Engine events — no write contention, no row locking, and server-blindness preserved by design.</p>
+      </div>
+      <div class="flex items-center justify-between pt-4 border-t border-white/5">
+        <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-21</span>
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 6 min read</span>
+        </div>
+        <div class="size-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+          <svg class="size-4 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/blog/zero-ops-global-scale" class="glass-card p-6 sm:p-8 md:p-10 group hover:border-primary/30 transition-all duration-500 flex flex-col gap-6">
+      <div class="flex items-center gap-3"><span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em]">Operations</span></div>
+      <div class="space-y-3 flex-1">
+        <h2 class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight group-hover:text-primary transition-colors leading-tight">Zero Ops at the Edge: Global Scale Without an Ops Team</h2>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium line-clamp-3">What it means to deploy to 330+ cities with a single command, and why wrangler deploy is the entire production pipeline for sTELgano v2.</p>
+      </div>
+      <div class="flex items-center justify-between pt-4 border-t border-white/5">
+        <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-18</span>
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 7 min read</span>
+        </div>
+        <div class="size-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+          <svg class="size-4 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/blog/what-we-gave-up" class="glass-card p-6 sm:p-8 md:p-10 group hover:border-primary/30 transition-all duration-500 flex flex-col gap-6">
+      <div class="flex items-center gap-3"><span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em]">Engineering</span></div>
+      <div class="space-y-3 flex-1">
+        <h2 class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight group-hover:text-primary transition-colors leading-tight">What We Gave Up: The Real Tradeoffs of Going Serverless on Cloudflare</h2>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium line-clamp-3">An honest accounting of what we lost migrating to Cloudflare Workers — vendor lock-in, OTP supervision, live process introspection, and Elixir's compile-time safety. The gains are real. So are the losses.</p>
+      </div>
+      <div class="flex items-center justify-between pt-4 border-t border-white/5">
+        <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-15</span>
+          <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 8 min read</span>
+        </div>
+        <div class="size-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/40 transition-all">
+          <svg class="size-4 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+        </div>
+      </div>
+    </a>
+
     <a href="/blog/why-your-privacy-app-shouldnt-look-like-one" class="glass-card p-6 sm:p-8 md:p-10 group hover:border-primary/30 transition-all duration-500 flex flex-col gap-6">
       <div class="flex items-center gap-3"><span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em]">Philosophy</span></div>
       <div class="space-y-3 flex-1">

@@ -95,34 +95,35 @@ The `can_type?/1` helper enforces turn-based input: you can type when the room i
 - `ChatLive` — chat UI plus the in-page generator drawer (toggled via `phx-click="open_generator"`) and the inline paid-tier upgrade flow. Crypto + channel interaction happen in JS hooks, not server-side. The drawer holds the country selector + steg-number generator that previously lived on a separate `/steg-number` page; applying a generated number sets `phone_locked=true` so the user cannot edit it (only toggle visibility via the eye icon). Manual entries remain editable.
 - `AdminDashboardLive` — aggregate metrics at `/admin` (HTTP Basic Auth via `AdminAuth` plug)
 
-### Telemetry: `Stelgano.CountryMetrics` + `Stelgano.DailyMetrics`
+### Telemetry: `src/lib/analytics.ts` (v2 — this branch)
 
-Two aggregate-counter tables that together replace Google-Analytics-style
-telemetry without shipping anything third-party and without breaking the
-server-blindness invariant.
+All event writes go through [`src/lib/analytics.ts`](src/lib/analytics.ts) → `writeEvent()`, which calls `env.ANALYTICS.writeDataPoint()` on the Cloudflare Analytics Engine binding declared in `wrangler.toml`. Fire-and-forget with no row locking — no write contention under concurrent load.
 
-**`country_metrics`** — lifetime per-country totals. One row per ISO-3166
-alpha-2 code with two monotonic counters (`free_rooms`, `paid_rooms`).
-Incremented on new-room creation ([chat_live.ex](lib/stelgano_web/live/chat_live.ex)
-`channel_authenticate` handler) and on paid upgrade
-([anon_room_channel.ex](lib/stelgano_web/channels/anon_room_channel.ex)
-`redeem_extension` handler). The ISO is derived client-side from the E.164
-phone via `libphonenumber-js` (no network call) and passed to the server in
-that single event — **never stored alongside any individual `room_hash`
-or `token_hash`**. A DB dump answers "how many rooms from Kenya?" but
-never "which rooms from Kenya?".
+**Write schema** (one data point per event):
+- `blobs[0]` = `EventType`: `"room_free"` | `"room_paid"` | `"room_rejoin"` | `"room_expired_free"` | `"room_expired_paid"` | `"message_sent"`
+- `blobs[1]` = ISO-3166 alpha-2 steg-number country (client-derived via libphonenumber-js), or `""` for global-only events
+- `blobs[2]` = CF-IPCountry alpha-2 (server-side IP geolocation), or `""` when unavailable
+- `doubles[0]` = 1
 
-**`daily_metrics`** — per-day global totals. One row per UTC calendar day
-with four monotonic counters (`free_new`, `paid_new`, `free_expired`,
-`paid_expired`). New-room and paid-upgrade events bump alongside the
-`country_metrics` bump; expiry events bump from the
-[ExpireTtlRooms](lib/stelgano/jobs/expire_ttl_rooms.ex) Oban job, which
-groups expired rooms by tier.
+One data point covers both per-country and per-day aggregates — computed at query time via the Cloudflare GraphQL API (`https://api.cloudflare.com/client/v4/graphql`, dataset `stelgano_events` → AE field `stelgano_eventsAdaptiveGroups`). `writeEvent()` is null-safe (`analytics?.writeDataPoint(...)`) and becomes a no-op in tests where the binding is absent.
 
-*Expiry is intentionally global (no country dimension)* because
-individual room records do not carry a `country_code` and will never
-get one — storing country per room would undo server-blindness. The
-admin dashboard renders both tables.
+**Call sites** in [`src/room.ts`](src/room.ts):
+- `handleJoin()` (new room, no valid paid secret): `writeEvent(env.ANALYTICS, "room_free", country_iso, cfCountry)`
+- `handleJoin()` (new room, valid paid `extension_secret` in join payload): `writeEvent(env.ANALYTICS, "room_paid", country_iso, cfCountry)` — atomic with room creation; the subsequent `redeem_extension` round-trip is skipped
+- `handleJoin()` (existing room, successful join): `writeEvent(env.ANALYTICS, "room_rejoin", country_iso, cfCountry)`
+- `handleRedeemExtension()` (existing-room extend path only): `writeEvent(env.ANALYTICS, "room_paid", iso, cfCountry)` — fired when an already-initialised room has its TTL extended via the "Extend" button in chat
+- `handleSendMessage()`: `writeEvent(env.ANALYTICS, "message_sent", att.stegCountry, att.cfCountry)`
+- `alarm()` + `handleExpireRoom()`: `writeEvent(env.ANALYTICS, expiredType)` where `expiredType` is `"room_expired_free"` or `"room_expired_paid"` — expiry is global-only (individual room records never carry a country code)
+
+**Admin dashboard reads** in [`_worker.ts`](/_worker.ts): calls `queryCountryMetrics()` and `queryDailyMetrics()` from `src/lib/analytics.ts`, using `CF_ACCOUNT_ID` (var in `wrangler.toml`) and `CF_AE_API_TOKEN` (secret via `wrangler secret put`). Both return `[]` gracefully when credentials are absent.
+
+`queryDiasporaMetrics()` groups by both `blob2` (steg-number country) and `blob3` (CF-IPCountry) simultaneously, producing a (steg_country, cf_country) pair matrix. Rows where the two codes differ are diaspora signals — users whose phone number originates in a different country than their current connection location.
+
+*Expiry is intentionally global (no country dimension)* — individual room records carry no `country_code` and will never get one, to preserve server-blindness.
+
+The D1 `country_metrics` and `daily_metrics` tables from the initial v2 port were **deleted** (migrations 0002 and 0003 dropped). The `live_counters` D1 table (migration 0004) remains for the active-room snapshot.
+
+**v1 equivalent** (Phoenix/Elixir — `elixir/` subdirectory): `Stelgano.CountryMetrics` and `Stelgano.DailyMetrics` PostgreSQL tables, incremented via UPSERT in Phoenix channel handlers. See [`elixir/AGENTS.md`](elixir/AGENTS.md).
 
 ### Monetization layer: `Stelgano.Monetization`
 
@@ -146,7 +147,9 @@ Payment flow:
 4. Client sends `extension_secret` via channel `redeem_extension` event
 5. Server hashes it, finds matching paid token, extends room TTL — token table still has no room_id
 
-**Settlement currency conversion.** `PRICE_CENTS` is always denominated in `PAYMENT_CURRENCY` (the display currency). If the Paystack merchant account only accepts a different currency, set `PAYSTACK_SETTLEMENT_CURRENCY` to that code. `Paystack.initialize/3` then reads the cached rate from `FxRate`, applies `PAYSTACK_FX_BUFFER_PCT` (default 5%) on top to absorb drift, rounds to the nearest integer minor unit, and submits that to Paystack. This config lives on the **adapter** — a future Stripe/Flutterwave adapter is responsible for its own settlement-currency story (or doesn't need one).
+**Settlement currency conversion (v2).** `PRICE_CENTS` is always denominated in `PAYMENT_CURRENCY` (the display currency). If the Paystack merchant account only accepts a different currency, set `PAYSTACK_SETTLEMENT_CURRENCY` to that code. `initialize()` in [`src/lib/paystack.ts`](src/lib/paystack.ts) reads the cached rate from the `RATE_CACHE` KV namespace via `getRate()` in [`src/lib/fx_rate.ts`](src/lib/fx_rate.ts), applies `PAYSTACK_FX_BUFFER_PCT` (default 5%) on top to absorb drift, rounds to the nearest integer minor unit, and submits that to Paystack. Falls back to `PAYMENT_FX_FALLBACK_RATE` if KV is empty (first run before cron fires). Returns `fx_conversion_not_wired` only when neither source yields a rate.
+
+**FX rate refresh (v2).** A daily Cron Trigger (`0 6 * * *` in `wrangler.toml`) fires `scheduled()` in `_worker.ts`, which calls `refreshRate()` to fetch the live rate from Fawazahmed0's currency-api (same source as v1) and write it to `RATE_CACHE` KV with a 25h TTL — long enough to bridge two consecutive cron runs. Only runs when `PAYSTACK_SETTLEMENT_CURRENCY` is set and differs from `PAYMENT_CURRENCY`. Provision the KV namespace with `wrangler kv:namespace create RATE_CACHE` and paste the returned ID into `wrangler.toml`.
 
 ### Background jobs (Oban)
 
@@ -157,7 +160,12 @@ Payment flow:
 ### Security plugs
 
 - `SecurityHeaders` — HSTS, X-Robots-Tag, Cache-Control: no-store
-- `RateLimiter` — IP-based throttling via PlugAttack (ETS-backed, runs in endpoint before router). Three rules: admin paths at 20/IP/min (caps HTTP Basic Auth brute-force), WebSocket upgrades at 30/IP/min (caps socket-cycling enumeration), all HTTP requests at 200/IP/min.
+- Rate limiting (v2) — three native CF rate-limiter bindings declared as `[[unsafe.bindings]]` in `wrangler.toml`, enforced in [`_worker.ts`](/_worker.ts) and [`src/room.ts`](src/room.ts):
+  - `RATE_LIMITER_ADMIN` — 20/IP/min on `/admin` (caps HTTP Basic Auth brute-force)
+  - `RATE_LIMITER_WS` — 30/IP/min on WebSocket upgrade requests (caps socket-cycling enumeration)
+  - `RATE_LIMITER_ROOM_CREATE` — 3/IP/min per client IP, checked **inside the RoomDO** only on first join (`!room.isInitialized`), so existing-room rejoins are unaffected. IP forwarded from the Worker as `X-Client-IP` header before `stub.fetch()`. Fail-open (`.catch(() => ({ success: true }))`) so a CF outage never blocks legitimate traffic. Returns `{ reason: "rate_limited" }` error frame to the WebSocket when triggered.
+  - CF Workers Rate Limiting only supports `period: 10 | 60` seconds — `wrangler.toml` uses `period = 60`; `wrangler.test.toml` uses `limit = 9999, period = 60` to avoid false hits during tests (all test requests share `"unknown"` as the client IP).
+- Rate limiting (v1) — PlugAttack (ETS-backed, runs in Phoenix endpoint). See [`elixir/AGENTS.md`](elixir/AGENTS.md).
 - `AdminAuth` — HTTP Basic Auth for `/admin` scope
 - CSP in router: strict `default-src 'self'` with specific allowances for fonts.googleapis.com/gstatic.com. `script-src` uses a **per-request nonce** ([CspNonce plug](lib/stelgano_web/plugs/csp_nonce.ex)) — *not* `'unsafe-inline'` — so attacker-injected inline scripts cannot execute. The only legitimate inline script (service-worker cleanup in `root.html.heex`) carries `nonce={@csp_nonce}`. `style-src` keeps `'unsafe-inline'` because LiveView emits inline `style` attributes for animations — acceptable since inline styles cannot execute JS.
 - Panic route: `GET /x` — instant session clear, no confirmation

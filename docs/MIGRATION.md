@@ -534,7 +534,7 @@ These have no semantic change but get rewritten in TypeScript:
   `delete_message`, `typing`, `expire_room`, `redeem_extension`).
 - `Stelgano.Rooms` context functions → DO methods + D1 queries (only
   metrics/tokens go to D1; room state is in the DO itself).
-- `country_metrics` and `daily_metrics` tables → D1 schema, same shape.
+- `country_metrics` and `daily_metrics` tables → **replaced by Cloudflare Analytics Engine** (see "Analytics Engine" section below); the D1 tables were deleted (migrations 0002 and 0003 dropped).
 - `extension_tokens` table → D1 schema, same shape, **same privacy
   guarantee** (no `room_id` column).
 - `Stelgano.Monetization.Providers.Paystack` adapter → TS port, same
@@ -542,9 +542,11 @@ These have no semantic change but get rewritten in TypeScript:
 - `AdminAuth` plug → Worker middleware doing HTTP Basic Auth.
 - `SecurityHeaders` plug + `CspNonce` plug → Worker middleware. The
   per-request CSP nonce strategy is preserved.
-- `RateLimiter` (PlugAttack) → Cloudflare's native rate-limiting rules,
-  configured in the dashboard or `wrangler.toml`. Better than the ETS
-  implementation because it runs at the edge before Workers execute.
+- `RateLimiter` (PlugAttack) → three native CF rate-limiter bindings in
+  `wrangler.toml` (`[[unsafe.bindings]]` type `ratelimit`):
+  `RATE_LIMITER_ADMIN` (20/IP/min), `RATE_LIMITER_WS` (30/IP/min),
+  `RATE_LIMITER_ROOM_CREATE` (3/IP/min, enforced inside RoomDO on first
+  join only). CF Workers Rate Limiting only supports `period: 10 | 60`.
 - `ExpireUnredeemedTokens` Oban job → Workers Cron Trigger, daily.
 - `ExpireTtlRooms` Oban job → **deleted entirely**, replaced by per-room
   DO alarms.
@@ -639,33 +641,62 @@ The user we don't serve (state-level adversaries) was never in scope.
 
 ## Rate limiting
 
-v1's ETS-backed PlugAttack rules (20/IP/min on /admin, 30/IP/min on
-WebSocket upgrades, 200/IP/min globally) don't port directly — there's
-no cross-request in-memory store in Workers. Two options v2 can use:
+v1's ETS-backed PlugAttack rules port to **native Cloudflare Workers Rate
+Limiting** — declared directly in `wrangler.toml` as `[[unsafe.bindings]]`
+entries of `type = "ratelimit"`. These run inside the Worker (not at the
+WAF layer), but they're backed by CF's global distributed rate-limit store,
+so they're consistent across all Worker instances world-wide.
 
-1. **Cloudflare dashboard Rate Limiting Rules** (recommended). In the
-   CF dashboard, route the Worker's custom domain through a zone,
-   then go to the zone → Security → WAF → Rate Limiting Rules and
-   add:
-   - `http.request.uri.path eq "/admin"` → 20 requests / minute / IP, block
-   - `http.request.uri.path matches "^/room/[a-f0-9]{64}/ws$"` →
-     30 requests / minute / IP, block
-   - (optional) `http.request.uri.path matches "^/api/"` →
-     200 requests / minute / IP, block
+**Implemented bindings** (all in `wrangler.toml` and `wrangler.test.toml`):
 
-   These run at CF's edge BEFORE the Worker executes, so they're
-   strictly better than an in-application limiter at the same budget.
+| Binding | Limit | Where enforced |
+|---------|-------|---------------|
+| `RATE_LIMITER_ADMIN` | 20/IP/min | `_worker.ts` `/admin` handler |
+| `RATE_LIMITER_WS` | 30/IP/min | `_worker.ts` WebSocket upgrade handler |
+| `RATE_LIMITER_ROOM_CREATE` | 3/IP/min | `src/room.ts` `handleJoin()`, only on `!room.isInitialized` |
 
-2. **DO-backed limiter** if you need finer-grained logic (e.g. per-
-   room-hash lockout). Each limiter instance is a tiny DO keyed by
-   `(rule, ip)`; it stores a count + window start and refuses over
-   budget. Adds latency (~1ms per request), only worth it if the
-   dashboard rules aren't enough.
+All three use `.catch(() => ({ success: true }))` fail-open — a CF rate-
+limit service outage never blocks legitimate traffic.
 
-v2 ships with no application-level rate limiting — the CF dashboard
-rules are set up as part of the production deploy (Phase 10 smoke
-test + cutover). The Worker does not enforce anything rate-related
-itself.
+**IP forwarding:** The client IP (`CF-Connecting-IP`) is read in
+`_worker.ts` and injected as `X-Client-IP` header before `stub.fetch()`
+so the RoomDO can key its rate-limit check on the real client IP rather
+than the loopback address the DO sees. Headers on `Request` are immutable
+so a new `Request` object is constructed: `new Request(request, { headers: withIp })`.
+
+**CF API constraint:** Workers Rate Limiting only supports `period: 10 | 60`
+seconds. The initial implementation used `period = 3600` for room creation
+but this is invalid even in production. The correct equivalent is
+`period = 60, limit = 3` (3 per minute).
+
+**Test config:** `wrangler.test.toml` sets `limit = 9999` on
+`RATE_LIMITER_ROOM_CREATE` because all test requests share `"unknown"` as
+the client IP (no `CF-Connecting-IP` in the test environment), so a real
+limit would be exhausted after 3 tests.
+
+## Analytics Engine
+
+v1's `country_metrics` and `daily_metrics` PostgreSQL UPSERT tables
+serialise under concurrent load — two concurrent room creates fight over the
+same row. v2 replaces them with **Cloudflare Analytics Engine** writes.
+
+**Write path** (`src/lib/analytics.ts` → `writeEvent()`):
+- Called fire-and-forget via `env.ANALYTICS.writeDataPoint()`
+- One data point per event; blobs carry event type + ISO country code
+- No row locking, no contention — AE is an append-only log
+- `writeEvent()` is null-safe; no-op in tests (binding absent in
+  `wrangler.test.toml` to avoid an esbuild deadlock in wrangler 3.x)
+
+**Read path** (admin dashboard, `_worker.ts`):
+- `queryCountryMetrics(accountId, apiToken)` → CF GraphQL API
+- `queryDailyMetrics(accountId, apiToken, days)` → CF GraphQL API
+- Both return `[]` when `CF_ACCOUNT_ID` or `CF_AE_API_TOKEN` are absent
+
+**What was deleted:** D1 migrations 0002 (`country_metrics`) and 0003
+(`daily_metrics`), their TypeScript lib modules, and their vitest test
+files. Migration 0004 (`live_counters`) is retained for the active-room
+counter. The AE dataset is `stelgano_events`; the GraphQL field is
+`stelgano_eventsAdaptiveGroups` (AE naming convention: `<dataset>AdaptiveGroups`).
 
 ## Vendor lock-in: explicit acknowledgement
 
@@ -763,30 +794,42 @@ a commit that compiles and runs (even if incomplete):
 6. **Generator drawer + payment flow + admin dashboard.** ✅ _done
    2026-04-24 (0ef27f3, a99597b, 0d3362a)._ Port the remaining
    LiveView surfaces.
-7. **Paystack adapter port.** ✅ _done 2026-04-24 (4dfc2ac → 7ad2ade)._
-   `initialize`, webhook verification (HMAC-SHA512). FX-rate caching
-   is deferred — see `src/lib/paystack.ts` docstring: if
-   `PAYSTACK_SETTLEMENT_CURRENCY` differs from `PAYMENT_CURRENCY`,
-   `initialize()` returns `fx_conversion_not_wired` rather than
-   silently losing money. Will wire when we first need a settlement
-   currency that differs from the display currency.
+7. **Paystack adapter port.** ✅ _done 2026-04-24 (4dfc2ac → 7ad2ade);
+   FX-rate caching completed post-2026-04-24._ `initialize`, webhook
+   verification (HMAC-SHA512). `src/lib/fx_rate.ts` implements
+   `getRate()` / `refreshRate()` backed by the Fawazahmed0 currency
+   API; `RATE_CACHE` KV caches the rate with a 25 h TTL; the `0 6 * *
+   *` Cron Trigger refreshes it daily. `initialize()` reads the live
+   rate, applies `PAYSTACK_FX_BUFFER_PCT` (default 5 %), and returns
+   `fx_conversion_not_wired` only when neither KV nor
+   `PAYMENT_FX_FALLBACK_RATE` yields a rate.
 8. **CSP, security headers, rate limiting.** ✅ _done 2026-04-24
-   (1efe406)._ Header injection in `_worker.ts`'s fetch handler
+   (1efe406); rate limiting shipped in application layer
+   post-2026-04-24._ Header injection in `_worker.ts`'s fetch handler
    (wraps responses from both ASSETS and the DO routes). The
    bootstrap inline `<script>` in the layout is byte-identical
    across requests, so script-src pins it via SHA-256 rather than
-   nonce. Rate limiting deferred to CF dashboard rules at deploy
-   time (no application-layer PlugAttack equivalent shipped).
-9. **Tests.** ✅ _done 2026-04-24 (9082f5e + 43e1929)._ Two-project
-   vitest workspace: pure-function tests (crypto + paystack helpers)
-   run in Node, Worker/DO runtime tests run under workerd via
-   `@cloudflare/vitest-pool-workers`. 85 tests green covering
-   healthz + security headers, admin Basic Auth, /api/room/:hash/exists,
-   /api/payment/initiate gates, /api/webhooks/paystack signature
-   handling, full RoomDO WebSocket protocol (join, turn-taking, N=1
-   overwrite, read-gated edits, lockout math), and the D1 lib
-   modules (extension_tokens lifecycle, country/daily UPSERT
-   counters). D1 migrations apply per test realm via a setup file.
+   nonce. Three native CF rate-limiter bindings shipped in
+   `wrangler.toml` (see "Rate limiting" section above) — no CF
+   dashboard WAF rules required.
+9. **Tests.** ✅ _done 2026-04-24 (9082f5e + 43e1929); updated
+   post-2026-04-24 for AE migration, CF-IPCountry metrics, FX rate,
+   RoomClient wire-frame coverage, and paid-tier atomic join._
+   Two-project vitest workspace (`name: "unit"` / `name: "workers"`):
+   pure-function tests (crypto, paystack helpers, analytics queries,
+   FX rate, RoomClient frames) run in Node; Worker/DO runtime tests
+   run under workerd via `@cloudflare/vitest-pool-workers`. **125
+   tests** green covering healthz + security headers, admin Basic Auth,
+   /api/room/:hash/exists, /api/payment/initiate gates,
+   /api/webhooks/paystack signature handling, full RoomDO WebSocket
+   protocol (join, paid-tier atomic join, turn-taking, N=1 overwrite,
+   read-gated edits, lockout math), and the D1 lib modules
+   (extension_tokens lifecycle). D1 migrations apply per test realm
+   via a setup file. The D1 country/daily metric tests were deleted
+   when those tables were replaced by Analytics Engine.
+   `wrangler.test.toml` (separate from `wrangler.toml`) omits the
+   `[[analytics_engine_datasets]]` block to avoid an esbuild deadlock
+   in wrangler 3.x's mock-AE middleware injection.
 10. **Smoke test on `workers.dev`.** Add GitHub secrets
     (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), create the D1
     database (`wrangler d1 create stelgano`, paste the ID into

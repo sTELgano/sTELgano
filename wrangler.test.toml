@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Test-only wrangler config used by vitest.workers.config.ts.
+#
+# Identical to wrangler.toml with one deliberate omission:
+# [[analytics_engine_datasets]] is NOT declared here. wrangler 3.x
+# (bundled inside @cloudflare/vitest-pool-workers) injects a
+# mock-analytics-engine middleware when it sees that binding, and its
+# esbuild plugin calls build.resolve() from inside an onStart callback
+# — which deadlocks esbuild's bundler. Omitting the binding skips the
+# middleware injection entirely. writeEvent() is null-safe and becomes a
+# no-op when env.ANALYTICS is absent, so no test behaviour changes.
+
+name = "stelgano"
+main = "./_worker.ts"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "RoomDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDO"]
+
+[[unsafe.bindings]]
+name = "RATE_LIMITER_ADMIN"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
+[[unsafe.bindings]]
+name = "RATE_LIMITER_WS"
+type = "ratelimit"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
+
+[[unsafe.bindings]]
+name = "RATE_LIMITER_ROOM_CREATE"
+type = "ratelimit"
+namespace_id = "1003"
+simple = { limit = 9999, period = 60 }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "stelgano"
+database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
+migrations_dir = "migrations"
+
+# In-memory KV for tests — miniflare creates this automatically.
+[[kv_namespaces]]
+binding = "RATE_CACHE"
+id = "test-rate-cache"
+
+[vars]
+PHX_HOST = "localhost"
+PAYMENT_CURRENCY = "USD"
+PRICE_CENTS = "200"
+FREE_TTL_DAYS = "7"
+PAID_TTL_DAYS = "365"
+MONETIZATION_ENABLED = "false"
+CF_ACCOUNT_ID = ""

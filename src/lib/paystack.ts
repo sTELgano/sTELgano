@@ -14,17 +14,16 @@
 // controls (so receipt mails bounce or land in the operator's own
 // mailserver — never a third party's).
 //
-// FX conversion (v1's PAYSTACK_SETTLEMENT_CURRENCY /
-// PAYSTACK_FX_BUFFER_PCT / PAYMENT_FX_FALLBACK_RATE / FxRate
-// GenServer) is DEFERRED. v1 supported showing USD but settling
-// in KES via a cached exchange rate; Workers don't have a natural
-// home for the FxRate cache (would need KV or D1 + fetch per
-// init, not worth the complexity yet). If PAYSTACK_SETTLEMENT_CURRENCY
-// is set and differs from PAYMENT_CURRENCY, initialize() returns
-// { ok: false, reason: "fx_conversion_not_wired" } so operators
-// don't silently lose money to misconfiguration.
+// FX conversion: when PAYSTACK_SETTLEMENT_CURRENCY differs from
+// PAYMENT_CURRENCY, initialize() reads the cached rate from the
+// RATE_CACHE KV namespace (written daily by the refreshRate() cron),
+// applies PAYSTACK_FX_BUFFER_PCT (default 5%), and rounds to the
+// nearest integer minor unit before submitting to Paystack.
+// Falls back to PAYMENT_FX_FALLBACK_RATE if KV is empty.
+// Returns fx_conversion_not_wired only when neither source yields a rate.
 
 import type { Env } from "../env";
+import { getRate } from "./fx_rate";
 
 const PAYSTACK_API = "https://api.paystack.co";
 const TOKEN_HASH_RE = /^[a-f0-9]{64}$/;
@@ -66,16 +65,27 @@ export async function initialize(
 
   const displayCurrency = env.PAYMENT_CURRENCY || "USD";
   const settlementCurrency = env.PAYSTACK_SETTLEMENT_CURRENCY || displayCurrency;
+
+  let amountToCharge = amountCents;
   if (settlementCurrency !== displayCurrency) {
-    // v1 did rate-based conversion here. Deferred — see module-level
-    // comment.
-    return { ok: false, reason: "fx_conversion_not_wired" };
+    const rate = await getRate(
+      env.RATE_CACHE,
+      displayCurrency.toLowerCase(),
+      settlementCurrency.toLowerCase(),
+      env.PAYMENT_FX_FALLBACK_RATE,
+    );
+    if (rate === null) {
+      return { ok: false, reason: "fx_conversion_not_wired" };
+    }
+    const bufferPct = parseFloat(env.PAYSTACK_FX_BUFFER_PCT ?? "5");
+    const buffer = Number.isFinite(bufferPct) ? bufferPct : 5;
+    amountToCharge = Math.round(amountCents * rate * (1 + buffer / 100));
   }
 
   const body = {
     email: placeholderEmail(tokenHash, env.PAYSTACK_RECEIPT_EMAIL_DOMAIN),
     reference: tokenHash,
-    amount: amountCents,
+    amount: amountToCharge,
     currency: settlementCurrency,
     callback_url: env.PAYSTACK_CALLBACK_URL,
     channels: ["card", "bank", "ussd", "mobile_money"],

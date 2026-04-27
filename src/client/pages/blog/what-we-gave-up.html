@@ -1,0 +1,137 @@
+<!--
+  title: What We Gave Up — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <header class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#scale"/></svg>
+      Engineering
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+      What We <span class="text-gradient">Gave Up.</span>
+    </h1>
+
+    <p class="text-slate-400 text-lg font-medium max-w-2xl mx-auto animate-in stagger-3 leading-relaxed">
+      An honest accounting of the tradeoffs we made migrating sTELgano to Cloudflare Workers. The gains are real. So are the losses.
+    </p>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-15</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 8 min read</span>
+    </div>
+  </header>
+
+  <div class="space-y-16 animate-in stagger-4">
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Vendor Lock-In Is Real</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Durable Objects are a Cloudflare primitive. There is no equivalent in AWS Lambda, Google Cloud Run, or any other major cloud. The WebSocket hibernation API, the global uniqueness guarantee, the colocated durable storage&mdash;these are all Cloudflare-specific. If we ever needed to leave Cloudflare, the stateful layer would require a full rewrite.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">This is not a hypothetical risk to dismiss. Cloudflare has changed pricing, deprecated features, and altered product roadmaps before. Betting the stateful core of a privacy application on a single proprietary primitive is a real exposure.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">We made this bet anyway, because the Elixir branch on <span class="font-mono text-sm text-slate-300">main</span> remains a full, independent implementation that anyone can run without Cloudflare. The vendor dependency is in the hosted service, not in the protocol or the product itself. Anyone who needs infrastructure independence has a path.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">No Persistent Background Processes</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">In Elixir, you can run a GenServer that holds state in memory across requests, acts on timers, and responds to messages from other processes. This is a powerful pattern. Our <span class="font-mono text-sm text-slate-300">FxRate</span> GenServer, for example, caches a live exchange rate in memory, refreshes it every 24 hours, and answers queries from any process in the system&mdash;all without a database round-trip.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">In Workers, there is no persistent in-memory process. A Worker runs, handles a request, and exits. State must live in Durable Objects, D1, or KV. The FxRate equivalent on Workers is a KV cache with a Cron Trigger for refresh&mdash;more moving parts, more latency on cache miss. We built it: <span class="font-mono text-sm text-slate-300">src/lib/fx_rate.ts</span> writes the live rate to <span class="font-mono text-sm text-slate-300">RATE_CACHE</span> KV with a 25h TTL via a <span class="font-mono text-sm text-slate-300">0 6 * * *</span> cron; <span class="font-mono text-sm text-slate-300">paystack.ts</span> reads it on checkout and applies the FX buffer. It works&mdash;it&rsquo;s just more infrastructure than a single <span class="font-mono text-sm text-slate-300">GenServer.start_link/1</span>.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">For sTELgano&rsquo;s current workload, this is manageable. But the constraint is real: anything that benefits from long-lived in-memory state becomes more complex to implement correctly on Workers.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Debugging Is Harder</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">On a server running Elixir, debugging a production issue means connecting to the running node via <span class="font-mono text-sm text-slate-300">iex --remsh</span>, introspecting process state, tracing function calls live, inspecting the supervision tree, and reading structured logs with full request context. The BEAM was designed for hot observability of a running system.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">On Workers, you have <span class="font-mono text-sm text-slate-300">console.log</span> and the Cloudflare real-time log tail. There is no equivalent of attaching to a running isolate and inspecting its state. Durable Object storage can be queried from the Cloudflare dashboard, but that&rsquo;s a read-only snapshot, not a live session.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">The practical impact: bugs that would take minutes to diagnose in a BEAM environment take longer on Workers. We compensate with more defensive logging and a comprehensive test suite. The local development environment (<span class="font-mono text-sm text-slate-300">wrangler dev</span>) runs a real Workers runtime, which helps catch most issues before they reach production.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The OTP Supervision Model</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Erlang&rsquo;s OTP supervision tree is one of the most robust fault-tolerance models in production software. Each process is supervised. A crash is contained to that process. The supervisor restarts it with a clean state. The rest of the system keeps running. This is not just theory&mdash;telecom systems built on the BEAM have achieved 99.9999999% uptime.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Cloudflare Workers has no equivalent. If a DO throws an unhandled exception, Cloudflare will restart it on the next request, but there is no supervisor that monitors it, no escalation path for repeated crashes, no fine-grained restart strategy. A crash in a DO during message handling will drop that message.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">In practice, this is acceptable for sTELgano. A chat message that fails to send is visible to the user (the UI shows a delivery failure). The room is not corrupted&mdash;the DO&rsquo;s durable storage is consistent. The user can retry. But anyone building on Workers should understand that the &ldquo;let it crash&rdquo; philosophy does not apply here in the same way. Unhandled errors need to be caught explicitly.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">JavaScript vs Elixir: The Language Gap</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Elixir has pattern matching, immutable data, the pipe operator, and a type system discipline (via Dialyzer) that catches a whole class of bugs at compile time. The language pushes you toward explicit error handling&mdash;every function returns <span class="font-mono text-sm text-slate-300">&#123;:ok, result&#125;</span> or <span class="font-mono text-sm text-slate-300">&#123;:error, reason&#125;</span>, and the compiler enforces that you handle both.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">TypeScript with strict mode is a reasonable second. The type coverage on our Workers codebase is high, and Biome enforces style and catches common errors. But JavaScript&rsquo;s implicit coercions, mutable state, and <span class="font-mono text-sm text-slate-300">null</span>/<span class="font-mono text-sm text-slate-300">undefined</span> dichotomy introduce a class of bugs that the BEAM simply doesn&rsquo;t have.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">We mitigated this with a comprehensive test suite: 75 tests across pure-function and real Workers runtime environments. But if language safety is your primary concern, Elixir on v1 is the more correct choice.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Balance Sheet</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Migrations are not free. The gains on v2 are real&mdash;zero infrastructure to manage, global deployment in seconds, no capacity planning, DO alarms instead of polling jobs. So are the losses&mdash;vendor lock-in, weaker fault isolation, harder debugging, no OTP supervision model.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">We think the v2 tradeoffs are the right ones for a product that needs to reach users globally, deploy frequently, and keep a tiny team focused on building rather than operating. But we are honest about what we gave up. That honesty is the product.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <div class="p-5 rounded-2xl bg-primary/5 border border-primary/20 space-y-3">
+            <div class="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">Gained</div>
+            <ul class="space-y-1.5 text-sm text-slate-400 font-medium">
+              <li class="flex items-start gap-2"><span class="text-primary shrink-0">+</span>Zero infrastructure ops</li>
+              <li class="flex items-start gap-2"><span class="text-primary shrink-0">+</span>Global deployment in seconds</li>
+              <li class="flex items-start gap-2"><span class="text-primary shrink-0">+</span>Exact TTL expiry via DO alarms</li>
+              <li class="flex items-start gap-2"><span class="text-primary shrink-0">+</span>No capacity planning</li>
+              <li class="flex items-start gap-2"><span class="text-primary shrink-0">+</span>N=1 via serial execution (no locks)</li>
+            </ul>
+          </div>
+          <div class="p-5 rounded-2xl bg-red-500/5 border border-red-500/20 space-y-3">
+            <div class="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400">Lost</div>
+            <ul class="space-y-1.5 text-sm text-slate-400 font-medium">
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">−</span>Infrastructure portability</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">−</span>OTP supervision model</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">−</span>Live process introspection</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">−</span>Persistent in-memory processes</li>
+              <li class="flex items-start gap-2"><span class="text-red-500/60 shrink-0">−</span>Elixir&rsquo;s compile-time safety</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="space-y-8 animate-in stagger-5">
+    <div class="flex items-center justify-between pt-8 border-t border-white/5">
+      <a href="/blog" class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+        Back to Blog
+      </a>
+    </div>
+
+    <div class="text-center space-y-6">
+      <p class="text-slate-500 text-sm font-medium">An honest product. Try it.</p>
+      <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        Start a Private Chat
+        <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+  </div>
+</article>

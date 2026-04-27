@@ -65,6 +65,26 @@ type = "ratelimit"
 namespace_id = "1002"
 simple = { limit = 30, period = 60 }
 
+# Caps new room creation per IP to 3 per minute. Checked inside the RoomDO
+# only on first join (when !room.isInitialized), so existing-room joins
+# are unaffected. Fail-open (.catch(() => success)) so a CF outage never
+# blocks legitimate traffic. CF Workers Rate Limiting only supports
+# period = 10 or 60 seconds — sub-minute windows are the finest granularity.
+[[unsafe.bindings]]
+name = "RATE_LIMITER_ROOM_CREATE"
+type = "ratelimit"
+namespace_id = "1003"
+simple = { limit = 3, period = 60 }
+
+# Analytics Engine — replaces the D1 country_metrics / daily_metrics
+# UPSERT writes. Fire-and-forget writeDataPoint() has no row locking so
+# it scales to concurrent bursts that would serialize D1 UPSERTs. Admin
+# reads query this dataset via the CF GraphQL API (CF_ACCOUNT_ID +
+# CF_AE_API_TOKEN secrets).
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "stelgano_events"
+
 # D1 database: aggregate metrics + extension tokens.
 # IDs are placeholders — `wrangler d1 create stelgano` produces real
 # values that get pasted in here.
@@ -74,13 +94,20 @@ database_name = "stelgano"
 database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
 migrations_dir = "migrations"
 
-# Cron Triggers — daily token-cleanup sweep. Runs at 03:00 UTC,
-# identical to v1's ExpireUnredeemedTokens Oban job. Fires the
-# `scheduled` handler in _worker.ts, which calls deleteExpired()
-# against D1. The N=1 message store is per-DO (not D1) and expires
-# via DO alarms, so no other cron is needed here.
+# KV namespace for exchange rate caching. Written daily by the
+# "0 6 * * *" cron via refreshRate() and read by initialize() in
+# src/lib/paystack.ts when PAYSTACK_SETTLEMENT_CURRENCY ≠ PAYMENT_CURRENCY.
+# Create with: wrangler kv:namespace create RATE_CACHE
+[[kv_namespaces]]
+binding = "RATE_CACHE"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Cron Triggers:
+#   "0 3 * * *" — daily token cleanup (deleteExpired, ports v1 ExpireUnredeemedTokens)
+#   "0 6 * * *" — daily FX rate refresh (refreshRate, ports v1 FxRate GenServer cycle)
+# Both fire the `scheduled` handler in _worker.ts; it dispatches by event.cron.
 [triggers]
-crons = ["0 3 * * *"]
+crons = ["0 3 * * *", "0 6 * * *"]
 
 # Observability: Workers Logs, no third-party telemetry.
 [observability]
@@ -96,3 +123,7 @@ PRICE_CENTS = "200"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
 MONETIZATION_ENABLED = "false"
+# Cloudflare account ID — needed by the admin dashboard to query Analytics
+# Engine via the GraphQL API. Not a secret: safe to commit. Get it from
+# the Cloudflare dashboard URL or `wrangler whoami`.
+CF_ACCOUNT_ID = "REPLACE_WITH_CF_ACCOUNT_ID"

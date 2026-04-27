@@ -24,9 +24,18 @@
 
 import { INLINE_SCRIPT_HASHES } from "./src/csp_hashes";
 import type { Env } from "./src/env";
-import { type CountryRow, list as listCountryMetrics } from "./src/lib/country_metrics";
-import { type DailyRow, listRecent as listDailyRecent } from "./src/lib/daily_metrics";
+import {
+  type CFCountryRow,
+  type CountryRow,
+  type DailyRow,
+  type DiasporaRow,
+  queryCFCountryMetrics,
+  queryCountryMetrics,
+  queryDailyMetrics,
+  queryDiasporaMetrics,
+} from "./src/lib/analytics";
 import { createPending, deleteExpired, markPaid } from "./src/lib/extension_tokens";
+import { refreshRate } from "./src/lib/fx_rate";
 import { getActiveRooms } from "./src/lib/live_counters";
 import {
   hmacSha512Hex,
@@ -62,12 +71,27 @@ export default {
   },
 
   // Cron handler — wired via [triggers] crons in wrangler.toml.
-  // Ports elixir/lib/stelgano/jobs/expire_unredeemed_tokens.ex:
-  // once a day, sweep extension_tokens whose expires_at has passed.
-  // Pending tokens get this far when the user abandoned checkout; paid
-  // tokens get this far when a user paid but never redeemed. Either
-  // way we don't keep them around forever.
-  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+  // Two cron entries dispatch here; we route by event.cron pattern:
+  //
+  //  "0 3 * * *" — daily token cleanup. Ports ExpireUnredeemedTokens
+  //    Oban job: sweeps extension_tokens whose expires_at has passed.
+  //    Pending = user abandoned checkout. Paid = user never redeemed.
+  //
+  //  "0 6 * * *" — daily FX rate refresh. Fetches the live exchange
+  //    rate from Fawazahmed0's currency API and writes it to the
+  //    RATE_CACHE KV with a 25h TTL. Only runs when
+  //    PAYSTACK_SETTLEMENT_CURRENCY is set and differs from
+  //    PAYMENT_CURRENCY. Ports the v1 FxRate GenServer refresh cycle.
+  async scheduled(event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    if (event.cron === "0 6 * * *") {
+      const base = (env.PAYMENT_CURRENCY || "USD").toLowerCase();
+      const quote = env.PAYSTACK_SETTLEMENT_CURRENCY?.toLowerCase();
+      if (quote && quote !== base && env.RATE_CACHE) {
+        await refreshRate(env.RATE_CACHE, base, quote);
+      }
+      return;
+    }
+    // Default: "0 3 * * *" token cleanup sweep.
     const cutoff = new Date().toISOString();
     await deleteExpired(env.DB, cutoff);
   },
@@ -126,7 +150,14 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
     }
     const id = env.ROOM.idFromName(roomHash);
     const stub = env.ROOM.get(id);
-    return stub.fetch(request);
+    // Inject the client IP so the RoomDO can enforce per-IP rate limits
+    // on room creation. Headers are immutable on Request, so we copy them.
+    const withIp = new Headers(request.headers);
+    withIp.set("X-Client-IP", ip);
+    // Forward CF-IPCountry so the RoomDO can include it in AE telemetry
+    // as blob3 (complement to the client-derived steg-number country).
+    withIp.set("X-CF-Country", (request.cf?.country ?? "") as string);
+    return stub.fetch(new Request(request, { headers: withIp }));
   }
 
   // GET /api/room/:roomHash/exists — probe whether a room has
@@ -151,12 +182,9 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   }
 
   // POST /api/payment/initiate — payment client (chat.ts) calls
-  // this with a token_hash. We create the extension_tokens row
-  // (status=pending) and return a checkout URL the client
-  // redirects to. The Paystack adapter wires the actual checkout
-  // URL in Phase 7; for now we stub it with a 501 + clear note
-  // when monetization is enabled, or 503 when the operator hasn't
-  // turned on monetization at all.
+  // this with a token_hash. Creates the extension_tokens row
+  // (status=pending) and returns a Paystack checkout URL the
+  // client redirects to. Returns 503 when monetization is off.
   if (url.pathname === "/api/payment/initiate" && request.method === "POST") {
     return handlePaymentInitiate(request, env);
   }
@@ -351,17 +379,29 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   if (!checkBasicAuth(request, env)) return basicAuthChallenge();
 
   let country: CountryRow[] = [];
+  let cfCountry: CFCountryRow[] = [];
   let daily: DailyRow[] = [];
+  let diaspora: DiasporaRow[] = [];
   let activeRooms = 0;
+  const aeReady = Boolean(env.CF_ACCOUNT_ID && env.CF_AE_API_TOKEN);
   try {
-    [country, daily, activeRooms] = await Promise.all([
-      listCountryMetrics(env.DB),
-      listDailyRecent(env.DB, 90),
+    [country, cfCountry, daily, diaspora, activeRooms] = await Promise.all([
+      aeReady
+        ? queryCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!)
+        : Promise.resolve([] as CountryRow[]),
+      aeReady
+        ? queryCFCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!)
+        : Promise.resolve([] as CFCountryRow[]),
+      aeReady
+        ? queryDailyMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, 90)
+        : Promise.resolve([] as DailyRow[]),
+      aeReady
+        ? queryDiasporaMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!)
+        : Promise.resolve([] as DiasporaRow[]),
       getActiveRooms(env.DB),
     ]);
   } catch {
-    // D1 unavailable or schema not migrated — show an empty
-    // dashboard rather than 500.
+    // AE unavailable — show an empty dashboard rather than 500.
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -380,6 +420,8 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
     messagesThisDay,
     daily: dailyTable,
     country,
+    cfCountry,
+    diaspora,
   });
 
   return new Response(html, {
@@ -399,6 +441,8 @@ function renderAdminHtml(d: {
   messagesThisDay: number;
   daily: DailyRow[];
   country: CountryRow[];
+  cfCountry: CFCountryRow[];
+  diaspora: DiasporaRow[];
 }): string {
   const dailyRows = d.daily.length
     ? d.daily
@@ -429,6 +473,39 @@ function renderAdminHtml(d: {
         )
         .join("")
     : `<tr><td colspan="4" class="py-4 text-sm text-slate-500 italic">No country data yet.</td></tr>`;
+
+  const cfCountryRows = d.cfCountry.length
+    ? d.cfCountry
+        .map(
+          (r) => `
+          <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.country_code)}</td>
+            <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_rooms}</td>
+            <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_rooms}</td>
+            <td class="py-3 text-right font-mono text-slate-400">${r.free_rooms + r.paid_rooms}</td>
+          </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="py-4 text-sm text-slate-500 italic">No IP-country data yet.</td></tr>`;
+
+  const diasporaRows = d.diaspora.length
+    ? d.diaspora
+        .map((r) => {
+          const isDiaspora = r.steg_country !== r.cf_country;
+          const indicator = isDiaspora
+            ? `<span class="inline-block size-1.5 rounded-full bg-primary ml-1" title="diaspora"></span>`
+            : "";
+          return `
+          <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.steg_country)}${indicator}</td>
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.cf_country)}</td>
+            <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_rooms}</td>
+            <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_rooms}</td>
+            <td class="py-3 text-right font-mono text-slate-400">${r.free_rooms + r.paid_rooms}</td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="5" class="py-4 text-sm text-slate-500 italic">No diaspora data yet.</td></tr>`;
 
   const iconSvg = (name: string, cls = "size-4") =>
     `<svg class="${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
@@ -509,14 +586,14 @@ function renderAdminHtml(d: {
         </div>
       </div>
 
-      <!-- Per-country breakdown -->
+      <!-- Per-country breakdown (steg-number country) -->
       <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
         <div class="flex items-center gap-3 text-slate-300">
           ${iconSvg("globe", "size-5 text-primary")}
-          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Rooms by Country · Aggregate Only</h4>
+          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Rooms by Steg-Number Country · Aggregate Only</h4>
         </div>
         <p class="text-xs text-slate-500 font-medium leading-relaxed">
-          Counters incremented on room creation and paid-tier upgrade. The country is never stored alongside any individual room record — these rows can answer "how many rooms from Kenya?" but never "which rooms from Kenya?".
+          Country derived client-side from the E.164 steg number via libphonenumber-js. Answers "which country's phone format was adopted?" — a proxy for the user's social identity. Never stored alongside any individual room record.
         </p>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -529,6 +606,55 @@ function renderAdminHtml(d: {
               </tr>
             </thead>
             <tbody>${countryRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Per-country breakdown (CF-IPCountry) -->
+      <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
+        <div class="flex items-center gap-3 text-slate-300">
+          ${iconSvg("map_pin", "size-5 text-primary")}
+          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Rooms by IP Location (CF-IPCountry) · Aggregate Only</h4>
+        </div>
+        <p class="text-xs text-slate-500 font-medium leading-relaxed">
+          Country derived server-side from the connecting IP via Cloudflare's geolocation. Answers "where are users physically connecting from?" — differs from the steg-number country for diaspora users, travellers, and VPN users.
+        </p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                <th class="py-3 pr-8">Country</th>
+                <th class="py-3 pr-8 text-right">Free rooms</th>
+                <th class="py-3 pr-8 text-right">Paid rooms</th>
+                <th class="py-3 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>${cfCountryRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Diaspora breakdown (steg country vs IP country) -->
+      <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
+        <div class="flex items-center gap-3 text-slate-300">
+          ${iconSvg("users", "size-5 text-primary")}
+          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Diaspora Breakdown · Steg vs IP Country</h4>
+        </div>
+        <p class="text-xs text-slate-500 font-medium leading-relaxed">
+          Rows where Steg Country ≠ CF Country (marked <span class="inline-block size-1.5 rounded-full bg-primary mb-0.5"></span>) reveal diaspora usage — users whose steg number is from one country but who connect from another.
+        </p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                <th class="py-3 pr-8">Steg Country</th>
+                <th class="py-3 pr-8">CF Country</th>
+                <th class="py-3 pr-8 text-right">Free rooms</th>
+                <th class="py-3 pr-8 text-right">Paid rooms</th>
+                <th class="py-3 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>${diasporaRows}</tbody>
           </table>
         </div>
       </div>
@@ -697,9 +823,7 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
   }
 
   // Compute expiry now so the row carries an explicit deadline. v1
-  // sets this 7 days out (the unredeemed-token sweep window). The
-  // Paystack call may bump it via Paystack's own session window —
-  // Phase 7 may overwrite this.
+  // sets this 7 days out (the unredeemed-token sweep window).
   const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
   const amountCents = parseInt(env.PRICE_CENTS, 10) || 200;
   const currency = env.PAYMENT_CURRENCY || "USD";

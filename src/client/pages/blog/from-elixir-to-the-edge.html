@@ -1,0 +1,165 @@
+<!--
+  title: From BEAM to the Edge — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <header class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#wrench"/></svg>
+      Engineering
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-[0.95]">
+      From BEAM to <span class="text-gradient">the Edge.</span>
+    </h1>
+
+    <p class="text-slate-400 text-lg font-medium max-w-2xl mx-auto animate-in stagger-3 leading-relaxed">
+      Why we rewrote sTELgano in TypeScript on Cloudflare Workers, what prompted the move, what stayed the same, and what happens to the Elixir branch.
+    </p>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-27</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 10 min read</span>
+    </div>
+  </header>
+
+  <div class="space-y-16 animate-in stagger-4">
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Why Elixir Was the Right Start</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">We wrote <a href="/blog/why-elixir-and-phoenix" class="text-primary hover:text-primary/80 transition-colors">an entire post</a> explaining why we chose Elixir for the first version of sTELgano. The short version: the BEAM VM was literally designed for soft real-time communication systems, Phoenix Channels gave us 2M+ concurrent WebSockets on a single node, and the supervision tree model meant production crashes were contained and self-healing.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Elixir was right for v1. We stand by that. A small team building a real-time privacy application for the first time, where correctness mattered more than operational simplicity, reached for the best-in-class tool for the job. The BEAM's lightweight processes, each isolated and supervised, gave us exactly the fault model we needed.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">But after running v1 in production, a different set of constraints became visible.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Operational Reality</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Running an Elixir application in production on a bare server means owning the full stack: OS patching, Erlang/OTP upgrades, release management, database migrations, systemd unit configuration, nginx TLS termination, Let&rsquo;s Encrypt renewal, Oban job queues, and a monitoring setup to know when any of these go wrong.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">For a product with a clear privacy thesis and a small team, this is non-trivial overhead. Each layer is a surface to maintain and a potential point of failure. A missed security patch in the OS is as dangerous as a bug in the application code. Capacity planning for a single-region deployment means either over-provisioning or accepting degraded performance under burst load.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">We wanted to spend engineering time on the product&mdash;on the cryptography, the UX, the protocol&mdash;not on keeping a server healthy.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Why Cloudflare Workers?</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card-premium p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">Cloudflare Workers runs JavaScript on V8 isolates at 330+ points of presence globally. There are no servers to manage, no capacity decisions to make, no patching cycles. Deployment is <span class="font-mono text-primary/80 text-sm">wrangler deploy</span> and the code is live everywhere in seconds.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">But the primitive that made Workers the right choice for sTELgano specifically is the <span class="text-white font-semibold">Durable Object</span>. A DO is a stateful, single-threaded actor that lives at the edge. Each sTELgano room gets exactly one DO instance. That single-threaded execution model is what makes the N=1 invariant implementable without database-level transactions&mdash;serial execution means concurrent writes are structurally impossible.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Phoenix Channels gave us one BEAM process per room. Durable Objects give us one V8 isolate per room. The model is the same; the infrastructure underneath is completely different.</p>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What Changed</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="glass-card p-6 space-y-4">
+          <div class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">v1 — Elixir/Phoenix</div>
+          <ul class="space-y-2 text-sm text-slate-400 font-medium">
+            <li class="flex items-start gap-2"><span class="text-slate-600 shrink-0 mt-0.5">•</span>Elixir / BEAM VM</li>
+            <li class="flex items-start gap-2"><span class="text-slate-600 shrink-0 mt-0.5">•</span>Phoenix Channels (WebSocket)</li>
+            <li class="flex items-start gap-2"><span class="text-slate-600 shrink-0 mt-0.5">•</span>PostgreSQL + Ecto</li>
+            <li class="flex items-start gap-2"><span class="text-slate-600 shrink-0 mt-0.5">•</span>Oban background jobs</li>
+            <li class="flex items-start gap-2"><span class="text-slate-600 shrink-0 mt-0.5">•</span>DB UPSERT for metrics</li>
+            <li class="flex items-start gap-2"><span class="text-slate-600 shrink-0 mt-0.5">•</span>Single-region DigitalOcean droplet</li>
+            <li class="flex items-start gap-2"><span class="text-slate-600 shrink-0 mt-0.5">•</span>systemd + nginx + Let&rsquo;s Encrypt</li>
+          </ul>
+        </div>
+        <div class="glass-card p-6 space-y-4 border-primary/20">
+          <div class="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">v2 — Cloudflare Workers</div>
+          <ul class="space-y-2 text-sm text-slate-400 font-medium">
+            <li class="flex items-start gap-2"><span class="text-primary shrink-0 mt-0.5">•</span>TypeScript / V8 isolates</li>
+            <li class="flex items-start gap-2"><span class="text-primary shrink-0 mt-0.5">•</span>Durable Object WebSockets</li>
+            <li class="flex items-start gap-2"><span class="text-primary shrink-0 mt-0.5">•</span>D1 (SQLite) + DO storage</li>
+            <li class="flex items-start gap-2"><span class="text-primary shrink-0 mt-0.5">•</span>Workers Cron Trigger + DO alarms</li>
+            <li class="flex items-start gap-2"><span class="text-primary shrink-0 mt-0.5">•</span>Analytics Engine (write-only events)</li>
+            <li class="flex items-start gap-2"><span class="text-primary shrink-0 mt-0.5">•</span>330+ PoPs globally</li>
+            <li class="flex items-start gap-2"><span class="text-primary shrink-0 mt-0.5">•</span><span class="font-mono text-primary/80 text-xs">wrangler deploy</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What Did Not Change</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">The sTELgano-std-1 protocol is unchanged. The cryptographic constants (ROOM_SALT, ACCESS_SALT, SENDER_SALT, ENC_SALT), the derivation functions, the AES-256-GCM parameters, the 600,000 PBKDF2 iterations&mdash;all identical. Existing rooms created on v1 are accessible on v2 without any migration.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+          <div class="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-2">
+            <div class="text-primary font-bold text-sm">Protocol</div>
+            <p class="text-xs text-slate-500 font-medium leading-relaxed">sTELgano-std-1 unchanged. All crypto constants and derivation paths identical.</p>
+          </div>
+          <div class="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-2">
+            <div class="text-primary font-bold text-sm">N=1 Invariant</div>
+            <p class="text-xs text-slate-500 font-medium leading-relaxed">At most one message per room. Reply deletes previous atomically. Same guarantee, different mechanism.</p>
+          </div>
+          <div class="p-5 rounded-2xl bg-white/2 border border-white/5 space-y-2">
+            <div class="text-primary font-bold text-sm">Privacy Model</div>
+            <p class="text-xs text-slate-500 font-medium leading-relaxed">Server sees only hashes and ciphertext. No phone number. No PIN. No plaintext. Unchanged.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Future of the Elixir Branch</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">The Elixir implementation lives on the <span class="font-mono text-primary/80 text-sm">main</span> branch and is not going anywhere. It is a complete, production-grade implementation of sTELgano-std-1 and a useful reference for anyone who wants to self-host on their own infrastructure without Cloudflare.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">If you run an Elixir stack, want full infrastructure control, or operate in a jurisdiction where edge-computing providers are not an option, the Elixir branch is the right choice. It will continue to receive security patches and protocol-level updates whenever sTELgano-std-1 changes.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">Both branches are AGPL-3.0. Both implement the same protocol. New features may land in the Cloudflare branch first, but anything that affects the protocol or the cryptographic spec propagates to both.</p>
+        <div class="p-5 rounded-2xl bg-primary/5 border border-primary/20 flex items-start gap-3 mt-2">
+          <svg class="size-5 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#git_branch"/></svg>
+          <p class="text-sm text-slate-300 font-medium leading-relaxed"><span class="text-white font-semibold">main</span> — Elixir/Phoenix. Self-hosted on your own server. Full infrastructure control.<br><span class="text-white font-semibold">v2-cloudflare</span> — TypeScript. Deploy to Cloudflare Workers with <span class="font-mono text-primary/80 text-xs">wrangler deploy</span>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-6">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Tradeoff We Made</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        <p class="text-slate-300 leading-relaxed font-medium">This migration was not free. Cloudflare Workers is a proprietary platform. Durable Objects are not a portable abstraction&mdash;if we ever wanted to move off Cloudflare, we would need to rewrite the stateful layer. We traded infrastructure autonomy for operational simplicity and global reach.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">We think that&rsquo;s the right trade for v2. The product&rsquo;s privacy guarantees live in the protocol and the client-side cryptography, not in who operates the server. A Cloudflare-hosted sTELgano room is as private as a self-hosted one&mdash;the server sees the same hashes and ciphertext either way. The trust model is in the math, not the infrastructure provider.</p>
+        <p class="text-slate-400 leading-relaxed font-medium">We cover the full set of tradeoffs in a <a href="/blog/what-we-gave-up" class="text-primary hover:text-primary/80 transition-colors">dedicated post</a>. This is an honest product. We do not paper over the downsides.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="space-y-8 animate-in stagger-5">
+    <div class="flex items-center justify-between pt-8 border-t border-white/5">
+      <a href="/blog" class="btn-ghost px-6 py-3 inline-flex items-center gap-2 group text-sm">
+        <svg class="size-4 group-hover:-translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_left"/></svg>
+        Back to Blog
+      </a>
+    </div>
+
+    <div class="text-center space-y-6">
+      <p class="text-slate-500 text-sm font-medium">See the new stack in action.</p>
+      <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        Start a Private Chat
+        <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+  </div>
+</article>

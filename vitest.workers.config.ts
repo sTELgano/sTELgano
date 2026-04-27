@@ -32,6 +32,7 @@ export default defineWorkersConfig(async () => {
 
   return {
     test: {
+      name: "workers",
       include: ["test/worker/**/*.test.ts"],
       setupFiles: ["./test/worker/apply_migrations.ts"],
       poolOptions: {
@@ -41,7 +42,7 @@ export default defineWorkersConfig(async () => {
           // The pool needs an explicit path — it does not infer it
           // from `pages_build_output_dir` in wrangler.toml.
           main: "./_worker.ts",
-          wrangler: { configPath: "./wrangler.toml" },
+          wrangler: { configPath: "./wrangler.test.toml" },
           miniflare: {
             // Ephemeral D1 per test run — populated by the
             // migrations directory so the schema matches what the
