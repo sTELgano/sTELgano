@@ -82,12 +82,77 @@ let lastInferredCountry: string | null = null;
 // root.innerHTML swap restarts all animate-in CSS animations and looks
 // like a full page reload to the user.
 let prevKind: string | null = null;
+let prevState: State | null = null;
 
 state.onStateChange((s) => {
+  // Fast path: if only the generator dropdown/search query changed on the entry screen,
+  // do an in-place update of the dropdown container instead of wiping root.innerHTML.
+  // This solves backwards typing bugs caused by destroying the <input> mid-keystroke.
+  if (prevState && prevState.kind === "entry" && s.kind === "entry") {
+    const aStrip = { ...prevState, generator: { ...prevState.generator, searchQuery: "", showCountries: false } };
+    const bStrip = { ...s, generator: { ...s.generator, searchQuery: "", showCountries: false } };
+    if (JSON.stringify(aStrip) === JSON.stringify(bStrip)) {
+      const container = document.getElementById("drawer-country-dropdown-container");
+      if (container) {
+        container.innerHTML = renderGeneratorDropdown(s.generator);
+      }
+      const input = document.getElementById("drawer-country-input") as HTMLInputElement;
+      if (input && input.value !== s.generator.searchQuery) {
+        input.value = s.generator.searchQuery;
+      }
+      prevState = JSON.parse(JSON.stringify(s)) as State;
+      return;
+    }
+  }
+
+  const active = document.activeElement;
+  const activeId = active?.id;
+  const activeName = active instanceof HTMLInputElement ? active.name : null;
+  let activeStart: number | null = null;
+  let activeEnd: number | null = null;
+
+  if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+    try {
+      if (typeof active.selectionStart === "number") {
+        activeStart = active.selectionStart;
+        activeEnd = active.selectionEnd;
+      }
+    } catch (e) {}
+  }
+
   const kindsChanged = s.kind !== prevKind;
   prevKind = s.kind;
+  prevState = JSON.parse(JSON.stringify(s)) as State;
   root.innerHTML = render(s, kindsChanged);
-  focusFirstField();
+
+  let focusRestored = false;
+  let elToFocus: HTMLElement | null = null;
+  if (activeId) elToFocus = root.querySelector(`#${activeId}`);
+  else if (activeName) elToFocus = root.querySelector(`[name="${activeName}"]`);
+
+  if (elToFocus) {
+    if ((elToFocus instanceof HTMLInputElement || elToFocus instanceof HTMLTextAreaElement) && activeStart !== null && activeEnd !== null) {
+      try { elToFocus.setSelectionRange(activeStart, activeEnd); } catch (e) {}
+    }
+    
+    elToFocus.focus();
+    
+    if ((elToFocus instanceof HTMLInputElement || elToFocus instanceof HTMLTextAreaElement) && activeStart !== null && activeEnd !== null) {
+      const s = activeStart;
+      const e = activeEnd;
+      requestAnimationFrame(() => {
+        if (document.activeElement === elToFocus) {
+          try { elToFocus.setSelectionRange(s, e); } catch (err) {}
+        }
+      });
+    }
+    focusRestored = true;
+  }
+
+  if (!focusRestored) {
+    focusFirstField();
+  }
+
   // After any re-render of the entry screen, re-apply phone formatting so
   // the country display and AsYouType formatting survive the innerHTML swap.
   if (s.kind === "entry") {
@@ -248,14 +313,49 @@ root.addEventListener(
   true,
 );
 
-// Escape cancels an active edit in the chat textarea.
-// Enter inserts a newline (standard textarea behaviour — v1 sent via button only).
+// Open country dropdown when the search input is focused (e.g. tab in).
+root.addEventListener(
+  "focus",
+  (e) => {
+    const target = e.target as HTMLElement;
+    if (target instanceof HTMLInputElement && target.id === "drawer-country-input") {
+      const s = state.getState();
+      if (s.kind === "entry" && !s.generator.showCountries) {
+        state.setCountrySearch(target.value, true);
+      }
+    }
+  },
+  true,
+);
+
+// Close country dropdown on Escape; also cancel chat edits.
 root.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
+  if (target instanceof HTMLInputElement && target.id === "drawer-country-input") {
+    if (e.key === "Escape") {
+      state.closeCountries();
+      e.preventDefault();
+    }
+    return;
+  }
+
   if (!(target instanceof HTMLTextAreaElement) || target.id !== "chat-textarea") return;
   if (e.key === "Escape") {
     const s = state.getState();
     if (s.kind === "chat" && s.editing) state.cancelEdit();
+  }
+});
+
+// Close country dropdown when clicking outside the search input + dropdown.
+document.addEventListener("click", (e) => {
+  const s = state.getState();
+  if (s.kind !== "entry" || !s.generator.showCountries) return;
+  const clicked = e.target as HTMLElement;
+  if (
+    !clicked.closest("#drawer-country-input") &&
+    !clicked.closest("[data-action='select-country']")
+  ) {
+    state.closeCountries();
   }
 });
 
@@ -525,38 +625,43 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
 
 // -------------------------- generator drawer --------------------------
 
+function renderGeneratorDropdown(g: GeneratorState): string {
+  const q = g.searchQuery.toLowerCase();
+  const filtered = q
+    ? COUNTRY_LIST.filter((c) => c.name.toLowerCase().includes(q)).sort((a, b) => {
+        const aStarts = a.name.toLowerCase().startsWith(q);
+        const bStarts = b.name.toLowerCase().startsWith(q);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        return 0;
+      })
+    : COUNTRY_LIST;
+  const countriesToShow = filtered.slice(0, 60);
+
+  if (!g.showCountries || countriesToShow.length === 0) return "";
+
+  return `
+    <div class="absolute z-100 w-full mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+      ${countriesToShow
+        .map(
+          (c) => `
+            <button
+              type="button"
+              data-action="select-country"
+              data-country="${escapeHtml(c.name)}"
+              class="w-full px-6 py-4 text-left hover:bg-white/5 text-slate-300 hover:text-white transition-all border-b border-white/5 last:border-0 flex items-center justify-between group"
+            >
+              <span class="font-bold tracking-wide text-sm">${escapeHtml(c.name)}</span>
+              ${icon("chevron_right", "size-4 opacity-0 group-hover:opacity-100 transition-opacity")}
+            </button>`,
+        )
+        .join("")}
+    </div>`;
+}
+
 function renderGeneratorDrawer(g: GeneratorState): string {
   const containerVis = g.open ? "visible" : "invisible pointer-events-none";
   const backdropOp = g.open ? "opacity-100" : "opacity-0";
   const drawerSlide = g.open ? "translate-x-0" : "translate-x-full";
-
-  // Filter the country list by current search query (case-insensitive
-  // substring on the country name).
-  const filtered = g.searchQuery
-    ? COUNTRY_LIST.filter((c) => c.name.toLowerCase().includes(g.searchQuery.toLowerCase()))
-    : COUNTRY_LIST;
-  const countriesToShow = filtered.slice(0, 50); // cap UI list size
-
-  const dropdown =
-    g.showCountries && countriesToShow.length > 0
-      ? `
-      <div class="absolute z-100 w-full mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2">
-        ${countriesToShow
-          .map(
-            (c) => `
-              <button
-                type="button"
-                data-action="select-country"
-                data-country="${escapeHtml(c.name)}"
-                class="w-full px-6 py-4 text-left hover:bg-white/5 text-slate-300 hover:text-white transition-all border-b border-white/5 last:border-0 flex items-center justify-between group"
-              >
-                <span class="font-bold tracking-wide text-sm">${escapeHtml(c.name)}</span>
-                ${icon("chevron_right", "size-4 opacity-0 group-hover:opacity-100 transition-opacity")}
-              </button>`,
-          )
-          .join("")}
-      </div>`
-      : "";
 
   const inputRightIcon = g.selectedCountry
     ? icon("badge_check", "size-5 text-emerald-400")
@@ -687,7 +792,9 @@ function renderGeneratorDrawer(g: GeneratorState): string {
                   ${inputRightIcon}
                 </div>
               </div>
-              ${dropdown}
+              <div id="drawer-country-dropdown-container">
+                ${renderGeneratorDropdown(g)}
+              </div>
             </div>
           </div>
 
