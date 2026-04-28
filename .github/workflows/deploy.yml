@@ -33,6 +33,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source-branch-gate:
+    name: Source branch gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    steps:
+      - name: Only staging may target main
+        if: github.head_ref != 'staging'
+        run: |
+          echo "PRs to main must come from the staging branch, not '${{ github.head_ref }}'."
+          exit 1
+
   test:
     name: Test + build
     runs-on: ubuntu-latest
