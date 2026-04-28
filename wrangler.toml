@@ -115,7 +115,7 @@ head_sampling_rate = 1.0
 # Production environment variables. Secrets (PAYSTACK_*, ADMIN_PASSWORD)
 # are set via `wrangler secret put`, never committed.
 [vars]
-PHX_HOST = "staging.stelgano.com"
+HOST = "staging.stelgano.com"
 PAYMENT_CURRENCY = "USD"
 PRICE_CENTS = "200"
 FREE_TTL_DAYS = "7"
@@ -186,7 +186,7 @@ binding = "RATE_CACHE"
 id = "59542bfc5ca040e180b5a52fcd436b4f"
 
 [env.staging.vars]
-PHX_HOST = "staging.stelgano.com"
+HOST = "staging.stelgano.com"
 PAYMENT_CURRENCY = "USD"
 PRICE_CENTS = "200"
 FREE_TTL_DAYS = "7"

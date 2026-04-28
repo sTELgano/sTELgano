@@ -38,7 +38,7 @@ function baseEnv(overrides: Partial<Env> = {}): Env {
     RATE_LIMITER_ADMIN: {} as RateLimit,
     RATE_LIMITER_WS: {} as RateLimit,
     RATE_LIMITER_ROOM_CREATE: {} as RateLimit,
-    PHX_HOST: "example.com",
+    HOST: "example.com",
     PRICE_CENTS: "200",
     FREE_TTL_DAYS: "7",
     PAID_TTL_DAYS: "365",

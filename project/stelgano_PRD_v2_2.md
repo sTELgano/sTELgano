@@ -1070,7 +1070,7 @@ primary_region = "jnb"   # Africa-first
   auto_stop_machines = false  # keep alive for WebSocket persistence
 
 [env]
-  PHX_HOST = "stelgano.com"
+  HOST = "stelgano.com"
   POOL_SIZE = "10"
 
 [[vm]]

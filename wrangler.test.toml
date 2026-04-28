@@ -58,7 +58,7 @@ binding = "RATE_CACHE"
 id = "test-rate-cache"
 
 [vars]
-PHX_HOST = "localhost"
+HOST = "localhost"
 PAYMENT_CURRENCY = "USD"
 PRICE_CENTS = "200"
 FREE_TTL_DAYS = "7"
