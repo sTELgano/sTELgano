@@ -19,10 +19,10 @@ export interface Env extends Cloudflare.Env {
   // Secrets set via `wrangler secret put` — not in wrangler.toml, so absent
   // from the CI-generated Cloudflare.Env. Declaring here keeps typecheck
   // passing regardless of whether wrangler types had CF auth.
-  ADMIN_USERNAME: string;
+  ADMIN_USERNAME: string;  // optional secret; Worker falls back to "admin" when unset
   ADMIN_PASSWORD: string;
   PAYSTACK_SECRET_KEY: string;
-  PAYSTACK_PUBLIC_KEY: string;
+  PAYSTACK_PUBLIC_KEY: string;  // set but not read server-side; hosted checkout only
   PAYSTACK_CALLBACK_URL: string;
   PAYSTACK_RECEIPT_EMAIL_DOMAIN: string;
 }

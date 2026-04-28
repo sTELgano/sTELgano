@@ -813,9 +813,9 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
     return jsonResponse({ error: "invalid_token_hash" }, 400);
   }
 
-  // Compute expiry now so the row carries an explicit deadline. v1
-  // sets this 7 days out (the unredeemed-token sweep window).
-  const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  // Compute expiry: 30 days (matching v1's Monetization.create_token/1).
+  // Tokens swept by the daily cron if abandoned before this deadline.
+  const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
   const amountCents = parseInt(env.PRICE_CENTS, 10) || 200;
   const currency = env.PAYMENT_CURRENCY || "USD";
 

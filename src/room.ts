@@ -626,7 +626,18 @@ export class RoomDO implements DurableObject {
     }
 
     // Extend the room's TTL and reschedule its self-destruct alarm.
-    const newTtlMs = Date.now() + PAID_TTL_DAYS * 86_400_000;
+    // Floor to the hour (v1 `round_to_hour/1`) so the exact redemption
+    // moment is not encoded in ttl_expires_at. A server operator with
+    // D1 + DO access cannot pinpoint redemption time from the expiry.
+    const newTtlRaw = Date.now() + PAID_TTL_DAYS * 86_400_000;
+    const newTtlMs = Math.floor(newTtlRaw / 3_600_000) * 3_600_000;
+
+    // v1 slept 0–5000ms (jitter_sleep) between the token mark-redeemed
+    // and the room TTL update to de-align their updated_at timestamps.
+    // In the DO model both writes are in the same request handler; the
+    // D1 write (markRedeemed above) and the DO SQLite write (persist
+    // below) land in different storage systems at different latencies,
+    // giving natural de-alignment without an explicit sleep.
     this.room.tier = "paid";
     this.room.ttlExpiresAtMs = newTtlMs;
     await this.persist();

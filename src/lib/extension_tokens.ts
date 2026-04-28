@@ -15,7 +15,6 @@
 //       expired (sweep)  expired (sweep)
 
 const HEX64_RE = /^[a-f0-9]{64}$/;
-const VALID_CURRENCIES = new Set(["USD", "KES", "NGN", "GHS", "ZAR", "EUR", "GBP"]);
 
 export type TokenStatus = "pending" | "paid" | "redeemed";
 
@@ -42,7 +41,8 @@ export type CreatePendingArgs = {
 
 /** Creates a new pending token. Validates token_hash is 64-char lowercase
  *  hex (SHA-256 digest of the client-side extension_secret), amount > 0,
- *  and currency is one of the supported set. Throws on invalid input. */
+ *  Throws on invalid input. Currency is validated by the payment
+ *  provider (Paystack rejects unsupported codes directly). */
 export async function createPending(
   db: D1Database,
   args: CreatePendingArgs,
@@ -53,8 +53,8 @@ export async function createPending(
   if (!Number.isInteger(args.amountCents) || args.amountCents <= 0) {
     throw new Error("amount_cents must be a positive integer");
   }
-  if (!VALID_CURRENCIES.has(args.currency)) {
-    throw new Error(`currency must be one of ${[...VALID_CURRENCIES].join(", ")}`);
+  if (!args.currency || !/^[A-Z]{3}$/.test(args.currency)) {
+    throw new Error("currency must be a 3-letter ISO 4217 code");
   }
 
   const id = crypto.randomUUID();

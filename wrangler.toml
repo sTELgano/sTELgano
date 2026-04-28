@@ -112,15 +112,31 @@ crons = ["0 3 * * *"]
 enabled = true
 head_sampling_rate = 1.0
 
-# Production environment variables. Secrets (PAYSTACK_*, ADMIN_PASSWORD)
-# are set via `wrangler secret put`, never committed.
+# Production environment variables.
+#
+# Secrets — set via `wrangler secret put`, never committed:
+#   wrangler secret put ADMIN_PASSWORD
+#   wrangler secret put ADMIN_USERNAME          # optional, default "admin"
+#   wrangler secret put PAYSTACK_SECRET_KEY
+#   wrangler secret put PAYSTACK_PUBLIC_KEY
+#   wrangler secret put PAYSTACK_CALLBACK_URL
+#   wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN
+#   wrangler secret put CF_AE_API_TOKEN
+#
+# Optional FX conversion secrets (only needed when PAYSTACK_SETTLEMENT_CURRENCY
+# differs from PAYMENT_CURRENCY):
+#   wrangler secret put PAYSTACK_SETTLEMENT_CURRENCY   # e.g. "KES"
+#   wrangler secret put PAYMENT_FX_FALLBACK_RATE       # e.g. "130.5"
 [vars]
-HOST = "staging.stelgano.com"
+HOST = "stelgano.com"
 PAYMENT_CURRENCY = "USD"
-PRICE_CENTS = "200"
+PRICE_CENTS = "500"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
-MONETIZATION_ENABLED = "false"
+MONETIZATION_ENABLED = "true"
+# Percent buffer added on top of FX-converted amounts to absorb rate drift.
+# Only used when PAYSTACK_SETTLEMENT_CURRENCY is set. Default: 5
+PAYSTACK_FX_BUFFER_PCT = "5"
 # Cloudflare account ID — needed by the admin dashboard to query Analytics
 # Engine via the GraphQL API. Not a secret: safe to commit. Get it from
 # the Cloudflare dashboard URL or `wrangler whoami`.
@@ -135,11 +151,16 @@ CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
 #
 # Secrets (set once per env, not in this file):
 #   wrangler secret put ADMIN_PASSWORD --env staging
+#   wrangler secret put ADMIN_USERNAME --env staging          # optional, default "admin"
 #   wrangler secret put PAYSTACK_SECRET_KEY --env staging
 #   wrangler secret put PAYSTACK_PUBLIC_KEY --env staging
 #   wrangler secret put PAYSTACK_CALLBACK_URL --env staging
 #   wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN --env staging
 #   wrangler secret put CF_AE_API_TOKEN --env staging
+#
+# Optional FX conversion secrets (only if PAYSTACK_SETTLEMENT_CURRENCY is needed):
+#   wrangler secret put PAYSTACK_SETTLEMENT_CURRENCY --env staging
+#   wrangler secret put PAYMENT_FX_FALLBACK_RATE --env staging
 #
 # After secrets are set, push to staging — CI deploys automatically.
 # ---------------------------------------------------------------------------
@@ -188,9 +209,10 @@ id = "59542bfc5ca040e180b5a52fcd436b4f"
 [env.staging.vars]
 HOST = "staging.stelgano.com"
 PAYMENT_CURRENCY = "USD"
-PRICE_CENTS = "200"
+PRICE_CENTS = "10"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
+PAYSTACK_FX_BUFFER_PCT = "5"
 # Enable monetization in staging so the full paid-tier flow can be exercised.
 MONETIZATION_ENABLED = "true"
 CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
