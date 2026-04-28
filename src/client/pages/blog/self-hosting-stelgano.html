@@ -1,10 +1,5 @@
 <!--
   title: Self-Hosting sTELgano: Your Server, Your Rules — sTELgano Blog
-
-  TODO(v2): The deployment instructions reference Elixir/PostgreSQL/Oban
-  (v1 stack). After cutover this needs a parallel "Self-hosting on
-  Cloudflare Pages + Workers" guide, or this post should be relabelled
-  as the v1 self-hosting guide.
 -->
 
 <article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
@@ -20,7 +15,7 @@
 
     <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
       <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-03-08</span>
-      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 9 min read</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 8 min read</span>
     </div>
   </div>
 
@@ -35,8 +30,8 @@
           <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#shield"/></svg>
         </div>
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>The ultimate trust boundary. When you run your own sTELgano instance, you control <span class="text-white">the server, the database, the network, and the logs</span>. You do not have to trust anyone &mdash; not even us.</p>
-          <p>Even though our hosted version is zero-knowledge by design, self-hosting removes the last remaining trust assumption: that we are actually running the code we publish. With your own instance, <span class="text-primary font-semibold">you verify by running</span>.</p>
+          <p>The ultimate trust boundary. When you run your own sTELgano instance, you control <span class="text-white">the Worker code, the D1 database, and which secrets are in scope</span>. You do not have to trust anyone &mdash; not even us.</p>
+          <p>Even though our hosted version is zero-knowledge by design, self-hosting removes the last remaining trust assumption: that we are actually running the code we publish. With your own Cloudflare account, <span class="text-primary font-semibold">you verify by deploying</span>.</p>
         </div>
       </div>
     </section>
@@ -51,46 +46,90 @@
           <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
             <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#cpu"/></svg>
           </div>
-          <h3 class="text-white font-display font-bold text-lg">Elixir/Erlang Runtime</h3>
-          <p class="text-slate-400 text-sm leading-relaxed">Elixir 1.17+ and Erlang/OTP 27+. Install via asdf, mise, or your system package manager.</p>
+          <h3 class="text-white font-display font-bold text-lg">Node.js 22+</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">The build toolchain runs on Node. Install via <span class="font-mono text-xs text-primary">nvm</span>, <span class="font-mono text-xs text-primary">fnm</span>, or your system package manager.</p>
         </div>
         <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
           <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#database"/></svg>
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#cloud"/></svg>
           </div>
-          <h3 class="text-white font-display font-bold text-lg">PostgreSQL</h3>
-          <p class="text-slate-400 text-sm leading-relaxed">PostgreSQL 15+ with binary UUID support. The only external dependency besides the runtime.</p>
+          <h3 class="text-white font-display font-bold text-lg">Cloudflare Account</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">Free tier is sufficient for personal use. Workers, D1, KV, and Durable Objects are all available on the free plan with generous limits.</p>
+        </div>
+        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#terminal"/></svg>
+          </div>
+          <h3 class="text-white font-display font-bold text-lg">Wrangler CLI</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">Comes with <span class="font-mono text-xs text-primary">npm install</span>. Wrangler is the single tool for local dev, D1 migrations, secret management, and deployment.</p>
         </div>
         <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
           <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
             <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#globe"/></svg>
           </div>
           <h3 class="text-white font-display font-bold text-lg">Domain Name</h3>
-          <p class="text-slate-400 text-sm leading-relaxed">A domain name pointed at your server. Required for TLS and for the WebSocket connection.</p>
-        </div>
-        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
-          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#lock"/></svg>
-          </div>
-          <h3 class="text-white font-display font-bold text-lg">TLS Certificate</h3>
-          <p class="text-slate-400 text-sm leading-relaxed">HTTPS is mandatory. Use Let's Encrypt for free automated certificates via certbot or Caddy.</p>
+          <p class="text-slate-400 text-sm leading-relaxed">Optional but recommended. Cloudflare provides a free <span class="font-mono text-xs text-primary">*.workers.dev</span> subdomain out of the box if you prefer not to use a custom domain.</p>
         </div>
       </div>
     </section>
 
     <section class="space-y-8">
       <div class="flex items-center gap-4">
-        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Environment Variables</h2>
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Provision Cloudflare Resources</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#database"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>After cloning and running <span class="font-mono text-xs text-primary">npm install</span>, create the two stateful resources Wrangler needs IDs for:</p>
+        </div>
+        <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto leading-relaxed"><code># D1 database — stores extension tokens and live counters
+wrangler d1 create stelgano
+
+# KV namespace — FX rate cache for currency conversion
+wrangler kv:namespace create RATE_CACHE</code></pre>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p>Paste the returned IDs into <span class="font-mono text-xs text-primary">wrangler.toml</span> under <span class="font-mono text-xs text-primary">[[d1_databases]]</span> and <span class="font-mono text-xs text-primary">[[kv_namespaces]]</span>. The Durable Object and rate-limiter bindings are already declared and require no provisioning steps.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Secrets</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#lock"/></svg>
+        </div>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p>Secrets are set once via Wrangler and never appear in your source code or <span class="font-mono text-xs text-primary">wrangler.toml</span>:</p>
+        </div>
+        <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto leading-relaxed"><code>wrangler secret put ADMIN_PASSWORD
+wrangler secret put ADMIN_USERNAME        # default: admin
+wrangler secret put CF_AE_API_TOKEN       # Cloudflare Analytics Engine read token</code></pre>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p>If you enable monetization, also set the Paystack credentials:</p>
+        </div>
+        <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto leading-relaxed"><code>wrangler secret put PAYSTACK_SECRET_KEY
+wrangler secret put PAYSTACK_PUBLIC_KEY
+wrangler secret put PAYSTACK_CALLBACK_URL
+wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN</code></pre>
+      </div>
+    </section>
+
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Configuration Variables</h2>
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
       <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
         <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
           <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#settings"/></svg>
         </div>
-        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>The application requires a small set of environment variables to run in production:</p>
-        </div>
-
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -101,20 +140,17 @@
               </tr>
             </thead>
             <tbody class="text-slate-400">
-              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">PHX_SERVER</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Set to <span class="font-mono">true</span> so the release binds the HTTP endpoint on boot</td></tr>
-              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">SECRET_KEY_BASE</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Phoenix session signing (64+ hex chars)</td></tr>
-              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">DATABASE_URL</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">PostgreSQL connection string</td></tr>
-              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">PHX_HOST</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Your production domain name</td></tr>
-              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">ADMIN_PASSWORD</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">HTTP Basic Auth password for <span class="font-mono">/admin</span></td></tr>
-              <tr><td class="py-3 px-4 font-mono text-primary text-xs">POOL_SIZE</td><td class="py-3 px-4">No</td><td class="py-3 px-4">DB connection pool size (default: 10)</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">PHX_HOST</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Your production domain (e.g. <span class="font-mono text-xs">stelgano.example.com</span>)</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">CF_ACCOUNT_ID</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Cloudflare account ID — visible in the dashboard URL</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">MONETIZATION_ENABLED</td><td class="py-3 px-4">No</td><td class="py-3 px-4">Set to <span class="font-mono text-xs">true</span> to enable paid tiers (default: false)</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">FREE_TTL_DAYS</td><td class="py-3 px-4">No</td><td class="py-3 px-4">Free channel lifetime in days (default: 7)</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">PAID_TTL_DAYS</td><td class="py-3 px-4">No</td><td class="py-3 px-4">Paid channel lifetime in days (default: 365)</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">PRICE_CENTS</td><td class="py-3 px-4">No</td><td class="py-3 px-4">Price in smallest currency unit (default: 200 = $2.00)</td></tr>
+              <tr><td class="py-3 px-4 font-mono text-primary text-xs">PAYMENT_CURRENCY</td><td class="py-3 px-4">No</td><td class="py-3 px-4">ISO 4217 display currency (default: USD)</td></tr>
             </tbody>
           </table>
         </div>
-
-        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
-          <p>Generate a secret key base with:</p>
-          <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>mix phx.gen.secret</code></pre>
-        </div>
+        <p class="text-slate-400 font-medium leading-relaxed text-sm">These live in the <span class="font-mono text-xs text-primary">[vars]</span> section of <span class="font-mono text-xs text-primary">wrangler.toml</span> and are not secrets.</p>
       </div>
     </section>
 
@@ -128,60 +164,29 @@
           <svg class="size-7 text-red-400" aria-hidden="true"><use href="/icons.svg#alert_triangle"/></svg>
         </div>
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>You can override the default cryptographic salts via environment variables: <span class="font-mono text-xs text-primary">ROOM_SALT</span>, <span class="font-mono text-xs text-primary">ACCESS_SALT</span>, <span class="font-mono text-xs text-primary">SENDER_SALT</span>, and <span class="font-mono text-xs text-primary">ENC_SALT</span>.</p>
-          <p class="text-red-400 font-semibold">WARNING: Changing salts after users have created rooms will make all existing rooms permanently inaccessible. The same phone number and PIN will produce different hashes with different salts. There is no migration path. This is a one-way, destructive operation.</p>
-          <p>Only set custom salts <span class="text-white">before your first user creates a room</span>. If you are unsure, leave them at the defaults.</p>
+          <p>The cryptographic salts (<span class="font-mono text-xs text-primary">ROOM_SALT</span>, <span class="font-mono text-xs text-primary">ACCESS_SALT</span>, <span class="font-mono text-xs text-primary">SENDER_SALT</span>, <span class="font-mono text-xs text-primary">ENC_SALT</span>) are public constants baked into the client JS at build time. They are domain separators, not secrets.</p>
+          <p class="text-red-400 font-semibold">WARNING: Changing salts after users have created channels will make all existing channels permanently inaccessible. The same phone number and PIN will produce different hashes. There is no migration path. This is a one-way, destructive operation.</p>
+          <p>Only change salts <span class="text-white">before your first user creates a channel</span>. If you are unsure, leave them at the defaults — they are safe to share publicly.</p>
         </div>
       </div>
     </section>
 
     <section class="space-y-8">
       <div class="flex items-center gap-4">
-        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Database Setup</h2>
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Deploy</h2>
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
-      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
-        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
-          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#database"/></svg>
+      <div class="glass-card-premium p-6 sm:p-10 md:p-12 space-y-6">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#rocket"/></svg>
         </div>
-        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>PostgreSQL with <span class="text-white">binary UUIDs</span>. All table IDs are generated as binary UUIDs, and all timestamps use UTC. The setup is straightforward:</p>
-          <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>mix ecto.setup</code></pre>
-          <p>This single command creates the database, runs all migrations, and seeds initial data. Oban job tables are created alongside the application tables &mdash; no separate migration step is needed.</p>
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p>Build the assets, apply D1 migrations, then deploy the Worker:</p>
         </div>
-      </div>
-    </section>
-
-    <section class="space-y-8">
-      <div class="flex items-center gap-4">
-        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Deployment Options</h2>
-        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
-          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#terminal"/></svg>
-          </div>
-          <h3 class="text-white font-display font-bold text-lg">Bare Metal</h3>
-          <p class="text-slate-400 text-sm leading-relaxed">Build a release with <span class="font-mono text-xs text-primary">mix release</span> and run it directly. Simplest deployment, full control.</p>
-        </div>
-        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
-          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#box"/></svg>
-          </div>
-          <h3 class="text-white font-display font-bold text-lg">Docker</h3>
-          <p class="text-slate-400 text-sm leading-relaxed">Containerised deployment for consistent environments. Works with any container orchestrator.</p>
-        </div>
-        <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
-          <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-            <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#cloud"/></svg>
-          </div>
-          <h3 class="text-white font-display font-bold text-lg">PaaS</h3>
-          <p class="text-slate-400 text-sm leading-relaxed">Fly.io, Railway, or Render. Platform-managed infrastructure with minimal configuration.</p>
-        </div>
-      </div>
-      <div class="glass-card p-8 space-y-4">
-        <p class="text-slate-400 font-medium leading-relaxed text-base">The app is a <span class="text-white">single Elixir release</span>. One binary, one process tree. No microservices, no external message brokers, no Redis. PostgreSQL is the only infrastructure dependency.</p>
+        <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto leading-relaxed"><code>npm run build
+wrangler d1 migrations apply stelgano --remote
+wrangler deploy</code></pre>
+        <p class="text-slate-400 font-medium leading-relaxed text-sm">That's the entire pipeline. Wrangler bundles the Worker, uploads static assets, and propagates to Cloudflare's global network. Within seconds the new code is live globally. Rollback is <span class="font-mono text-xs text-primary">wrangler rollback</span>.</p>
       </div>
     </section>
 
@@ -195,30 +200,14 @@
           <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
         </div>
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>The built-in security headers and Content Security Policy are configured by default. Out of the box, sTELgano ships with:</p>
+          <p>sTELgano ships with security defaults active out of the box:</p>
           <ul class="space-y-2">
             <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">HSTS</span> &mdash; enforces HTTPS for all connections</span></li>
-            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">CSP</span> &mdash; strict Content Security Policy blocking inline scripts and external resources</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">CSP with per-request nonce</span> &mdash; blocks inline scripts and external resources; no <span class="font-mono text-xs">'unsafe-inline'</span> on <span class="font-mono text-xs">script-src</span></span></li>
             <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">Cache-Control: no-store</span> &mdash; prevents caching of sensitive pages</span></li>
-            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">Rate limiting</span> &mdash; IP-based throttling via PlugAttack</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span><span class="text-white">Native CF rate limiters</span> &mdash; 20/IP/min on <span class="font-mono text-xs">/admin</span>, 30/IP/min on WebSocket upgrades, 3/IP/min on new room creation</span></li>
           </ul>
-          <p>On your end: configure your firewall, keep Elixir and Erlang updated, and restrict SSH access to your server.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="space-y-8">
-      <div class="flex items-center gap-4">
-        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Monitoring</h2>
-        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
-      </div>
-      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
-        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
-          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#activity"/></svg>
-        </div>
-        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>The admin dashboard at <span class="font-mono text-xs text-primary">/admin</span> provides aggregate metrics about your instance. It is protected by <span class="text-white">HTTP Basic Auth</span> &mdash; set your credentials via environment variables.</p>
-          <p>The dashboard shows operational data only: room counts, message volumes, and system health. It never exposes individual room contents, user identifiers, or message content. The admin can see that the system is running; they cannot see what anyone is saying.</p>
+          <p>There is no server to patch. Cloudflare handles runtime security, TLS, and DDoS mitigation. Your operational surface is limited to keeping your API token and secrets rotated.</p>
         </div>
       </div>
     </section>
@@ -233,12 +222,12 @@
           <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#cog"/></svg>
         </div>
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>Oban handles automatic cleanup with <span class="text-white">no manual intervention needed</span>:</p>
+          <p>Essentially <span class="text-white">zero ongoing maintenance</span>. Each room's Durable Object schedules its own alarm at creation time. When the alarm fires, the DO hard-deletes its state and broadcasts expiry to any connected clients. No cron jobs, no polling, no background queue to monitor.</p>
           <ul class="space-y-2">
             <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Messages are hard-deleted immediately when a reply arrives (N=1 invariant)</span></li>
-            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Every hour, expired TTL rooms are deactivated and their messages and (room_hash, access_hash) records are hard-deleted in the same transaction</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>TTL expiry fires exactly at the scheduled timestamp via DO alarms</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>The FX rate cache (if monetization is enabled) is refreshed daily at 06:00 UTC via a Cron Trigger</span></li>
           </ul>
-          <p>The maintenance queue runs with 2 workers, ensuring cleanup tasks complete without impacting real-time chat performance.</p>
         </div>
       </div>
     </section>
@@ -253,12 +242,13 @@
           <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#refresh_cw"/></svg>
         </div>
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>Upgrading is straightforward:</p>
+          <p>Pull, build, migrate, deploy:</p>
           <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto"><code>git pull origin main
-mix deps.get
-mix ecto.migrate
-mix phx.server</code></pre>
-          <p>The protocol is designed for <span class="text-white">backward compatibility</span> within the same major version. Migrations are additive &mdash; they add columns and tables but do not remove or rename existing ones. Your data is safe across upgrades.</p>
+npm install
+npm run build
+wrangler d1 migrations apply stelgano --remote
+wrangler deploy</code></pre>
+          <p>Migrations are additive — they add tables and columns but never drop or rename existing ones. Your data is safe across upgrades.</p>
         </div>
       </div>
     </section>

@@ -1500,7 +1500,7 @@ All metrics are computed server-side. No client-side instrumentation. No user id
 
 #### 23.3.1 Implemented metrics
 
-**v2 (Cloudflare Workers — `v2-cloudflare` branch):**
+**v2 (Cloudflare Workers — `staging` branch):**
 
 The admin dashboard (`GET /admin` in `_worker.ts`) queries two data sources in parallel:
 

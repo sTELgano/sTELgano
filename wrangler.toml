@@ -127,7 +127,7 @@ MONETIZATION_ENABLED = "false"
 CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
 
 # ---------------------------------------------------------------------------
-# Staging environment (v2-cloudflare branch → stelgano-staging Worker)
+# Staging environment (staging branch → stelgano-staging Worker)
 #
 # Resources already provisioned:
 #   D1:  wrangler d1 create stelgano-staging  → f7a9b60a-0fea-43fd-94d2-66fa76ec2287
@@ -141,7 +141,7 @@ CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
 #   wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN --env staging
 #   wrangler secret put CF_AE_API_TOKEN --env staging
 #
-# After secrets are set, push to v2-cloudflare — CI deploys automatically.
+# After secrets are set, push to staging — CI deploys automatically.
 # ---------------------------------------------------------------------------
 [env.staging]
 name = "stelgano-staging"

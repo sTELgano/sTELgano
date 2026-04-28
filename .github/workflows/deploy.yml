@@ -7,8 +7,8 @@
 # Workers + Assets").
 #
 # Branch behaviour:
-#   v2-cloudflare → deploys to stelgano-staging (wrangler --env staging)
-#   main          → deploys to stelgano (production)
+#   staging → deploys to stelgano-staging (wrangler --env staging)
+#   main    → deploys to stelgano (production)
 #   pull_request  → test + build only, no deploy
 #
 # Required GitHub secrets on the repo:
@@ -23,7 +23,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main, v2-cloudflare]
+    branches: [main, staging]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -51,7 +51,7 @@ jobs:
   deploy-staging:
     name: Deploy to staging
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/v2-cloudflare'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

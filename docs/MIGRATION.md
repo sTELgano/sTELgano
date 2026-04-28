@@ -82,10 +82,10 @@ rewrite cost) it would be the right call.
 - `main` — Phoenix/Elixir implementation, v1, **active maintenance**.
   Continues to receive bug fixes, security patches, dep bumps, and any
   cross-cutting updates (spec, threat-model docs, design tweaks).
-- `v2-cloudflare` — this branch. CF Workers + DO + D1 rewrite. Active
+- `staging` — this branch. CF Workers + DO + D1 rewrite. Active
   development. **Not yet deployed anywhere.**
 
-### Layout on `v2-cloudflare`
+### Layout on `staging`
 
 The Phoenix tree lives entirely under `elixir/` on this branch. v2 code
 (Workers, DOs, client TS, public assets) lives at the repo root. This is
@@ -96,7 +96,7 @@ deliberate — not just for visual cleanliness:
   `Read` away at `elixir/lib/...` rather than requiring `git show main:...`
   every time.
 - **Cutover is one command.** When v2 is ready, the final pre-cutover
-  commit is just `git rm -r elixir/`. Everything else on `v2-cloudflare`
+  commit is just `git rm -r elixir/`. Everything else on `staging`
   is already in its final shape for `main`.
 - **No accidental tooling crossover.** TypeScript compiler, Vitest,
   Wrangler, esbuild, and Tailwind v4 all see only the v2 tree (the root
@@ -108,7 +108,7 @@ deliberate — not just for visual cleanliness:
   ignores them. The v2 wrangler-deploy workflow lands at the root in
   Phase 8.
 
-Files that stayed at root on `v2-cloudflare` (version-independent or v2
+Files that stayed at root on `staging` (version-independent or v2
 governance):
 
 - `LICENSE`, `NOTICE`, `README.md`, `CLAUDE.md` (will be updated for v2 in
@@ -122,25 +122,25 @@ governance):
 ### Cross-tree changes during development
 
 Cross-cutting changes (spec edits, threat-model wording, design system) made
-on `main` should be periodically merged forward into `v2-cloudflare`. They
+on `main` should be periodically merged forward into `staging`. They
 will land under `elixir/` automatically on the v2 branch (since main's tree
 is now nested):
 
 ```bash
-git checkout v2-cloudflare
+git checkout staging
 git merge main
 # resolve any conflicts — usually only docs/ and CLAUDE.md are touched.
 # Note: changes that landed on main at lib/foo.ex will appear in the merge
-# at elixir/lib/foo.ex on v2-cloudflare, which is what we want.
+# at elixir/lib/foo.ex on staging, which is what we want.
 ```
 
 Do this often enough that the merge is small. Quarterly at minimum, monthly
 ideally. A long-divergence merge with hundreds of conflicting files is the
 failure mode to avoid.
 
-**Important:** `git merge main` from `v2-cloudflare` will try to merge the
+**Important:** `git merge main` from `staging` will try to merge the
 root-level Elixir files on `main` (e.g. `mix.exs`) with the moved versions
-on `v2-cloudflare` (e.g. `elixir/mix.exs`). Git's rename detection usually
+on `staging` (e.g. `elixir/mix.exs`). Git's rename detection usually
 handles this, but for unusually large changes you may need to merge with
 `-X find-renames=50%` or resolve a few paths by hand.
 
@@ -151,11 +151,11 @@ feature parity, has been smoke-tested on a `*.workers.dev` URL, and the
 production domain is ready to swap.
 
 ```bash
-# Step 1: on v2-cloudflare, drop the elixir/ reference subtree.
+# Step 1: on staging, drop the elixir/ reference subtree.
 # This is the only "destructive" commit of the cutover and it's mechanical
 # — no logic changes, just the deletion of v1 reference material that
 # served its purpose during the rewrite.
-git checkout v2-cloudflare && git pull
+git checkout staging && git pull
 git rm -r elixir/
 git commit -m "Remove elixir/ reference subtree ahead of v2 cutover
 
@@ -163,7 +163,7 @@ The Phoenix/Elixir tree was kept under elixir/ on this branch as
 reference material during the rewrite. With v2 ready to ship, the
 reference is no longer needed here — v1 lives on the v1-elixir
 branch (created in the next step) and at the v1-elixir-cutover tag."
-git push origin v2-cloudflare
+git push origin staging
 
 # Step 2: snapshot v1 as a long-lived branch (NOT just a tag — we keep
 # pushing commits to it after cutover for security/maintenance work)
@@ -175,10 +175,10 @@ git push -u origin v1-elixir
 git tag -a v1-elixir-cutover -m "Final state of Phoenix/Elixir implementation when CF v2 became canonical"
 git push origin v1-elixir-cutover
 
-# Step 4: replace main's tree with v2-cloudflare's tree, single commit
+# Step 4: replace main's tree with staging's tree, single commit
 git checkout main
 git rm -rf .
-git checkout v2-cloudflare -- .
+git checkout staging -- .
 git commit -m "Migrate to Cloudflare Workers + Assets + Durable Objects + D1
 
 Replaces the Phoenix/Elixir implementation. The previous tree is preserved
@@ -197,9 +197,9 @@ Architecture:
 See docs/MIGRATION.md for the full migration record."
 git push origin main
 
-# Step 5: optional — delete the v2-cloudflare branch since main now contains it
-git branch -d v2-cloudflare
-git push origin --delete v2-cloudflare
+# Step 5: optional — delete the staging branch since main now contains it
+git branch -d staging
+git push origin --delete staging
 ```
 
 ### After cutover
@@ -762,7 +762,7 @@ Things that don't need a decision today but should not be forgotten:
 
 ## Migration phasing
 
-Suggested order of work on the `v2-cloudflare` branch, each phase ending in
+Suggested order of work on the `staging` branch, each phase ending in
 a commit that compiles and runs (even if incomplete):
 
 1. **Skeleton.** ✅ _done 2026-04-24 (fbeae33)._ `wrangler.toml`,
@@ -835,7 +835,7 @@ a commit that compiles and runs (even if incomplete):
     database (`wrangler d1 create stelgano`, paste the ID into
     `wrangler.toml`), and let `.github/workflows/deploy.yml` run
     against a throwaway branch merged into `main` (or flip the `if:`
-    in the workflow to include `v2-cloudflare` for a one-off
+    in the workflow to include `staging` for a one-off
     pre-cutover deploy). The worker comes up at
     `stelgano.<account>.workers.dev` by default. Smoke-test
     end-to-end there before touching the production domain.
