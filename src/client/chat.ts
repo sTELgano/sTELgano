@@ -186,6 +186,13 @@ state.onStateChange((s) => {
         if (container) {
           container.innerHTML = renderGeneratorPanel(s.generator);
         }
+        const footer = document.getElementById("generator-apply-footer");
+        if (footer) {
+          const applyBtn = s.generator.generatedNumber
+            ? `<button type="button" data-action="apply-generated" class="btn-primary w-full py-4 uppercase tracking-widest text-sm">Apply to Workspace ${icon("arrow_right", "size-4")}</button>`
+            : `<button type="button" disabled class="w-full py-4 rounded-2xl bg-white/5 border border-white/5 text-slate-600 font-bold uppercase tracking-widest text-sm cursor-not-allowed italic">Select Country First</button>`;
+          footer.innerHTML = applyBtn;
+        }
       }
 
       // If anything ELSE changed in the entry state that we don't handle surgically,
@@ -1059,7 +1066,7 @@ function renderGeneratorDrawer(g: GeneratorState): string {
 
         <!-- Footer -->
         <div class="p-6 border-t border-white/5 bg-slate-900/50">
-          ${applyBtn}
+          <div id="generator-apply-footer">${applyBtn}</div>
         </div>
       </div>
     </div>
