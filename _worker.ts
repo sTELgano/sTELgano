@@ -70,30 +70,21 @@ export default {
     return applySecurityHeaders(response, url.pathname);
   },
 
-  // Cron handler — wired via [triggers] crons in wrangler.toml.
-  // Two cron entries dispatch here; we route by event.cron pattern:
-  //
-  //  "0 3 * * *" — daily token cleanup. Ports ExpireUnredeemedTokens
-  //    Oban job: sweeps extension_tokens whose expires_at has passed.
-  //    Pending = user abandoned checkout. Paid = user never redeemed.
-  //
-  //  "0 6 * * *" — daily FX rate refresh. Fetches the live exchange
-  //    rate from Fawazahmed0's currency API and writes it to the
-  //    RATE_CACHE KV with a 25h TTL. Only runs when
-  //    PAYSTACK_SETTLEMENT_CURRENCY is set and differs from
-  //    PAYMENT_CURRENCY. Ports the v1 FxRate GenServer refresh cycle.
-  async scheduled(event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
-    if (event.cron === "0 6 * * *") {
-      const base = (env.PAYMENT_CURRENCY || "USD").toLowerCase();
-      const quote = env.PAYSTACK_SETTLEMENT_CURRENCY?.toLowerCase();
-      if (quote && quote !== base && env.RATE_CACHE) {
-        await refreshRate(env.RATE_CACHE, base, quote);
-      }
-      return;
-    }
-    // Default: "0 3 * * *" token cleanup sweep.
+  // Cron handler — fires daily at 03:00 UTC via [triggers] in wrangler.toml.
+  // Runs both maintenance tasks sequentially:
+  //   1. Token cleanup — sweeps extension_tokens past their expires_at.
+  //   2. FX rate refresh — fetches live rate into RATE_CACHE KV (25h TTL).
+  //      Only runs when PAYSTACK_SETTLEMENT_CURRENCY is set and differs
+  //      from PAYMENT_CURRENCY; no-ops otherwise.
+  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     const cutoff = new Date().toISOString();
     await deleteExpired(env.DB, cutoff);
+
+    const base = (env.PAYMENT_CURRENCY || "USD").toLowerCase();
+    const quote = env.PAYSTACK_SETTLEMENT_CURRENCY?.toLowerCase();
+    if (quote && quote !== base && env.RATE_CACHE) {
+      await refreshRate(env.RATE_CACHE, base, quote);
+    }
   },
 } satisfies ExportedHandler<Env>;
 
