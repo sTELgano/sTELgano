@@ -746,7 +746,7 @@ defmodule StelganoWeb.ChatLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} active_chat={true}>
-      <div id="chat-root" phx-hook="AnonChat" class="chat-container relative overflow-hidden">
+      <div id="chat-root" phx-hook="AnonChat" class="chat-container relative overflow-y-auto overflow-x-hidden">
         {render_generator_drawer(assigns)}
 
         <%= cond do %>
@@ -1179,7 +1179,7 @@ defmodule StelganoWeb.ChatLive do
 
       <%!-- Workspace Message Area --%>
       <div
-        class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-10 scrollbar-hide"
+        class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-10 scrollbar-hide min-h-[150px]"
         role="log"
         aria-live="polite"
         id="message-list"

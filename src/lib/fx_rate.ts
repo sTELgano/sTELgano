@@ -18,8 +18,7 @@
 // URL: https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/{base}.json
 // Response: { "date": "2025-01-01", "{base}": { "{quote}": 0.00076, ... } }
 
-const CURRENCY_API =
-  "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies";
+const CURRENCY_API = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies";
 
 function kvKey(base: string, quote: string): string {
   return `fx:${base.toLowerCase()}:${quote.toLowerCase()}`;

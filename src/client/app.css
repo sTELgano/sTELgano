@@ -203,7 +203,7 @@ body {
   flex-direction: column;
   position: relative;
   overflow-x: hidden;
-  padding-bottom: env(safe-area-inset-bottom);
+  overflow-x: hidden;
 }
 
 /* Premium Background System */

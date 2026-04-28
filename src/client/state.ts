@@ -393,8 +393,7 @@ export class ChatState {
     // "+1 555 012 3456"), then digits-with-plus (handles the re-auth
     // path where state stores the already-normalised form "15550123456").
     const parsed =
-      parsePhoneNumberFromString(phone) ??
-      parsePhoneNumberFromString(`+${normalise(phone)}`);
+      parsePhoneNumberFromString(phone) ?? parsePhoneNumberFromString(`+${normalise(phone)}`);
     if (!parsed?.isValid() || !parsed.country) return;
 
     const normalisedPhone = normalise(phone);

@@ -82,7 +82,7 @@
     <div class="noise-overlay"></div>
   </div>
 
-  <nav class="fixed top-0 left-0 right-0 z-50 border-b border-white/5 backdrop-blur-2xl bg-slate-950/40">
+  <nav class="fixed top-0 left-0 right-0 z-50 border-b border-white/5 backdrop-blur-3xl bg-slate-950/90">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="wordmark group text-xl">
         <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
@@ -109,30 +109,30 @@
         </div>
       </div>
     </div>
-
-    <div id="mobile-menu" class="fixed inset-0 z-[60] hidden">
-      <div id="mobile-menu-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-xl"></div>
-      <nav class="absolute top-0 right-0 bottom-0 w-64 bg-slate-950 border-l border-white/10 p-8 flex flex-col gap-8 shadow-2xl">
-        <div class="flex items-center justify-between mb-4">
-          <span class="wordmark text-lg">
-            <span class="wm-symbol">s</span><span class="wm-accent">TEL</span>
-          </span>
-          <button type="button" id="mobile-menu-close" aria-label="Close menu" class="p-2 text-slate-400 hover:text-white">
-            <svg class="size-6" aria-hidden="true"><use href="/icons.svg#x"/></svg>
-          </button>
-        </div>
-        <div class="flex flex-col gap-6">
-          <a href="/spec" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Spec</a>
-          <a href="/about" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">About</a>
-          <a href="/blog" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Blog</a>
-          <a href="/pricing" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Pricing</a>
-        </div>
-        <div class="mt-auto">
-          <a href="/chat" class="btn-primary w-full py-3 text-xs block text-center">Open Chat</a>
-        </div>
-      </nav>
-    </div>
   </nav>
+
+  <div id="mobile-menu" class="fixed inset-0 z-[100] hidden bg-black" style="background-color: #000 !important; opacity: 1 !important;">
+    <div id="mobile-menu-overlay" class="absolute inset-0 bg-black"></div>
+    <nav class="absolute top-0 right-0 bottom-0 w-64 border-l border-white/10 p-8 flex flex-col gap-8 shadow-2xl bg-black" style="background-color: #000 !important;">
+      <div class="flex items-center justify-between mb-4">
+        <span class="wordmark text-lg">
+          <span class="wm-symbol">s</span><span class="wm-accent">TEL</span>
+        </span>
+        <button type="button" id="mobile-menu-close" aria-label="Close menu" class="p-2 text-slate-400 hover:text-white">
+          <svg class="size-6" aria-hidden="true"><use href="/icons.svg#x"/></svg>
+        </button>
+      </div>
+      <div class="flex flex-col gap-6">
+        <a href="/spec" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Spec</a>
+        <a href="/about" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">About</a>
+        <a href="/blog" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Blog</a>
+        <a href="/pricing" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Pricing</a>
+      </div>
+      <div class="mt-auto">
+        <a href="/chat" class="btn-primary w-full py-3 text-xs block text-center">Open Chat</a>
+      </div>
+    </nav>
+  </div>
 
   <main class="flex-1 flex flex-col h-screen overflow-y-auto pt-16">
     <div class="w-full flex-1 flex flex-col max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">

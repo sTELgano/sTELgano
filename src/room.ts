@@ -336,8 +336,8 @@ export class RoomDO implements DurableObject {
       // Only runs when monetization is enabled and the client sent a secret.
       let tier: "free" | "paid" = "free";
       let ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
-      const rawSecret = typeof evt.data.extension_secret === "string"
-        ? evt.data.extension_secret : null;
+      const rawSecret =
+        typeof evt.data.extension_secret === "string" ? evt.data.extension_secret : null;
       if (rawSecret && this.env.MONETIZATION_ENABLED === "true") {
         const tokenHash = await sha256hex(rawSecret);
         const token = await findByTokenHash(this.env.DB, tokenHash);
@@ -363,9 +363,20 @@ export class RoomDO implements DurableObject {
       void incrementActiveRooms(this.env.DB);
       // Telemetry: blob2 = steg-number country (client-derived),
       // blob3 = CF-IPCountry (server-side IP geolocation).
-      writeEvent(this.env.ANALYTICS, tier === "paid" ? "room_paid" : "room_free", evt.data.country_iso ?? "", cfCountry);
+      writeEvent(
+        this.env.ANALYTICS,
+        tier === "paid" ? "room_paid" : "room_free",
+        evt.data.country_iso ?? "",
+        cfCountry,
+      );
 
-      ws.serializeAttachment({ joined: true, senderHash, accessHash, cfCountry, stegCountry: evt.data.country_iso ?? "" } satisfies WsAttachment);
+      ws.serializeAttachment({
+        joined: true,
+        senderHash,
+        accessHash,
+        cfCountry,
+        stegCountry: evt.data.country_iso ?? "",
+      } satisfies WsAttachment);
       await this.padJoin(start);
       this.send(ws, {
         ref: evt.ref,
@@ -382,7 +393,13 @@ export class RoomDO implements DurableObject {
     if (result.kind === "ok") {
       await this.persist();
       writeEvent(this.env.ANALYTICS, "room_rejoin", evt.data.country_iso ?? "", cfCountry);
-      ws.serializeAttachment({ joined: true, senderHash, accessHash, cfCountry, stegCountry: evt.data.country_iso ?? "" } satisfies WsAttachment);
+      ws.serializeAttachment({
+        joined: true,
+        senderHash,
+        accessHash,
+        cfCountry,
+        stegCountry: evt.data.country_iso ?? "",
+      } satisfies WsAttachment);
       await this.padJoin(start);
       const reply: { room_id: string; current_message?: MessagePayload; ttl_expires_at: string } = {
         room_id: this.room.roomId,

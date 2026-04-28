@@ -106,7 +106,7 @@ function extractGroups(body: AeResponse): AeGroup[] {
 }
 
 async function graphqlQuery(
-  accountId: string,
+  _accountId: string,
   apiToken: string,
   query: string,
 ): Promise<AeResponse> {

@@ -127,7 +127,11 @@ describe("refreshRate", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeApiResponse("usd", { kes: 130.5 })));
     const kv = makeMockKV();
     await refreshRate(kv, "USD", "KES");
-    expect(kv.put).toHaveBeenCalledWith("fx:usd:kes", "130.5", expect.objectContaining({ expirationTtl: 25 * 3600 }));
+    expect(kv.put).toHaveBeenCalledWith(
+      "fx:usd:kes",
+      "130.5",
+      expect.objectContaining({ expirationTtl: 25 * 3600 }),
+    );
   });
 
   it("uses lowercase base/quote for KV key regardless of input case", async () => {
@@ -154,10 +158,7 @@ describe("refreshRate", () => {
   });
 
   it("returns null when quote is absent from the API response", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(makeApiResponse("usd", { eur: 0.92 })),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeApiResponse("usd", { eur: 0.92 })));
     const kv = makeMockKV();
     const rate = await refreshRate(kv, "USD", "KES");
     expect(rate).toBeNull();
@@ -165,10 +166,7 @@ describe("refreshRate", () => {
   });
 
   it("returns null on malformed (non-JSON) API response", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(new Response("not json", { status: 200 })),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not json", { status: 200 })));
     const kv = makeMockKV();
     const rate = await refreshRate(kv, "USD", "KES");
     expect(rate).toBeNull();

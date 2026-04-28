@@ -273,7 +273,8 @@ defmodule StelganoWeb.CoreComponents do
           multiple={@multiple}
           class={[
             "glass-input w-full appearance-none transition-all duration-300 pr-10",
-            @errors != [] && "border-danger ring-danger/10"
+            @errors != [] && "border-danger ring-danger/10",
+            @class
           ]}
           {@rest}
         >
@@ -304,7 +305,8 @@ defmodule StelganoWeb.CoreComponents do
         name={@name}
         class={[
           "glass-input w-full min-h-[120px] resize-none py-3 scrollbar-hide transition-all duration-300",
-          @errors != [] && "border-danger ring-danger/10"
+          @errors != [] && "border-danger ring-danger/10",
+          @class
         ]}
         {@rest}
       >{HtmlForm.normalize_value("textarea", @value)}</textarea>
@@ -332,7 +334,8 @@ defmodule StelganoWeb.CoreComponents do
           class={[
             "glass-input w-full transition-all duration-300",
             @errors != [] && "border-danger ring-danger/10 focus:ring-danger/20",
-            "group-focus-within:border-primary/40 group-focus-within:bg-slate-950/50"
+            "group-focus-within:border-primary/40 group-focus-within:bg-slate-950/50",
+            @class
           ]}
           {@rest}
         />

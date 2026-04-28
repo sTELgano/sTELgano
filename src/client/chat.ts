@@ -85,25 +85,190 @@ let prevKind: string | null = null;
 let prevState: State | null = null;
 
 state.onStateChange((s) => {
-  // Fast path: if only the generator dropdown/search query changed on the entry screen,
-  // do an in-place update of the dropdown container instead of wiping root.innerHTML.
-  // This solves backwards typing bugs caused by destroying the <input> mid-keystroke.
-  if (prevState && prevState.kind === "entry" && s.kind === "entry") {
-    const aStrip = { ...prevState, generator: { ...prevState.generator, searchQuery: "", showCountries: false } };
-    const bStrip = { ...s, generator: { ...s.generator, searchQuery: "", showCountries: false } };
-    if (JSON.stringify(aStrip) === JSON.stringify(bStrip)) {
-      const container = document.getElementById("drawer-country-dropdown-container");
-      if (container) {
-        container.innerHTML = renderGeneratorDropdown(s.generator);
+  // 1. THE FAST PATHS — surgical DOM updates to avoid blinking on minor changes
+  if (prevState && prevState.kind === s.kind) {
+    // ENTRY: surgical updates
+    if (s.kind === "entry") {
+      const ps = prevState as Extract<State, { kind: "entry" }>;
+
+      // Update phone visibility (eye toggle)
+      if (s.phoneVisible !== ps.phoneVisible) {
+        const input = document.getElementById("phone-input") as HTMLInputElement;
+        if (input) {
+          input.type = s.phoneVisible ? "text" : "password";
+          if (s.phoneVisible) {
+            input.classList.remove("tracking-widest");
+            input.classList.add("tracking-wider");
+          } else {
+            input.classList.remove("tracking-wider");
+            input.classList.add("tracking-widest");
+          }
+        }
+        const btn = document.getElementById("phone-toggle-btn");
+        if (btn) btn.innerHTML = icon(s.phoneVisible ? "eye_off" : "eye", "size-5 sm:size-6");
       }
-      const input = document.getElementById("drawer-country-input") as HTMLInputElement;
-      if (input && input.value !== s.generator.searchQuery) {
-        input.value = s.generator.searchQuery;
+
+      // Update phone value & country badge
+      if (s.phone !== ps.phone) {
+        const input = document.getElementById("phone-input") as HTMLInputElement;
+        if (input && input.value !== s.phone) input.value = s.phone;
+
+        const formatter = new AsYouType();
+        formatter.input(s.phone);
+        updatePhoneCountry(formatter.getCountry() ?? null);
       }
-      prevState = JSON.parse(JSON.stringify(s)) as State;
-      return;
+
+      // Update Error container
+      if (s.error !== ps.error || s.attemptsRemaining !== ps.attemptsRemaining) {
+        const container = document.getElementById("entry-error-container");
+        if (container) {
+          container.innerHTML = s.error ? renderEntryErrorBlock(s) : "";
+        }
+      }
+
+      // Update Generator Drawer state (open/close)
+      if (s.generator.open !== ps.generator.open) {
+        const container = document.getElementById("generator-drawer-container");
+        const drawer = document.getElementById("generator-drawer");
+        const backdrop = document.getElementById("drawer-backdrop");
+        
+        if (container) {
+          if (s.generator.open) {
+            container.classList.remove("invisible", "pointer-events-none");
+            container.classList.add("visible");
+          } else {
+            container.classList.remove("visible");
+            container.classList.add("invisible", "pointer-events-none");
+          }
+        }
+        
+        if (drawer) {
+          if (s.generator.open) {
+            drawer.classList.remove("translate-x-full");
+            drawer.classList.add("translate-x-0");
+          } else {
+            drawer.classList.remove("translate-x-0");
+            drawer.classList.add("translate-x-full");
+          }
+        }
+        
+        if (backdrop) {
+          if (s.generator.open) {
+            backdrop.classList.remove("opacity-0", "pointer-events-none");
+            backdrop.classList.add("opacity-100");
+          } else {
+            backdrop.classList.remove("opacity-100");
+            backdrop.classList.add("opacity-0", "pointer-events-none");
+          }
+        }
+      }
+
+      // Intra-generator updates (dropdown search)
+      if (
+        s.generator.searchQuery !== ps.generator.searchQuery ||
+        s.generator.showCountries !== ps.generator.showCountries
+      ) {
+        const container = document.getElementById("drawer-country-dropdown-container");
+        if (container) container.innerHTML = renderGeneratorDropdown(s.generator);
+
+        const input = document.getElementById("drawer-country-input") as HTMLInputElement;
+        if (input && input.value !== s.generator.searchQuery) input.value = s.generator.searchQuery;
+      }
+
+      // Generator Panel updates (derived number, loading states)
+      if (
+        s.generator.generatedNumber !== ps.generator.generatedNumber ||
+        s.generator.generating !== ps.generator.generating ||
+        s.generator.selectedCountry !== ps.generator.selectedCountry ||
+        s.generator.copiedNumber !== ps.generator.copiedNumber
+      ) {
+        const container = document.getElementById("generator-panel-container");
+        if (container) {
+          container.innerHTML = renderGeneratorPanel(s.generator);
+        }
+      }
+
+      // If anything ELSE changed in the entry state that we don't handle surgically,
+      // fall through to slow path to ensure UI correctness.
+      const entriesMatch = (
+        s.phoneLocked === ps.phoneLocked &&
+        s.generator.searchQuery === ps.generator.searchQuery &&
+        s.generator.showCountries === ps.generator.showCountries
+      );
+
+      if (entriesMatch) {
+        prevState = JSON.parse(JSON.stringify(s)) as State;
+        return;
+      }
+    }
+
+    // DERIVING: surgical update of percentage
+    if (s.kind === "deriving") {
+      const pctEl = document.getElementById("derivation-progress");
+      if (pctEl) {
+        pctEl.textContent = `${Math.round(s.progress)}%`;
+        prevState = JSON.parse(JSON.stringify(s)) as State;
+        return;
+      }
+    }
+
+    // CHAT: surgical updates
+    if (s.kind === "chat") {
+      const ps = prevState as Extract<State, { kind: "chat" }>;
+
+      // Update message buffer (if new message or edit)
+      if (JSON.stringify(s.current) !== JSON.stringify(ps.current)) {
+        const buffer = document.getElementById("message-buffer");
+        if (buffer) {
+          buffer.innerHTML = s.current ? renderMessageBubble(s.current, s.senderHash) : renderEmptyBuffer();
+          // Scroll to bottom if it's a new message
+          if (!ps.current || s.current?.id !== ps.current.id) {
+            requestAnimationFrame(() => {
+              buffer.scrollTop = buffer.scrollHeight;
+            });
+          }
+        }
+      }
+
+      // Update interaction zone (input vs waiting area vs typing)
+      const inputChanged = s.editing !== ps.editing || 
+                          s.counterpartyTyping !== ps.counterpartyTyping ||
+                          (s.current?.senderHash !== ps.current?.senderHash) ||
+                          (s.current?.readAt !== ps.current?.readAt);
+
+      if (inputChanged) {
+        const zone = document.getElementById("interaction-zone");
+        if (zone) {
+          const canType = !s.current || s.current.senderHash !== s.senderHash;
+          const html = s.editing
+            ? renderInputArea({ editing: true, value: s.current?.plaintext ?? "" })
+            : canType
+              ? renderInputArea({ editing: false, value: "" })
+              : renderWaitingArea(s.current, s.senderHash, s.counterpartyTyping);
+          
+          if (zone.innerHTML !== html) {
+             zone.innerHTML = html;
+          }
+        }
+      }
+
+      // Check if any "Slow Path" properties changed. If they did, we fall through
+      // to the full innerHTML wipe to ensure overlays (modals, errors) render.
+      const needsSlowPath = (
+        s.confirmExpire !== ps.confirmExpire ||
+        s.paymentError !== ps.paymentError ||
+        s.paymentLoading !== ps.paymentLoading ||
+        s.ttlExpiresAt !== ps.ttlExpiresAt
+      );
+
+      if (!needsSlowPath) {
+        prevState = JSON.parse(JSON.stringify(s)) as State;
+        return;
+      }
     }
   }
+
+  // 2. THE SLOW PATH — full re-render when switching kinds or unhandled intra-state change
 
   const active = document.activeElement;
   const activeId = active?.id;
@@ -117,10 +282,10 @@ state.onStateChange((s) => {
         activeStart = active.selectionStart;
         activeEnd = active.selectionEnd;
       }
-    } catch (e) {}
+    } catch (_e) {}
   }
 
-  const kindsChanged = s.kind !== prevKind;
+  const kindsChanged = !prevKind || s.kind !== prevKind;
   prevKind = s.kind;
   prevState = JSON.parse(JSON.stringify(s)) as State;
   root.innerHTML = render(s, kindsChanged);
@@ -131,18 +296,30 @@ state.onStateChange((s) => {
   else if (activeName) elToFocus = root.querySelector(`[name="${activeName}"]`);
 
   if (elToFocus) {
-    if ((elToFocus instanceof HTMLInputElement || elToFocus instanceof HTMLTextAreaElement) && activeStart !== null && activeEnd !== null) {
-      try { elToFocus.setSelectionRange(activeStart, activeEnd); } catch (e) {}
+    if (
+      (elToFocus instanceof HTMLInputElement || elToFocus instanceof HTMLTextAreaElement) &&
+      activeStart !== null &&
+      activeEnd !== null
+    ) {
+      try {
+        elToFocus.setSelectionRange(activeStart, activeEnd);
+      } catch (_e) {}
     }
-    
+
     elToFocus.focus();
-    
-    if ((elToFocus instanceof HTMLInputElement || elToFocus instanceof HTMLTextAreaElement) && activeStart !== null && activeEnd !== null) {
+
+    if (
+      (elToFocus instanceof HTMLInputElement || elToFocus instanceof HTMLTextAreaElement) &&
+      activeStart !== null &&
+      activeEnd !== null
+    ) {
       const s = activeStart;
       const e = activeEnd;
       requestAnimationFrame(() => {
         if (document.activeElement === elToFocus) {
-          try { elToFocus.setSelectionRange(s, e); } catch (err) {}
+          try {
+            elToFocus.setSelectionRange(s, e);
+          } catch (_err) {}
         }
       });
     }
@@ -463,7 +640,7 @@ function render(s: State, animate: boolean): string {
     case "entry":
       return renderEntry(s, animate);
     case "deriving":
-      return renderDeriving(s);
+      return renderDeriving(s, animate);
     case "new_channel":
       return renderNewChannel(s);
     case "connecting":
@@ -488,30 +665,34 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
   const phoneAutofocus = !s.phoneLocked ? "data-autofocus" : "";
   const pinAutofocus = s.phoneLocked ? "data-autofocus" : "";
 
-  const errorBanner = s.error
-    ? `
-      <div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
-        ${icon("alert_circle", "size-6 text-danger shrink-0")}
-        <div class="space-y-1">
-          <p class="text-sm font-bold text-danger">${escapeHtml(s.error)}</p>
-          ${
-            s.attemptsRemaining !== null && s.attemptsRemaining !== undefined
-              ? `<p class="text-[10px] text-danger/60 font-mono uppercase tracking-widest font-black">
-                   Security Lock: ${s.attemptsRemaining} ${s.attemptsRemaining === 1 ? "attempt" : "attempts"} remaining
-                 </p>`
-              : ""
-          }
-        </div>
-      </div>
-    `
-    : "";
+  const errorBanner = `
+    <div id="entry-error-container">
+      ${
+        s.error
+          ? `<div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
+              ${icon("alert_circle", "size-6 text-danger shrink-0")}
+              <div class="space-y-1">
+                <p class="text-sm font-bold text-danger">${escapeHtml(s.error)}</p>
+                ${
+                  s.attemptsRemaining !== null && s.attemptsRemaining !== undefined
+                    ? `<p class="text-[10px] text-danger/60 font-mono uppercase tracking-widest font-black">
+                         Security Lock: ${s.attemptsRemaining} ${s.attemptsRemaining === 1 ? "attempt" : "attempts"} remaining
+                       </p>`
+                    : ""
+                }
+              </div>
+            </div>`
+          : ""
+      }
+    </div>
+  `;
 
   const lockedBadge = s.phoneLocked
     ? `<span class="text-[10px] font-mono text-primary font-bold">LOCKED</span>`
     : "";
 
   return `
-    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)]${a}">
+    <div class="flex flex-col items-center justify-start h-full overflow-y-auto py-8 sm:py-20${a}">
       <div class="w-full max-w-xl space-y-12">
         <!-- Branding -->
         <div class="text-center space-y-4">
@@ -542,8 +723,9 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
                   </label>
                   ${lockedBadge}
                 </div>
-                <div class="relative group">
+                <div id="phone-container" class="relative group">
                   <input
+                    id="phone-input"
                     name="s_num"
                     type="${phoneType}"
                     class="glass-input w-full pr-14 font-mono text-lg sm:text-xl font-bold bg-slate-950/40 ${phoneLockedOpacity} ${phoneTrackClass}"
@@ -558,6 +740,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
                     ${phoneAutofocus}
                   >
                   <button
+                    id="phone-toggle-btn"
                     type="button"
                     data-action="toggle-phone-visibility"
                     class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all"
@@ -640,7 +823,7 @@ function renderGeneratorDropdown(g: GeneratorState): string {
   if (!g.showCountries || countriesToShow.length === 0) return "";
 
   return `
-    <div class="absolute z-100 w-full mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+    <div class="absolute z-100 w-full mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2 hide-scrollbar">
       ${countriesToShow
         .map(
           (c) => `
@@ -658,17 +841,9 @@ function renderGeneratorDropdown(g: GeneratorState): string {
     </div>`;
 }
 
-function renderGeneratorDrawer(g: GeneratorState): string {
-  const containerVis = g.open ? "visible" : "invisible pointer-events-none";
-  const backdropOp = g.open ? "opacity-100" : "opacity-0";
-  const drawerSlide = g.open ? "translate-x-0" : "translate-x-full";
-
-  const inputRightIcon = g.selectedCountry
-    ? icon("badge_check", "size-5 text-emerald-400")
-    : icon("search", "size-5");
-
-  const generatorPanel = g.generatedNumber
-    ? `
+function renderGeneratorPanel(g: GeneratorState): string {
+  if (g.generatedNumber) {
+    return `
       <div class="space-y-8 animate-in scale-in">
         <div class="relative py-12 px-6 rounded-4xl bg-slate-950/50 border border-white/5 group">
           <div class="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent"></div>
@@ -703,16 +878,28 @@ function renderGeneratorDrawer(g: GeneratorState): string {
             </div>
           </div>
         </div>
-      </div>`
-    : `
-      <div class="flex flex-col items-center gap-6 py-12 text-center">
-        <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-          ${icon("globe", "size-9 text-slate-500")}
-        </div>
-        <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 max-w-60">
-          Select a country above to generate a targeted identity
-        </p>
       </div>`;
+  }
+
+  return `
+    <div class="flex flex-col items-center gap-6 py-12 text-center">
+      <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+        ${icon("globe", "size-9 text-slate-500")}
+      </div>
+      <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 max-w-60">
+        Select a country above to generate a targeted identity
+      </p>
+    </div>`;
+}
+
+function renderGeneratorDrawer(g: GeneratorState): string {
+  const containerVis = g.open ? "visible" : "invisible pointer-events-none";
+  const backdropOp = g.open ? "opacity-100" : "opacity-0";
+  const drawerSlide = g.open ? "translate-x-0" : "translate-x-full";
+
+  const inputRightIcon = g.selectedCountry
+    ? icon("badge_check", "size-5 text-emerald-400")
+    : icon("search", "size-5");
 
   const applyBtn = g.generatedNumber
     ? `
@@ -735,15 +922,18 @@ function renderGeneratorDrawer(g: GeneratorState): string {
   const placeholder = g.selectedCountry ?? "Search country...";
 
   return `
-    <div class="fixed inset-0 z-50 transition-all duration-500 ${containerVis}">
+    <div id="generator-drawer-container" class="fixed inset-0 z-50 transition-all duration-500 ${containerVis}">
       <!-- Backdrop -->
       <div
+        id="drawer-backdrop"
         data-action="close-generator"
         class="absolute inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity duration-500 ${backdropOp}"
       ></div>
 
-      <!-- Drawer Content -->
-      <div class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-500 ease-out ${drawerSlide} sm:h-full max-sm:top-auto max-sm:h-[85dvh] max-sm:rounded-t-[2.5rem] max-sm:border-l-0 max-sm:border-t">
+      <div
+        id="generator-drawer"
+        class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-500 ease-out ${drawerSlide} h-dvh max-sm:border-l-0 max-sm:border-t"
+      >
 
         <!-- Header -->
         <div class="p-6 border-b border-white/5 flex items-center justify-between">
@@ -770,7 +960,7 @@ function renderGeneratorDrawer(g: GeneratorState): string {
         </div>
 
         <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-6 sm:p-8 space-y-10 scrollbar-hide">
+        <div class="flex-1 overflow-y-auto p-6 sm:p-8 space-y-10 hide-scrollbar">
 
           <!-- Country Selector -->
           <div class="space-y-4">
@@ -799,8 +989,8 @@ function renderGeneratorDrawer(g: GeneratorState): string {
           </div>
 
           <!-- Generator output -->
-          <div class="w-full">
-            ${generatorPanel}
+          <div id="generator-panel-container" class="w-full">
+            ${renderGeneratorPanel(g)}
           </div>
 
           <!-- Forensic Safety -->
@@ -877,10 +1067,11 @@ function renderGeneratorDrawer(g: GeneratorState): string {
 
 // ------------------------------ :deriving -------------------------------
 
-function renderDeriving(s: Extract<State, { kind: "deriving" }>): string {
+function renderDeriving(s: Extract<State, { kind: "deriving" }>, animate = true): string {
   const pct = Math.round(s.progress);
+  const a = animate ? " animate-in" : "";
   return `
-    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 animate-in">
+    <div class="flex flex-col items-center justify-center h-full p-6${a}">
       <div class="w-full max-w-sm text-center space-y-16">
         <div class="relative size-48 mx-auto">
           <div class="absolute inset-0 rounded-full border-2 border-primary/5 border-t-primary animate-spin duration-1000"></div>
@@ -888,14 +1079,7 @@ function renderDeriving(s: Extract<State, { kind: "deriving" }>): string {
           <div class="absolute inset-8 rounded-full border-2 border-primary/5 border-l-primary animate-spin duration-3000"></div>
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="size-24 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center shadow-2xl">
-              ${
-                pct > 0
-                  ? `<span class="font-mono font-black text-primary text-xl">${pct}%</span>`
-                  : icon(
-                      "cpu",
-                      "size-12 text-primary animate-pulse drop-shadow-[0_0_15px_var(--color-primary-glow)]",
-                    )
-              }
+              <span id="derivation-progress" class="font-mono font-black text-primary text-xl">${pct}%</span>
             </div>
           </div>
         </div>
@@ -939,7 +1123,7 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
     : "";
 
   return `
-    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6 animate-in">
+    <div class="flex flex-col items-center justify-start h-full overflow-y-auto p-6 py-12 sm:py-20 animate-in">
       <div class="w-full max-w-lg space-y-10">
         <div class="text-center space-y-4">
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(0,255,163,0.1)]">
@@ -955,7 +1139,7 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
 
         ${errorBanner}
 
-        <div class="space-y-4 max-w-sm mx-auto">
+        <div id="new-channel-options" class="space-y-4 max-w-sm mx-auto">
           <!-- Free tier -->
           <button
             data-action="continue-free"
@@ -975,8 +1159,7 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
             ${icon("arrow_right", "size-4 text-slate-500 group-hover:translate-x-1 group-hover:text-white transition-all")}
           </button>
 
-          <!-- Paid tier — POSTs to /api/payment/initiate which returns
-               a Paystack checkout URL once Phase 7 wires the adapter. -->
+          <!-- Paid tier -->
           <button
             type="button"
             data-action="initiate-payment"
@@ -1010,7 +1193,7 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
 
 function renderConnecting(): string {
   return `
-    <div class="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-6">
+    <div class="flex flex-col items-center justify-center h-full p-6">
       <div class="w-full max-w-sm text-center space-y-10 animate-in">
         <div class="size-24 rounded-[2.5rem] bg-primary/5 flex items-center justify-center mx-auto shadow-inner ring-1 ring-primary/20 animate-pulse">
           ${icon("globe", "size-12 text-primary")}
@@ -1073,7 +1256,7 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
   const destructionModal = s.confirmExpire ? renderDestructionModal() : "";
 
   return `
-    <div class="h-full w-full flex flex-col">
+    <div class="h-full w-full flex flex-col overflow-hidden">
       <!-- Navigation Header -->
       <div class="px-4 sm:px-6 py-3 sm:py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl sticky top-0 z-50">
         <div class="flex items-center gap-3 sm:gap-4">
@@ -1135,9 +1318,9 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
           : ""
       }
 
-      <!-- Workspace Message Area -->
       <div
-        class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-10 scrollbar-hide"
+        id="message-buffer"
+        class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-10 hide-scrollbar min-h-[150px]"
         role="log"
         aria-live="polite"
       >
@@ -1145,7 +1328,7 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
       </div>
 
       <!-- User Interaction Zone -->
-      <div class="p-4 sm:p-8 pb-10">
+      <div id="interaction-zone" class="p-4 sm:p-8 pb-10">
         ${interactionZone}
       </div>
 
@@ -1260,7 +1443,7 @@ function renderInputArea(opts: { editing: boolean; value: string }): string {
         <textarea
           id="chat-textarea"
           data-autofocus
-          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 focus:outline-none py-2 sm:py-4 px-2 resize-none max-h-36 min-h-12 sm:min-h-14 scrollbar-hide text-base sm:text-lg leading-relaxed font-medium"
+          class="flex-1 bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 focus:outline-none py-2 sm:py-4 px-2 resize-none max-h-36 min-h-12 sm:min-h-14 hide-scrollbar text-base sm:text-lg leading-relaxed font-medium"
           placeholder="${placeholder}"
           rows="1"
           maxlength="${MAX_CHARS}"
@@ -1384,7 +1567,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
     : "";
 
   return `
-    <div class="fixed inset-0 z-100 flex items-center justify-center p-6 bg-slate-950/95 backdrop-blur-3xl animate-in">
+    <div class="fixed inset-0 z-100 flex flex-col items-center justify-start sm:justify-center overflow-y-auto p-6 py-12 bg-slate-950/95 backdrop-blur-3xl animate-in">
       <div class="w-full max-w-sm text-center space-y-12">
         <div class="relative size-24 mx-auto">
           <div class="absolute -inset-4 bg-primary/10 rounded-full blur-2xl animate-pulse"></div>
@@ -1445,11 +1628,30 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
   `;
 }
 
+function renderEntryErrorBlock(s: Extract<State, { kind: "entry" }>): string {
+  if (!s.error) return "";
+  return `
+    <div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
+      ${icon("alert_circle", "size-6 text-danger shrink-0")}
+      <div class="space-y-1">
+        <p class="text-sm font-bold text-danger">${escapeHtml(s.error)}</p>
+        ${
+          s.attemptsRemaining !== null && s.attemptsRemaining !== undefined
+            ? `<p class="text-[10px] text-danger/60 font-mono uppercase tracking-widest font-black">
+                 Security Lock: ${s.attemptsRemaining} ${s.attemptsRemaining === 1 ? "attempt" : "attempts"} remaining
+               </p>`
+            : ""
+        }
+      </div>
+    </div>
+  `;
+}
+
 // ------------------------------- :expired -------------------------------
 
 function renderExpired(): string {
   return `
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-2xl">
+    <div class="fixed inset-0 z-50 flex flex-col items-center justify-start sm:justify-center overflow-y-auto p-6 py-12 bg-slate-950/80 backdrop-blur-2xl">
       <div class="glass-card-premium max-w-md w-full text-center border-danger/20 animate-in p-8 sm:p-10">
         <div class="size-20 rounded-3xl bg-danger/10 flex items-center justify-center mx-auto mb-8 border border-danger/20">
           ${icon("trash_2", "size-10 text-danger")}

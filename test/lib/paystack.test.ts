@@ -168,7 +168,7 @@ describe("initialize() FX conversion", () => {
       RATE_CACHE: makeKV(130.0),
     });
     await initialize(VALID_TOKEN, 200, env);
-    expect((captured as { amount: number }).amount).toBe(Math.round(200 * 130.0 * 1.10));
+    expect((captured as { amount: number }).amount).toBe(Math.round(200 * 130.0 * 1.1));
   });
 
   it("uses PAYMENT_FX_FALLBACK_RATE when KV is empty", async () => {

@@ -171,7 +171,7 @@ defmodule StelganoWeb.Layouts do
 
     <main class={[
       "flex-1 flex flex-col",
-      @active_chat && "h-dvh overflow-hidden",
+      @active_chat && "h-dvh overflow-y-auto overflow-x-hidden",
       !@active_chat && "h-screen overflow-y-auto pt-16"
     ]}>
       <.flash_group flash={@flash} />
