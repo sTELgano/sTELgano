@@ -32,6 +32,45 @@ less. The more eyes on the cryptographic implementation, the better.
 - PWA features of any kind (install banners, manifests, service workers,
   home-screen icons) — every surface is a passcode-test failure
 
+## Branch workflow
+
+```
+feature/your-thing  →  staging  →  main
+                           ↓           ↓
+                    staging.stelgano.com  stelgano.com
+```
+
+**`staging`** is the integration branch. All PRs from contributors and
+maintainers target `staging`. Every merge triggers an automatic deploy to
+`staging.stelgano.com`. This is where changes are validated before going live.
+
+**`main`** is the production branch. Changes reach `main` only via a pull
+request from `staging`, after the staging deploy has been verified. Every
+merge triggers an automatic deploy to `stelgano.com`.
+
+### For contributors
+
+1. Fork the repo and create a branch from `staging` (not `main`):
+   ```bash
+   git checkout staging
+   git checkout -b feature/your-thing
+   ```
+2. Make your changes, run `npm run precommit` until it passes.
+3. Open a PR targeting **`staging`**.
+4. CI must pass. A maintainer reviews and merges.
+5. The maintainer tests the change on `staging.stelgano.com`.
+6. If it passes, the maintainer opens a PR from `staging` → `main` to
+   promote it to production.
+
+### For maintainers
+
+- Merging to `staging` deploys to staging automatically.
+- To promote to production: open a PR from `staging` → `main`, confirm
+  CI passes, merge.
+- Both branches are protected — no direct pushes. Force-push is disabled.
+- The repo owner can bypass protection in emergencies (hotfix directly to
+  `staging`, then immediately promote via PR to `main`).
+
 ## Development setup
 
 ```bash
