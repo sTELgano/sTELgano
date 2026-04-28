@@ -100,12 +100,12 @@ migrations_dir = "migrations"
 binding = "RATE_CACHE"
 id = "7eb3e58ecdba426e9dc583b8aff0e042"
 
-# Cron Triggers:
-#   "0 3 * * *" — daily token cleanup (deleteExpired, ports v1 ExpireUnredeemedTokens)
-#   "0 6 * * *" — daily FX rate refresh (refreshRate, ports v1 FxRate GenServer cycle)
-# Both fire the `scheduled` handler in _worker.ts; it dispatches by event.cron.
+# Cron Trigger (single daily run at 03:00 UTC):
+#   Runs both maintenance tasks sequentially — token cleanup first, then
+#   FX rate refresh. Consolidated from two triggers to one to stay within
+#   the CF free-plan limit of 5 cron triggers per account.
 [triggers]
-crons = ["0 3 * * *", "0 6 * * *"]
+crons = ["0 3 * * *"]
 
 # Observability: Workers Logs, no third-party telemetry.
 [observability]
