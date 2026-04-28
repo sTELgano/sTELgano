@@ -131,7 +131,7 @@ state.onStateChange((s) => {
         const container = document.getElementById("generator-drawer-container");
         const drawer = document.getElementById("generator-drawer");
         const backdrop = document.getElementById("drawer-backdrop");
-        
+
         if (container) {
           if (s.generator.open) {
             container.classList.remove("invisible", "pointer-events-none");
@@ -141,7 +141,7 @@ state.onStateChange((s) => {
             container.classList.add("invisible", "pointer-events-none");
           }
         }
-        
+
         if (drawer) {
           if (s.generator.open) {
             drawer.classList.remove("translate-x-full");
@@ -151,7 +151,7 @@ state.onStateChange((s) => {
             drawer.classList.add("translate-x-full");
           }
         }
-        
+
         if (backdrop) {
           if (s.generator.open) {
             backdrop.classList.remove("opacity-0", "pointer-events-none");
@@ -190,11 +190,10 @@ state.onStateChange((s) => {
 
       // If anything ELSE changed in the entry state that we don't handle surgically,
       // fall through to slow path to ensure UI correctness.
-      const entriesMatch = (
+      const entriesMatch =
         s.phoneLocked === ps.phoneLocked &&
         s.generator.searchQuery === ps.generator.searchQuery &&
-        s.generator.showCountries === ps.generator.showCountries
-      );
+        s.generator.showCountries === ps.generator.showCountries;
 
       if (entriesMatch) {
         prevState = JSON.parse(JSON.stringify(s)) as State;
@@ -220,7 +219,9 @@ state.onStateChange((s) => {
       if (JSON.stringify(s.current) !== JSON.stringify(ps.current)) {
         const buffer = document.getElementById("message-buffer");
         if (buffer) {
-          buffer.innerHTML = s.current ? renderMessageBubble(s.current, s.senderHash) : renderEmptyBuffer();
+          buffer.innerHTML = s.current
+            ? renderMessageBubble(s.current, s.senderHash)
+            : renderEmptyBuffer();
           // Scroll to bottom if it's a new message
           if (!ps.current || s.current?.id !== ps.current.id) {
             requestAnimationFrame(() => {
@@ -231,10 +232,11 @@ state.onStateChange((s) => {
       }
 
       // Update interaction zone (input vs waiting area vs typing)
-      const inputChanged = s.editing !== ps.editing || 
-                          s.counterpartyTyping !== ps.counterpartyTyping ||
-                          (s.current?.senderHash !== ps.current?.senderHash) ||
-                          (s.current?.readAt !== ps.current?.readAt);
+      const inputChanged =
+        s.editing !== ps.editing ||
+        s.counterpartyTyping !== ps.counterpartyTyping ||
+        s.current?.senderHash !== ps.current?.senderHash ||
+        s.current?.readAt !== ps.current?.readAt;
 
       if (inputChanged) {
         const zone = document.getElementById("interaction-zone");
@@ -245,21 +247,20 @@ state.onStateChange((s) => {
             : canType
               ? renderInputArea({ editing: false, value: "" })
               : renderWaitingArea(s.current, s.senderHash, s.counterpartyTyping);
-          
+
           if (zone.innerHTML !== html) {
-             zone.innerHTML = html;
+            zone.innerHTML = html;
           }
         }
       }
 
       // Check if any "Slow Path" properties changed. If they did, we fall through
       // to the full innerHTML wipe to ensure overlays (modals, errors) render.
-      const needsSlowPath = (
+      const needsSlowPath =
         s.confirmExpire !== ps.confirmExpire ||
         s.paymentError !== ps.paymentError ||
         s.paymentLoading !== ps.paymentLoading ||
-        s.ttlExpiresAt !== ps.ttlExpiresAt
-      );
+        s.ttlExpiresAt !== ps.ttlExpiresAt;
 
       if (!needsSlowPath) {
         prevState = JSON.parse(JSON.stringify(s)) as State;
