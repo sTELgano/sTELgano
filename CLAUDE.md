@@ -131,7 +131,7 @@ Fully optional (disabled by default). When enabled, steg numbers have a free TTL
 
 **Privacy guarantee:** The `extension_tokens` table has **no `room_id` column**. The server cannot link a payment to a specific room. Correlation exists only ephemerally in memory during the channel `redeem_extension` event.
 
-**Paystack placeholder email:** Paystack's `/transaction/initialize` requires an email and mails receipts to it. We supply `anonymous+<token_hash[0..7]>@<PAYSTACK_RECEIPT_EMAIL_DOMAIN>` so the user is never prompted for a real address. The domain **must be operator-controlled** — a domain owned by a third party would receive every transaction receipt. Typically set to the deployment's `PHX_HOST` with no MX record (receipts bounce / void). The email prefix adds no info beyond the `reference` Paystack already receives.
+**Paystack placeholder email:** Paystack's `/transaction/initialize` requires an email and mails receipts to it. We supply `anonymous+<token_hash[0..7]>@<PAYSTACK_RECEIPT_EMAIL_DOMAIN>` so the user is never prompted for a real address. The domain **must be operator-controlled** — a domain owned by a third party would receive every transaction receipt. Typically set to the deployment's `HOST` with no MX record (receipts bounce / void). The email prefix adds no info beyond the `reference` Paystack already receives.
 
 Key modules:
 - `Stelgano.Monetization` — config accessors, token lifecycle, redemption logic
@@ -208,7 +208,7 @@ PostgreSQL with binary UUIDs. Migrations in [priv/repo/migrations/](priv/repo/mi
 | `PHX_SERVER` | Yes | Set to `true` so the release binds the HTTP endpoint on boot |
 | `SECRET_KEY_BASE` | Yes | Phoenix session signing |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `PHX_HOST` | Yes | Production hostname used by `url:` config and `check_origin` |
+| `HOST` | Yes | Production hostname used by `url:` config and `check_origin` |
 | `ADMIN_PASSWORD` | Yes | Admin dashboard password (HTTP Basic Auth for `/admin`) |
 | `ADMIN_USERNAME` | No | Admin dashboard username (default: `admin`) |
 | `PORT` | No | HTTP port the endpoint binds to (default: `4000`) |

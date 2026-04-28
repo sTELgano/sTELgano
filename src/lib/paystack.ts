@@ -134,7 +134,7 @@ export async function initialize(
  *  receipt to it. We supply `anonymous+<first8-of-token>@<domain>`
  *  so the user is never prompted. The domain MUST be operator-owned
  *  — a third-party domain would receive every transaction receipt.
- *  Typically set to the deployment's PHX_HOST with no MX record. */
+ *  Typically set to the deployment's HOST with no MX record. */
 function placeholderEmail(tokenHash: string, domain: string): string {
   return `anonymous+${tokenHash.slice(0, 8)}@${domain}`;
 }

@@ -1292,7 +1292,7 @@
 **Acceptance criteria:**
 - `.env.example` documents all required environment variables with descriptions
 - `DEPLOY.md` explains each variable's purpose
-- Required variables: `SECRET_KEY_BASE`, `DATABASE_URL`, `PHX_HOST`, `POOL_SIZE`
+- Required variables: `SECRET_KEY_BASE`, `DATABASE_URL`, `HOST`, `POOL_SIZE`
 - Optional variables (salt overrides): `ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`
 - Starting without required variables produces a clear, actionable error message
 

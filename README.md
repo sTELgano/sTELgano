@@ -134,7 +134,7 @@ Set via `wrangler secret put <NAME>` for secrets, or in `wrangler.toml [vars]` f
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `PHX_HOST` | Yes | Production hostname (used for CORS and `check_origin`) |
+| `HOST` | Yes | Production hostname (used for CORS and `check_origin`) |
 | `ADMIN_PASSWORD` | Yes | Admin dashboard password (HTTP Basic Auth) |
 | `ADMIN_USERNAME` | No | Admin dashboard username (default: `admin`) |
 | `MONETIZATION_ENABLED` | No | Set to `true` to enable paid tiers |
