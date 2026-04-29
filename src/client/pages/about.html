@@ -231,9 +231,9 @@
           <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#clock"/></svg>
         </div>
         <div class="space-y-3">
-          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">Workers Cron Triggers</h4>
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">Durable Object Alarms</h4>
           <p class="text-sm text-slate-400 leading-relaxed font-medium">
-            Scheduled jobs for automatic room expiry. Hourly, expired rooms are deactivated and their messages and access records are hard-deleted in the same transaction. Messages replaced by a reply are hard-deleted immediately on reply.
+            Each room schedules its own self-destruct alarm at creation. When the TTL fires, the room broadcasts expiry to all connected clients and hard-deletes all its state atomically. Messages replaced by a reply are hard-deleted immediately on reply.
           </p>
         </div>
       </div>

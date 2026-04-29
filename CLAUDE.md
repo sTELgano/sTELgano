@@ -262,8 +262,8 @@ Dark-first glassmorphism UI. All surfaces use `backdrop-filter: blur(16px)` with
 **Touch targets:** 56px minimum height on interactive elements (exceeds WCAG 44px). All motion respects `prefers-reduced-motion`. Mobile-first: 320px minimum width.
 
 **SessionStorage keys** (cleared on panic/room-expiry/logout):
-- Session state (6 keys, persisted across lock/re-auth): `stelegano_phone`, `stelegano_room_id`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`, `stelegano_extension_secret`
-- Transient (read-once): `stelegano_handoff_phone` (+ `stelegano_handoff_tier`) — set before Paystack redirect, read & deleted by the state machine on return from `/payment/callback`. Keeps the phone out of the URL, history, and server logs.
+- Persistent session state (4 keys, survive lock/re-auth): `stelegano_phone`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`
+- Transient (read-once, in `STORAGE_KEYS` so cleared with the rest on expiry/panic): `stelegano_handoff_phone`, `stelegano_handoff_tier` — set before Paystack redirect, read & deleted on return from `/payment/callback`; `stelegano_extension_secret` — set before Paystack redirect, deleted immediately before join on return
 - UX preference (persists across sessions *except panic*): `stelgano_selected_country` — last-picked country in the generator drawer.
 
 **Panic clear (`/x`)** redirects to `/?p=1`. The inline bootstrap script detects `?p=1`, calls `sessionStorage.clear()`, and strips the flag from the URL via `history.replaceState` before the user sees the address bar.
