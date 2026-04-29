@@ -955,9 +955,14 @@ export class ChatState {
     // join payload. For a new paid room the server creates it as paid
     // atomically; for an existing room the server ignores it and we fall
     // through to the post-join redeemExtension call below.
+    // Read and immediately remove the secret so it never lingers in
+    // sessionStorage past this point. A crash or navigation between
+    // checkout-return and join-success would otherwise leave the
+    // raw secret in sessionStorage, allowing a replay on next open.
     let pendingSecret: string | null = null;
     try {
       pendingSecret = sessionStorage.getItem("stelegano_extension_secret");
+      if (pendingSecret) sessionStorage.removeItem("stelegano_extension_secret");
     } catch {
       // sessionStorage disabled
     }
@@ -1036,11 +1041,6 @@ export class ChatState {
     // the primary redemption path — the join ignored the secret and this
     // call does the actual upgrade.
     if (pendingSecret && this.client) {
-      try {
-        sessionStorage.removeItem("stelegano_extension_secret");
-      } catch {
-        // ignore
-      }
       this.client.redeemExtension(pendingSecret).catch(() => {});
     }
   }

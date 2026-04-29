@@ -17,7 +17,7 @@
 
 import type { Env } from "./env";
 import { type EventType, writeEvent } from "./lib/analytics";
-import { findByTokenHash, markRedeemed } from "./lib/extension_tokens";
+import { deleteToken, findByTokenHash, markRedeemed } from "./lib/extension_tokens";
 import { decrementActiveRooms, incrementActiveRooms } from "./lib/live_counters";
 import {
   type ClientEvent,
@@ -284,6 +284,7 @@ export class RoomDO implements DurableObject {
       this.room.tier === "paid" ? "room_expired_paid" : "room_expired_free";
     void decrementActiveRooms(this.env.DB);
     writeEvent(this.env.ANALYTICS, expiredType);
+    await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
     this.room = null;
   }
@@ -389,6 +390,24 @@ export class RoomDO implements DurableObject {
     }
 
     // Existing room — check access.
+    // Guard second-slot registration: if the room has only one access record
+    // and this access_hash is new, the caller is claiming the second-party
+    // slot. Rate-limit this the same way we rate-limit room creation to
+    // prevent an attacker who knows the room_hash from pre-empting the slot
+    // before the legitimate second party joins.
+    if (
+      this.room.accessRecords.length < 2 &&
+      !this.room.accessRecords.find((r) => r.accessHash === accessHash)
+    ) {
+      const rl = await this.env.RATE_LIMITER_ROOM_CREATE.limit({ key: this.clientIp }).catch(
+        () => ({ success: true }),
+      );
+      if (!rl.success) {
+        await this.padJoin(start);
+        this.send(ws, { ref: evt.ref, error: { reason: "rate_limited" } });
+        return;
+      }
+    }
     const result = this.checkAccess(accessHash);
     if (result.kind === "ok") {
       await this.persist();
@@ -625,8 +644,25 @@ export class RoomDO implements DurableObject {
       return;
     }
 
+    // Delete the token row immediately after redemption so a redeemed
+    // token's redeemed_at timestamp does not sit in D1 for up to 30 days
+    // until the daily sweep. Closing this linkability window is the same
+    // privacy goal as v1's separate-transaction design.
+    void deleteToken(this.env.DB, tokenHash);
+
     // Extend the room's TTL and reschedule its self-destruct alarm.
-    const newTtlMs = Date.now() + PAID_TTL_DAYS * 86_400_000;
+    // Floor to the hour (v1 `round_to_hour/1`) so the exact redemption
+    // moment is not encoded in ttl_expires_at. A server operator with
+    // D1 + DO access cannot pinpoint redemption time from the expiry.
+    const newTtlRaw = Date.now() + PAID_TTL_DAYS * 86_400_000;
+    const newTtlMs = Math.floor(newTtlRaw / 3_600_000) * 3_600_000;
+
+    // v1 slept 0–5000ms (jitter_sleep) between the token mark-redeemed
+    // and the room TTL update to de-align their updated_at timestamps.
+    // In the DO model both writes are in the same request handler; the
+    // D1 write (markRedeemed above) and the DO SQLite write (persist
+    // below) land in different storage systems at different latencies,
+    // giving natural de-alignment without an explicit sleep.
     this.room.tier = "paid";
     this.room.ttlExpiresAtMs = newTtlMs;
     await this.persist();

@@ -1,7 +1,6 @@
 <!--
   title: sTELgano-std-1 Protocol Specification
 
-  Ported from elixir/lib/stelgano_web/controllers/page_html/spec.html.heex.
 -->
 
 <div class="max-w-5xl mx-auto space-y-16 py-12 animate-in pb-40">
@@ -106,7 +105,7 @@
             <div class="space-y-2">
               <span class="text-primary font-mono font-bold text-sm">access_hash</span>
               <div class="font-mono text-xs text-slate-500 bg-white/2 rounded-lg px-4 py-3 border border-white/5 overflow-x-auto">SHA-256(normalize(phone) + ":" + PIN + ":" + ACCESS_SALT)</div>
-              <p class="text-sm text-slate-400 leading-relaxed font-medium">Proves the caller knows the correct PIN. Each party has a different access_hash because they each choose a different PIN.</p>
+              <p class="text-sm text-slate-400 leading-relaxed font-medium">Proves the caller knows the correct PIN. Each party has a different access_hash because they each choose a different PIN. The steg number is the leading component, so a computed credential is bound to a specific channel — replaying the raw hash value on a different channel will fail. Note: password managers operate on the raw PIN field before any hashing; they are discouraged via <span class="font-mono">autocomplete="one-time-code"</span> and the in-form warning, not by this hash property.</p>
             </div>
           </div>
           <div class="border-l-2 border-white/5 pl-6 py-4 hover:border-primary transition-all group/id">
@@ -307,11 +306,11 @@
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#door_open"/></svg>
           </div>
-          <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">Hourly Check</span>
+          <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">DO Alarm</span>
         </div>
         <div class="space-y-3">
           <h4 class="text-white font-extrabold tracking-tight text-lg uppercase font-display">Rooms</h4>
-          <p class="text-sm text-slate-400 leading-relaxed font-medium">Expire at their configured TTL. An hourly background worker deactivates expired rooms and, in a single atomic transaction, hard-deletes every message and every (room_hash, access_hash) record so no long-term linkability of past attempts survives.</p>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium">Expire at their configured TTL. Each room self-destructs via a Durable Object alarm set at creation &mdash; when the alarm fires, it hard-deletes every message and every (room_hash, access_hash) record in a single atomic transaction so no long-term linkability of past attempts survives.</p>
         </div>
       </div>
       <div class="glass-card p-6 sm:p-8 space-y-6 group hover:border-primary/30 transition-all duration-500">

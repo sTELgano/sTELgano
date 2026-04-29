@@ -1,13 +1,5 @@
 <!--
   title: About — sTELgano
-
-  Ported from elixir/lib/stelgano_web/controllers/page_html/about.html.heex.
-
-  NOTE: The "Tech Stack" section still names Elixir/Phoenix/PostgreSQL/Oban
-  (v1 implementation). After cutover, this content is inaccurate and
-  should be updated to Cloudflare Workers / Durable Objects / D1. Left
-  verbatim for now to keep this commit a pure mechanical port — the
-  content edit is a separate concern.
 -->
 
 <div class="max-w-5xl mx-auto space-y-20 py-12 animate-in pb-40">
@@ -96,7 +88,10 @@
       </div>
       <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
         <p>
-          sTELgano hides the encrypted channel inside a phone number saved in your contacts. Someone scrolling through your contact list sees a normal phone number. Nothing unusual. Nothing suspicious.
+          sTELgano is an <span class="text-white">async, 1:1, text-only</span> channel with N=1 message retention. One conversation at a time, one message at a time, text only. Not a group chat, not a media vault &mdash; a single-thread link between two people where every reply erases what came before.
+        </p>
+        <p>
+          The channel hides inside a phone number saved in your contacts. Someone scrolling through your contact list sees a normal phone number. Nothing unusual. Nothing suspicious.
         </p>
         <p>
           If they open sTELgano itself, they see a blank entry form with two fields. No messages, no contacts, no chat history.
@@ -239,9 +234,9 @@
           <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#clock"/></svg>
         </div>
         <div class="space-y-3">
-          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">Workers Cron Triggers</h4>
+          <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">Durable Object Alarms</h4>
           <p class="text-sm text-slate-400 leading-relaxed font-medium">
-            Scheduled jobs for automatic room expiry. Hourly, expired rooms are deactivated and their messages and access records are hard-deleted in the same transaction. Messages replaced by a reply are hard-deleted immediately on reply.
+            Each room schedules its own self-destruct alarm at creation. When the TTL fires, the room broadcasts expiry to all connected clients and hard-deletes all its state atomically. Messages replaced by a reply are hard-deleted immediately on reply.
           </p>
         </div>
       </div>

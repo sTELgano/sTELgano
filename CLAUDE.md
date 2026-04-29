@@ -4,273 +4,266 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-sTELgano is a privacy-focused anonymous messaging app and open protocol (sTELgano-std-1) built with Elixir/Phoenix 1.8. It implements *contact-layer steganography* — two people share a "steg number" (a random phone number saved in each other's contacts) and each picks a PIN. All cryptography happens client-side via the Web Crypto API. The server only sees SHA-256 hashes and AES-256-GCM ciphertext.
+sTELgano is a privacy-focused anonymous messaging app and open protocol (sTELgano-std-1) built on **Cloudflare Workers + Durable Objects**, written in TypeScript. It implements *contact-layer steganography* — two people share a "steg number" (a random phone number saved in each other's contacts) and each picks a PIN. All cryptography happens client-side via the Web Crypto API. The server only sees SHA-256 hashes and AES-256-GCM ciphertext.
 
-**Core invariant (N=1):** At most one message exists per room at any time. Replies atomically delete the previous message in a single DB transaction. No history exists anywhere.
+**Core invariant (N=1):** At most one message exists per room at any time. Replies atomically delete the previous message. No history exists anywhere.
 
 **Threat model:** Protects against intimate-access attackers (partner, family member with device access). Explicitly does NOT protect against governments or law enforcement. This honesty is stated throughout the product.
 
 **Passcode test:** Every design decision must pass: "A suspicious partner unlocks your phone and opens sTELgano. What do they see?" Answer: a blank entry screen with two fields. Nothing else.
 
+**v1 note:** A prior Elixir/Phoenix implementation existed and is referenced in comments and the migration blog post. It has been removed from the repository. This codebase (Workers v2) is the only active implementation.
+
 ## Common commands
 
 ```bash
-mix setup              # deps + DB create/migrate + seed + assets
-mix phx.server         # dev server at http://localhost:4000
-mix test               # run all tests (auto-creates/migrates DB)
-mix test path/to/test.exs           # single test file
-mix test path/to/test.exs:42        # single test at line
-mix test --failed                   # re-run previously failed tests
-mix precommit          # compile (warnings-as-errors) + unlock unused deps + format + credo --strict + test
-mix credo --strict     # static analysis
-mix dialyzer           # type checking (PLTs in priv/plts/)
-mix sobelow --config   # Phoenix security scanning
-mix format             # code formatting
-mix ecto.migrate       # run pending migrations
-mix ecto.reset         # drop + create + migrate + seed
-mix ecto.gen.migration migration_name  # generate migration with correct timestamp
+npm run dev            # wrangler dev → http://localhost:8787
+npm run build          # compile all client assets to public/
+npm run typecheck      # tsc --noEmit
+npm run precommit      # typecheck + biome check + test (run before pushing)
+npm test               # vitest run (both pure-function and worker-runtime suites)
+npm run test:watch     # vitest watch mode
+npm run lint           # Biome linter
+npm run check          # Biome lint + format check
+npm run check:fix      # Biome check with auto-fix
+npm run types          # npx wrangler types (regenerate worker-configuration.d.ts)
+npm run d1:migrate:local   # wrangler d1 migrations apply stelgano --local
+npm run d1:migrate:remote  # wrangler d1 migrations apply stelgano --remote
 ```
 
 ## Architecture
 
-### Domain layer: `Stelgano.Rooms` context
+### Worker entry point: `_worker.ts`
 
-Single context module ([rooms.ex](lib/stelgano/rooms.ex)) owns all business logic. Server-blindness: no function accepts plaintext phone numbers or PINs — only opaque hashes.
+Routes all requests through a single `fetch()` handler. Responsibilities:
+- Applies security headers (CSP with per-request nonce, HSTS, X-Frame-Options, X-Robots-Tag) to every response including static assets (`run_worker_first = true` in `wrangler.toml`)
+- Rate-limits `/admin` (20/IP/min) and WebSocket upgrades (30/IP/min) via native CF rate limiter bindings
+- Serves the admin dashboard and all JSON API routes (`/api/payment/initiate`, `/api/room/:hash/exists`, `/api/webhooks/paystack`)
+- Upgrades WebSocket connections and forwards them to the correct `RoomDO` instance via `stub.fetch()`, injecting `X-Client-IP` for per-IP rate limiting inside the DO
+- Runs the daily Cron Trigger (`0 3 * * *`): sweeps expired extension tokens from D1, then refreshes the FX rate in KV
 
-Room lifecycle is split into two distinct operations so a probe attacker can't pollute the `rooms` table just by guessing `room_hash` values:
-- `get_active_room/1` — read-only lookup. Returns `{:ok, room}` or `{:error, :not_found}`.
-- `create_room/3` — explicit insert with `tier` and optional `ttl_expires_at`. Only ever called from `ChatLive.handle_event("continue_free", …)` (free path / monetization disabled) or the paid-extension flow. `join_room/2` never calls it — that function only reads via `get_active_room/1` and manages `room_access` rows.
+### Durable Object: `src/room.ts` — `RoomDO`
 
-Schemas in [lib/stelgano/rooms/](lib/stelgano/rooms/):
-- `Room` — identified by `room_hash` (SHA-256 hex), has `is_active` flag, `tier` ("free"/"paid"), and optional `ttl_expires_at`
-- `RoomAccess` — `(room_hash, access_hash)` pairs with failed-attempt lockout (10 attempts → 30min lock). Hard-deleted when the room expires so the DB carries no long-term linkability of past attempts. See [rooms.ex](lib/stelgano/rooms.ex) `expire_room/1`.
-- `Message` — opaque `ciphertext` + `iv` (binary), `sender_hash`; hard-deleted immediately on reply (N=1). Enforced both at the application layer (delete-then-insert in `Rooms.send_message/4`) and at the DB layer (`UNIQUE` index on `messages.room_id`) — the second guard catches concurrent inserts from two different senders under READ COMMITTED.
+One instance per `room_hash`. Single-threaded execution enforces the N=1 invariant by construction (no locks needed). Hibernatable WebSockets keep idle rooms cheap.
 
-### Real-time: Phoenix Channels (not LiveView sockets)
+**Persisted state** (one storage key per room, SQLite-backed):
+- `isInitialized` — true after first join
+- `roomId` — random UUID used as PBKDF2 salt for the shared enc key; independent from DO id scheme
+- `tier` — `"free"` | `"paid"`
+- `ttlExpiresAtMs` — epoch ms; DO alarm fires here and self-destructs the room
+- `accessRecords` — up to 2 entries (one per party), each with `accessHash`, `failedAttempts`, `lockedUntilMs`
+- `currentMessage` — N=1; at most one `StoredMessage` at any time
 
-Chat uses a raw Phoenix Channel ([anon_room_channel.ex](lib/stelgano_web/channels/anon_room_channel.ex)), not LiveView. Socket ([anon_socket.ex](lib/stelgano_web/channels/anon_socket.ex)) is fully anonymous — no session, no auth cookie.
+**Join flow:**
+1. First join initialises the room (rate-limited by `RATE_LIMITER_ROOM_CREATE`, 3/IP/min). If a valid paid `extension_secret` is supplied, the room starts as `"paid"` atomically.
+2. Second-party slot registration is also rate-limited by `RATE_LIMITER_ROOM_CREATE` to prevent slot exhaustion attacks.
+3. Subsequent joins check `accessHash` against stored records; 10 failed attempts → 30-min lockout.
 
-- Topic: `anon_room:{room_hash}` (64-char lowercase hex)
-- Join requires `(room_hash, access_hash, sender_hash)` — all validated as 64-char hex
-- Events: `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, `redeem_extension`
-- Max ciphertext: 8,192 bytes (base64-encoded)
+**Events handled:** `join`, `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, `redeem_extension`
 
-### Client-side crypto
+**Timing floor:** `JOIN_TIME_FLOOR_MS = 500` — every join reply is padded to at least 500 ms with jitter so reply timing cannot classify `room_hash` values as existing vs. non-existing.
 
-[assets/js/crypto/anon.js](assets/js/crypto/anon.js) — **single source of truth** for all cryptographic constants and operations. Zero external libraries. Changing any constant is a breaking change (all existing rooms become inaccessible).
+### Protocol constants: `src/protocol.ts`
+
+Single source of truth for all values shared between the Worker and the client WebSocket protocol: event type unions, `HEX64_RE`, `MAX_CIPHERTEXT_BYTES` (8 192), `MAX_ACCESS_ATTEMPTS` (10), `LOCKOUT_MINUTES` (30), `JOIN_TIME_FLOOR_MS` (500), `FREE_TTL_DAYS`, `PAID_TTL_DAYS`.
+
+### Client-side state machine: `src/client/state.ts`
+
+`ChatState` drives the entire browser-side UI as a pure TypeScript state machine. States:
+
+```
+entry → deriving → [new_channel?] → connecting → chat
+                                              ↓
+                                           locked
+                                           expired (terminal)
+```
+
+- `entry` — phone + PIN form. Phone is read-only when a steg number was just generated (generator drawer) or when returning from Paystack checkout (`stelegano_handoff_phone` in sessionStorage). Manual entries remain editable.
+- `deriving` — three-dot loading while `room_hash`, `access_hash`, `sender_hash` are computed; hits `/api/room/:hash/exists` to decide whether to show `new_channel`.
+- `new_channel` — plan selection (free/paid) when monetization is enabled and the room doesn't exist yet. No DO has been created at this point — the room is created on join, not before.
+- `connecting` — PBKDF2 key derivation (600 000 iterations, runs in a dedicated Web Worker to keep the UI responsive)
+- `chat` — active chat; turn-based input (can type when room is empty or last message is from the other party)
+- `locked` — PIN re-entry after auto-lock; re-derives the key without re-joining the WebSocket
+- `expired` — terminal; room was destroyed server-side
+
+### Client-side crypto: `src/client/crypto/anon.ts`
+
+**Single source of truth** for all cryptographic constants and operations. Zero external libraries. Changing any constant is a breaking change (all existing rooms become inaccessible).
 
 ```
 room_hash   = SHA-256(normalise(phone) + ":" + ROOM_SALT)
 access_hash = SHA-256(normalise(phone) + ":" + PIN + ":" + ACCESS_SALT)
-enc_key     = PBKDF2(phone, room_id + ENC_SALT, 600_000 iter, SHA-256, 256-bit)
+enc_key     = PBKDF2(password: phone, salt: room_id + ENC_SALT,
+                     iterations: 600_000, hash: SHA-256, keylen: 256 bits)
 sender_hash = SHA-256(normalise(phone) + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)
 ```
 
-PIN is NOT part of enc_key (both users need the same key but have different PINs). The access_hash IS part of sender_hash so that two users with the same phone but different PINs produce different sender identities. 600,000 PBKDF2 iterations = OWASP 2023 recommendation.
+PIN is NOT part of enc_key (both users need the same key but have different PINs). The access_hash IS part of sender_hash so two users with the same phone but different PINs produce different sender identities.
 
-`phone-number-generator-js` npm package — steg number generator (E.164 format, 227 countries supported via `CountryNames` enum). Installed in `assets/package.json`. Replaces the former custom `phone-gen.js`.
+**PBKDF2 runs in a dedicated Web Worker** (`src/client/workers/pbkdf2.ts` → `public/assets/pbkdf2_worker.js`) to keep the UI responsive during the 600 000-iteration derivation.
 
-[assets/js/hooks/chat.js](assets/js/hooks/chat.js) — LiveView hooks: `AnonChat` (main orchestrator; reads `stelegano_handoff_phone` on mount for post-payment return), `AutoResize` (textarea), `IntersectionReader` (read receipts), `PaymentInitiator` (extension token generation + payment initiation; used by both the `:new_channel` "Choose paid" button and the `:chat` "Extend" header button), `PhoneGenerator` (country selector + number generation inside the `/chat` generator drawer), `PhoneInput` (international formatting + country inference on the entry form), `CountryPersistence` (remembers last-picked country in sessionStorage).
+`phone-number-generator-js` npm package — steg number generator (E.164 format, 227 countries). The generator is an integrated drawer inside `/chat` (no separate page).
 
-### ChatLive state machine
+### UI renderer: `src/client/chat.ts`
 
-`ChatLive` uses a single `@state` atom to track the current screen:
+Renders the entire chat UI from `ChatState`. Uses surgical DOM updates (`diffChildren` / `entriesMatch`) to avoid re-rendering unchanged sections. Key sub-components:
 
-```
-:entry → :deriving → :new_channel (if monetization) → :connecting → :chat → :locked → :expired
-```
+- Generator drawer — slide-in panel with country selector + number generator. `id="generator-panel-container"` and `id="generator-apply-footer"` updated independently.
+- Entry form — phone + PIN fields, eye-icon visibility toggle, tier selection
+- Chat surface — message bubbles, input textarea, header controls (extend, lock, expire)
+- Lock overlay — renders over chat on `locked` state without destroying the chat DOM
 
-- `:entry` — form with phone + PIN fields. The phone field is read-only in two cases: (1) the user just generated a number from the in-page **generator drawer** (the `apply_generated_number` event sets `phone_locked=true`); (2) the user is returning from a Paystack checkout, in which case `PaymentInitiator` stashed the phone in `sessionStorage.stelegano_handoff_phone` before the redirect and `AnonChat.mounted()` re-fires it as a `prefill_phone` event. Manual entries (typed directly into the field) stay editable. The eye-icon visibility toggle works in all states. Passcode test compliant.
-- `:deriving` — three-dot loading while hashes are computed
-- `:new_channel` — plan selection screen (free/paid) shown when monetization is enabled and the room does not yet exist. No `Room` row has been created at this point — the `(room_hash, access_hash, sender_hash, country_iso)` tuple is held only in LiveView assigns. The row is only inserted once the user confirms via `continue_free` (or the paid-extension flow completes). This means probe attackers hashing random phones never pollute the `rooms` table. Helps detect mistyped numbers. If monetization is disabled **or** the handoff carried `tier=free`, the server auto-fires `continue_free` without showing this screen.
-- `:connecting` — three-dot loading while PBKDF2 derives the encryption key
-- `:chat` — active chat with message area, input, and header controls
-- `:locked` — PIN re-entry screen (re-derives key without re-joining channel)
-- `:expired` — terminal state after room expiry
+### WebSocket client: `src/client/room_client.ts`
 
-The `can_type?/1` helper enforces turn-based input: you can type when the room is empty or when the last message is from the other party.
+Manages the WebSocket connection lifecycle: connect, send typed events, handle server replies and broadcasts. Implements client-side ref tracking (request/reply correlation).
 
-### LiveViews
+### Telemetry: `src/lib/analytics.ts`
 
-- `ChatLive` — chat UI plus the in-page generator drawer (toggled via `phx-click="open_generator"`) and the inline paid-tier upgrade flow. Crypto + channel interaction happen in JS hooks, not server-side. The drawer holds the country selector + steg-number generator that previously lived on a separate `/steg-number` page; applying a generated number sets `phone_locked=true` so the user cannot edit it (only toggle visibility via the eye icon). Manual entries remain editable.
-- `AdminDashboardLive` — aggregate metrics at `/admin` (HTTP Basic Auth via `AdminAuth` plug)
-
-### Telemetry: `src/lib/analytics.ts` (v2 — this branch)
-
-All event writes go through [`src/lib/analytics.ts`](src/lib/analytics.ts) → `writeEvent()`, which calls `env.ANALYTICS.writeDataPoint()` on the Cloudflare Analytics Engine binding declared in `wrangler.toml`. Fire-and-forget with no row locking — no write contention under concurrent load.
+All event writes go through `writeEvent()` → `env.ANALYTICS.writeDataPoint()` on the Cloudflare Analytics Engine binding. Fire-and-forget; no row locking; no write contention under concurrent load.
 
 **Write schema** (one data point per event):
 - `blobs[0]` = `EventType`: `"room_free"` | `"room_paid"` | `"room_rejoin"` | `"room_expired_free"` | `"room_expired_paid"` | `"message_sent"`
-- `blobs[1]` = ISO-3166 alpha-2 steg-number country (client-derived via libphonenumber-js), or `""` for global-only events
+- `blobs[1]` = ISO-3166 alpha-2 steg-number country (client-derived), or `""` for global-only events
 - `blobs[2]` = CF-IPCountry alpha-2 (server-side IP geolocation), or `""` when unavailable
 - `doubles[0]` = 1
 
-One data point covers both per-country and per-day aggregates — computed at query time via the Cloudflare GraphQL API (`https://api.cloudflare.com/client/v4/graphql`, dataset `stelgano_events` → AE field `stelgano_eventsAdaptiveGroups`). `writeEvent()` is null-safe (`analytics?.writeDataPoint(...)`) and becomes a no-op in tests where the binding is absent.
+**Admin dashboard reads** (`_worker.ts`): `queryCountryMetrics()`, `queryDailyMetrics()`, `queryDiasporaMetrics()` from `src/lib/analytics.ts`, using `CF_ACCOUNT_ID` and `CF_AE_API_TOKEN`. All return `[]` gracefully when credentials are absent.
 
-**Call sites** in [`src/room.ts`](src/room.ts):
-- `handleJoin()` (new room, no valid paid secret): `writeEvent(env.ANALYTICS, "room_free", country_iso, cfCountry)`
-- `handleJoin()` (new room, valid paid `extension_secret` in join payload): `writeEvent(env.ANALYTICS, "room_paid", country_iso, cfCountry)` — atomic with room creation; the subsequent `redeem_extension` round-trip is skipped
-- `handleJoin()` (existing room, successful join): `writeEvent(env.ANALYTICS, "room_rejoin", country_iso, cfCountry)`
-- `handleRedeemExtension()` (existing-room extend path only): `writeEvent(env.ANALYTICS, "room_paid", iso, cfCountry)` — fired when an already-initialised room has its TTL extended via the "Extend" button in chat
-- `handleSendMessage()`: `writeEvent(env.ANALYTICS, "message_sent", att.stegCountry, att.cfCountry)`
-- `alarm()` + `handleExpireRoom()`: `writeEvent(env.ANALYTICS, expiredType)` where `expiredType` is `"room_expired_free"` or `"room_expired_paid"` — expiry is global-only (individual room records never carry a country code)
+`queryDiasporaMetrics()` groups by both steg-number country and CF-IPCountry simultaneously — rows where they differ are diaspora signals.
 
-**Admin dashboard reads** in [`_worker.ts`](/_worker.ts): calls `queryCountryMetrics()` and `queryDailyMetrics()` from `src/lib/analytics.ts`, using `CF_ACCOUNT_ID` (var in `wrangler.toml`) and `CF_AE_API_TOKEN` (secret via `wrangler secret put`). Both return `[]` gracefully when credentials are absent.
+*Expiry events are intentionally global (no country dimension)* — room records never carry a country code, to preserve server-blindness.
 
-`queryDiasporaMetrics()` groups by both `blob2` (steg-number country) and `blob3` (CF-IPCountry) simultaneously, producing a (steg_country, cf_country) pair matrix. Rows where the two codes differ are diaspora signals — users whose phone number originates in a different country than their current connection location.
+### Monetization: `src/lib/extension_tokens.ts` + `src/lib/paystack.ts`
 
-*Expiry is intentionally global (no country dimension)* — individual room records carry no `country_code` and will never get one, to preserve server-blindness.
+Fully optional (disabled by default). When enabled, steg numbers have a free TTL (default 7 days). Users can purchase a dedicated number (default 1 year) via a **blind token** protocol.
 
-The D1 `country_metrics` and `daily_metrics` tables from the initial v2 port were **deleted** (migrations 0002 and 0003 dropped). The `live_counters` D1 table (migration 0004) remains for the active-room snapshot.
+**Privacy guarantee:** The `extension_tokens` D1 table has **no `room_id` column**. The server cannot link a payment to a specific room. Correlation exists only ephemerally in memory during the `redeem_extension` event; the token row is deleted immediately after successful redemption.
 
-**v1 equivalent** (Phoenix/Elixir — `elixir/` subdirectory): `Stelgano.CountryMetrics` and `Stelgano.DailyMetrics` PostgreSQL tables, incremented via UPSERT in Phoenix channel handlers. See [`elixir/AGENTS.md`](elixir/AGENTS.md).
-
-### Monetization layer: `Stelgano.Monetization`
-
-Fully optional (disabled by default). When enabled, steg numbers have a free TTL (default 7 days). Users can purchase a dedicated number (default 1 year, $2.00) via a blind token protocol.
-
-**Privacy guarantee:** The `extension_tokens` table has **no `room_id` column**. The server cannot link a payment to a specific room. Correlation exists only ephemerally in memory during the channel `redeem_extension` event.
-
-**Paystack placeholder email:** Paystack's `/transaction/initialize` requires an email and mails receipts to it. We supply `anonymous+<token_hash[0..7]>@<PAYSTACK_RECEIPT_EMAIL_DOMAIN>` so the user is never prompted for a real address. The domain **must be operator-controlled** — a domain owned by a third party would receive every transaction receipt. Typically set to the deployment's `HOST` with no MX record (receipts bounce / void). The email prefix adds no info beyond the `reference` Paystack already receives.
-
-Key modules:
-- `Stelgano.Monetization` — config accessors, token lifecycle, redemption logic
-- `Stelgano.Monetization.ExtensionToken` — Ecto schema for payment tokens (pending → paid → redeemed)
-- `Stelgano.Monetization.PaymentProvider` — behaviour for payment gateway adapters
-- `Stelgano.Monetization.Providers.Paystack` — Paystack adapter (hosted checkout + webhook verification)
-- `Stelgano.Monetization.FxRate` — GenServer caching a single `base → quote` exchange rate, refreshed every 24h from Fawazahmed0's currency-api (keyless public CDN JSON). Started conditionally via `Paystack.child_specs/0` only when `PAYSTACK_SETTLEMENT_CURRENCY` is set and differs from `PAYMENT_CURRENCY`.
-
-Payment flow:
+**Payment flow:**
 1. Client generates random `extension_secret`, computes `token_hash = SHA-256(secret)`
-2. Server stores `token_hash` in `extension_tokens` (no room link), redirects to Paystack
-3. Paystack webhook marks token as `paid`
-4. Client sends `extension_secret` via channel `redeem_extension` event
-5. Server hashes it, finds matching paid token, extends room TTL — token table still has no room_id
+2. `POST /api/payment/initiate` creates a pending token in D1, calls Paystack `/transaction/initialize`
+3. Paystack webhook (`POST /api/webhooks/paystack`, HMAC-SHA512 verified) marks token `paid`
+4. Client sends `extension_secret` via WebSocket `redeem_extension` event
+5. Server hashes it, finds matching paid token, extends room TTL; token row deleted immediately
 
-**Settlement currency conversion (v2).** `PRICE_CENTS` is always denominated in `PAYMENT_CURRENCY` (the display currency). If the Paystack merchant account only accepts a different currency, set `PAYSTACK_SETTLEMENT_CURRENCY` to that code. `initialize()` in [`src/lib/paystack.ts`](src/lib/paystack.ts) reads the cached rate from the `RATE_CACHE` KV namespace via `getRate()` in [`src/lib/fx_rate.ts`](src/lib/fx_rate.ts), applies `PAYSTACK_FX_BUFFER_PCT` (default 5%) on top to absorb drift, rounds to the nearest integer minor unit, and submits that to Paystack. Falls back to `PAYMENT_FX_FALLBACK_RATE` if KV is empty (first run before cron fires). Returns `fx_conversion_not_wired` only when neither source yields a rate.
+**Token lifecycle:** `pending` → `paid` → deleted-on-redemption. Daily cron at 03:00 UTC sweeps any tokens whose `expires_at` has passed (30-day window matches v1).
 
-**FX rate refresh (v2).** A single daily Cron Trigger (`0 3 * * *` in `wrangler.toml`) fires `scheduled()` in `_worker.ts`, which runs token cleanup first, then calls `refreshRate()` to fetch the live rate from Fawazahmed0's currency-api and write it to `RATE_CACHE` KV with a 25h TTL — long enough to bridge two consecutive cron runs. Only runs when `PAYSTACK_SETTLEMENT_CURRENCY` is set and differs from `PAYMENT_CURRENCY`. Consolidated from two triggers to one to stay within CF's 5-trigger free-plan account limit. Provision the KV namespace with `wrangler kv:namespace create RATE_CACHE` and paste the returned ID into `wrangler.toml`.
+**Paystack placeholder email:** `anonymous+<token_hash[0..7]>@<PAYSTACK_RECEIPT_EMAIL_DOMAIN>`. Domain must be operator-controlled (no MX record — receipts bounce).
 
-### Background jobs (Oban)
+**FX conversion:** If `PAYSTACK_SETTLEMENT_CURRENCY` ≠ `PAYMENT_CURRENCY`, `src/lib/paystack.ts` reads the cached rate from `RATE_CACHE` KV (written by the daily cron via `src/lib/fx_rate.ts`), applies `PAYSTACK_FX_BUFFER_PCT` (default 5%), and submits the converted amount. Falls back to `PAYMENT_FX_FALLBACK_RATE` if KV is empty.
 
-- `ExpireTtlRooms` — expires rooms past their TTL and hard-deletes all their messages (hourly)
-- `ExpireUnredeemedTokens` — expires stale payment tokens (daily at 03:00 UTC)
-- Queue: `:maintenance` with 2 workers
+### Security
 
-### Security plugs
-
-- `SecurityHeaders` — HSTS, X-Robots-Tag, Cache-Control: no-store
-- Rate limiting (v2) — three native CF rate-limiter bindings declared as `[[unsafe.bindings]]` in `wrangler.toml`, enforced in [`_worker.ts`](/_worker.ts) and [`src/room.ts`](src/room.ts):
-  - `RATE_LIMITER_ADMIN` — 20/IP/min on `/admin` (caps HTTP Basic Auth brute-force)
-  - `RATE_LIMITER_WS` — 30/IP/min on WebSocket upgrade requests (caps socket-cycling enumeration)
-  - `RATE_LIMITER_ROOM_CREATE` — 3/IP/min per client IP, checked **inside the RoomDO** only on first join (`!room.isInitialized`), so existing-room rejoins are unaffected. IP forwarded from the Worker as `X-Client-IP` header before `stub.fetch()`. Fail-open (`.catch(() => ({ success: true }))`) so a CF outage never blocks legitimate traffic. Returns `{ reason: "rate_limited" }` error frame to the WebSocket when triggered.
-  - CF Workers Rate Limiting only supports `period: 10 | 60` seconds — `wrangler.toml` uses `period = 60`; `wrangler.test.toml` uses `limit = 9999, period = 60` to avoid false hits during tests (all test requests share `"unknown"` as the client IP).
-- Rate limiting (v1) — PlugAttack (ETS-backed, runs in Phoenix endpoint). See [`elixir/AGENTS.md`](elixir/AGENTS.md).
-- `AdminAuth` — HTTP Basic Auth for `/admin` scope
-- CSP in router: strict `default-src 'self'` with specific allowances for fonts.googleapis.com/gstatic.com. `script-src` uses a **per-request nonce** ([CspNonce plug](lib/stelgano_web/plugs/csp_nonce.ex)) — *not* `'unsafe-inline'` — so attacker-injected inline scripts cannot execute. The only legitimate inline script (service-worker cleanup in `root.html.heex`) carries `nonce={@csp_nonce}`. `style-src` keeps `'unsafe-inline'` because LiveView emits inline `style` attributes for animations — acceptable since inline styles cannot execute JS.
-- Panic route: `GET /x` — instant session clear, no confirmation
+- **Security headers** — applied in `_worker.ts` to every response including static assets: CSP (per-request nonce, `default-src 'self'`, no `'unsafe-inline'` for scripts), HSTS, X-Frame-Options, X-Robots-Tag, Cache-Control: no-store.
+- **CSP nonce** — generated per-request in the Worker, injected into HTML at serve time. The only inline script (panic-flag bootstrap) carries this nonce.
+- **Rate limiting** — three native CF rate-limiter bindings (`[[unsafe.bindings]]` in `wrangler.toml`):
+  - `RATE_LIMITER_ADMIN` — 20/IP/min on `/admin`
+  - `RATE_LIMITER_WS` — 30/IP/min on WebSocket upgrade requests
+  - `RATE_LIMITER_ROOM_CREATE` — 3/IP/min inside RoomDO on new-room creation AND second-slot registration. IP forwarded via `X-Client-IP` header. Fail-open (CF outage never blocks traffic).
+- **Admin auth** — HTTP Basic Auth enforced by the Worker before serving `/admin`.
+- **Panic route** — `GET /x` clears all sessionStorage and redirects to `/?p=1`. The bootstrap inline script detects `?p=1`, calls `sessionStorage.clear()`, and strips the flag from the URL via `history.replaceState`.
 
 ### Routes
 
 - `/` — homepage; `/security`, `/privacy`, `/terms`, `/about` — static pages
 - `/spec` — sTELgano-std-1 protocol specification
 - `/blog` — blog index; `/blog/:slug` — individual blog posts
-- `/chat` — anonymous chat LiveView. No URL parameters accepted. The steg number generator lives inside this page as a slide-in drawer (toggled via the `open_generator`/`close_generator` events). Phone may be pre-populated only via the `stelegano_handoff_phone` sessionStorage key set by `PaymentInitiator` before a Paystack redirect (read & cleared once by the `AnonChat` hook on mount when the user returns from `/payment/callback`).
-- `/admin` — admin dashboard (behind `:admin_auth` pipeline)
+- `/chat` — anonymous chat. No URL parameters accepted. The steg number generator lives inside this page as a slide-in drawer. Phone may be pre-populated only via the `stelegano_handoff_phone` sessionStorage key (set by the client before redirecting to Paystack, read & deleted on return).
+- `/admin` — admin dashboard (HTTP Basic Auth)
 - `/payment/callback` — post-payment redirect from Paystack
-- `/api/webhooks/paystack` — Paystack webhook endpoint (HMAC-SHA512 verified)
+- `/api/room/:hash/exists` — room existence probe (GET, used by the client to route first-time vs. returning joins)
+- `/api/payment/initiate` — start payment flow (POST)
+- `/api/webhooks/paystack` — Paystack webhook (HMAC-SHA512 verified)
 - `/.well-known/security.txt` — security disclosure info
-- `/dev/dashboard`, `/dev/mailbox` — dev-only tools (not compiled in prod)
+- `/robots.txt`, `/healthz` — crawler policy and health check
 
 ## Key conventions
 
-- All IDs are binary UUIDs (`binary_id: true`); all timestamps are `utc_datetime`
-- Use `Req` for HTTP requests (already included), not HTTPoison/Tesla/httpc
-- Tailwind CSS v4 — no `tailwind.config.js`; uses `@import "tailwindcss"` syntax in `app.css`
+- All IDs are random UUIDs (`crypto.randomUUID()`); all timestamps are ISO-8601 strings
+- Fetch externally via the native `fetch()` API — no HTTP client libraries
+- Tailwind CSS v4 — no `tailwind.config.js`; uses `@import "tailwindcss"` syntax in `src/client/app.css`
 - Write Tailwind-based components manually — do NOT use daisyUI components
-- No inline `<script>` tags in templates (except theme bootstrap in root layout) — use colocated JS hooks or external hooks in `assets/js/`
+- No inline `<script>` tags in HTML (except the panic-flag bootstrap which carries the CSP nonce) — all JS is bundled and referenced via `<script type="module">`
 - No third-party analytics, tracking pixels, or external scripts — CSP enforces this
-- **No PWA. sTELgano is a pure web app.** No `manifest.json`, no `<link rel="manifest">`, no `theme-color` meta, no service worker, no installable app icon. Rationale: every PWA surface (install banners, app drawers, `chrome://apps`, iOS home-screen long-press menus) is a passcode-test failure — an intimate-access attacker inspecting the device sees the app's name, description, and category, which breaks the "blank entry screen" invariant. Anyone shipping a PWA variant would need to ship a separate fork with neutral branding.
-- AGPL-3.0 licence; all source files need SPDX header: `# SPDX-License-Identifier: AGPL-3.0-only`
+- **No PWA. sTELgano is a pure web app.** No `manifest.json`, no service worker, no installable icon. Every PWA surface is a passcode-test failure.
+- AGPL-3.0 licence; all source files need SPDX header: `// SPDX-License-Identifier: AGPL-3.0-only`
 - UI terminology: "steg number" (technical), "the number in your contacts" (user-facing); "channel" not "conversation"
-- "Room" is used only in internal code/DB, not user-facing copy
+- "Room" is used only in internal code/DO storage, not user-facing copy
 - **Commit messages never include `Co-Authored-By: Claude` or any AI/agent attribution** — write clean subject + body only. Past projects had to squash many commits to strip accumulated AI attribution; we don't repeat that here.
-- **Files under `project/launch_content*.md` are gitignored by policy** — they're local planning drafts (launch strategy, objection playbooks, platform lists) kept private. Confirm any new `launch_content*.md` variant is in `.gitignore` before any `git add`.
+- **Files under `project/launch_content*.md` are gitignored by policy** — they're local planning drafts. Confirm any new `launch_content*.md` variant is in `.gitignore` before any `git add`.
+- Run `npm run types` after changing `wrangler.toml` to regenerate `worker-configuration.d.ts`. The file is gitignored (machine-generated). Secrets set via `wrangler secret put` must be declared manually in `src/env.ts` since `wrangler types` cannot discover them without CF auth.
 
 ## Database
 
-PostgreSQL with binary UUIDs. Migrations in [priv/repo/migrations/](priv/repo/migrations/). Oban jobs table migrated alongside app tables.
+**D1 (SQLite at the edge).** Migrations in [`migrations/`](migrations/):
+- `0001_create_extension_tokens.sql` — `extension_tokens` table (blind payment token store; no `room_id` column by design)
+- `0004_live_counters.sql` — `live_counters` table (active-room snapshot for the admin dashboard)
+
+Room state (access records, current message, TTL, tier) lives entirely in DO Storage (SQLite per-DO), not in D1. D1 carries only global data that needs to outlive a specific DO instance.
+
+Apply migrations: `npm run d1:migrate:local` (dev) / `npm run d1:migrate:remote` (prod).
 
 ## Environment variables (production)
 
+Non-sensitive vars in `wrangler.toml [vars]`; secrets set via `wrangler secret put <NAME>`.
+
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `PHX_SERVER` | Yes | Set to `true` so the release binds the HTTP endpoint on boot |
-| `SECRET_KEY_BASE` | Yes | Phoenix session signing |
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `HOST` | Yes | Production hostname used by `url:` config and `check_origin` |
-| `ADMIN_PASSWORD` | Yes | Admin dashboard password (HTTP Basic Auth for `/admin`) |
+| `HOST` | Yes | Production hostname (CORS, `check_origin`, Paystack email domain) |
+| `ADMIN_PASSWORD` | Yes | Admin dashboard password |
 | `ADMIN_USERNAME` | No | Admin dashboard username (default: `admin`) |
-| `PORT` | No | HTTP port the endpoint binds to (default: `4000`) |
-| `POOL_SIZE` | No | DB connection pool size (default: `10`) |
-| `ECTO_IPV6` | No | Set to `true`/`1` to connect to the DB over IPv6 |
-| `DNS_CLUSTER_QUERY` | No | `:dns_cluster` query for multi-node release deployments |
-| `MONETIZATION_ENABLED` | No | Set to `true` to enable paid tiers |
+| `PAYMENT_CURRENCY` | No | ISO 4217 display currency (default: `USD`) |
+| `PRICE_CENTS` | No | Price in smallest display-currency unit (default: `200`) |
+| `FREE_TTL_DAYS` | No | Free tier TTL in days (default: `7`) |
+| `PAID_TTL_DAYS` | No | Paid tier TTL in days (default: `365`) |
+| `MONETIZATION_ENABLED` | No | Set to `"true"` to enable paid tiers |
+| `CF_ACCOUNT_ID` | No | CF account ID for admin AE GraphQL queries (safe to commit) |
+| `CF_AE_API_TOKEN` | No | CF Analytics Engine API token (secret) |
 | `PAYSTACK_SECRET_KEY` | If monetization | Paystack secret key |
-| `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key |
+| `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key (not read server-side; hosted checkout only) |
 | `PAYSTACK_CALLBACK_URL` | If monetization | Post-payment redirect URL |
-| `PAYSTACK_RECEIPT_EMAIL_DOMAIN` | If monetization | Operator-owned domain used as the `@domain` of the anonymous placeholder email sent to Paystack on initialize |
-| `PAYSTACK_SETTLEMENT_CURRENCY` | No | ISO 4217 code submitted to Paystack when it differs from `PAYMENT_CURRENCY` (e.g. show USD, settle KES). Leave unset to disable conversion. |
-| `PAYSTACK_FX_BUFFER_PCT` | No | Percent buffer on converted amount (default: 5) |
-| `PAYMENT_FX_FALLBACK_RATE` | No | Seed rate for `FxRate` (quote per base unit). Used if the boot fetch fails. |
-| `FREE_TTL_DAYS` | No | Free tier TTL (default: 7) |
-| `PAID_TTL_DAYS` | No | Paid tier TTL (default: 365) |
-| `PRICE_CENTS` | No | Price in smallest display-currency unit (default: 200) |
-| `PAYMENT_CURRENCY` | No | ISO 4217 display currency (default: USD). What the UI shows and what `PRICE_CENTS` is denominated in. |
+| `PAYSTACK_RECEIPT_EMAIL_DOMAIN` | If monetization | Operator-controlled domain for anonymous placeholder emails |
+| `PAYSTACK_SETTLEMENT_CURRENCY` | No | ISO 4217 code when Paystack settlement currency differs from `PAYMENT_CURRENCY` |
+| `PAYSTACK_FX_BUFFER_PCT` | No | Percent buffer on FX-converted amounts (default: `5`) |
+| `PAYMENT_FX_FALLBACK_RATE` | No | Fallback FX rate (quote per base unit) if KV is empty |
 
-Salts (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`) are public constants in client JS; rotating them is a breaking change (all existing rooms become inaccessible).
-
-See [.env.example](.env.example) for the authoritative reference (what `config/runtime.exs` actually reads, with examples).
+Salts (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`) are public constants in `src/client/crypto/anon.ts`; rotating them is a breaking change.
 
 ## Deployment
 
-The repo ships a reference pipeline targeting a plain DigitalOcean droplet (or any SSH-reachable Linux host):
+CI/CD via GitHub Actions ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)):
+- **staging** — `wrangler deploy --env staging` on every push to `staging` branch; deploys to `stelgano-staging` Worker at `staging.stelgano.com`
+- **production** — requires a PR from `staging` → `main`; merging triggers `wrangler deploy` to the `stelgano` Worker at `stelgano.com`
 
-- [.github/workflows/deploy.yml](.github/workflows/deploy.yml) — builds a release with `mix release` in GitHub Actions, tarballs it, scp's to `$DO_HOST`, runs `Stelgano.Release.migrate()`, and bounces the systemd unit. Triggers on every push to `main` (or manual `workflow_dispatch`).
-- [deploy/stelgano.service](deploy/stelgano.service) — systemd unit template. Copy to `/etc/systemd/system/stelgano.service` on the droplet; reads env from `/opt/stelgano/.env`.
-- Required GitHub Actions secrets: `DO_HOST`, `DO_USERNAME`, `DO_SSH_KEY` (plus optional `DO_SSH_PORT`). The deploy user needs passwordless sudo for `systemctl {start,stop,is-active} stelgano` and `journalctl -u stelgano`.
-- Releases land at `/opt/stelgano/releases/<timestamp>`, with `/opt/stelgano/current` as the symlink the systemd unit targets. Last 3 releases are kept for rollback.
-- Migrations run as part of each deploy, not separately — the `Stelgano.Release.migrate/0` eval happens between extracting the new release and starting the unit.
-- Front with nginx or Caddy on `:443` proxying to `127.0.0.1:4000`; TLS via Let's Encrypt.
+No server process, no SSH, no systemd. Cloudflare manages the runtime. Rollback via the CF dashboard (version-based rollouts).
 
-A [Dockerfile](Dockerfile) is present for local testing and alternative deploy targets but isn't used by the reference pipeline.
+D1 migrations run as part of the deploy workflow before the Worker goes live.
 
 ## Testing
 
-Target: 90% minimum coverage (CI-enforced via ExCoveralls). Test layers:
-- Unit: ExUnit for Rooms context and schemas
-- Integration: `Phoenix.ChannelTest` for channel, `Phoenix.LiveViewTest` + `LazyHTML` for LiveViews
-- Security headers tests verify CSP and all response headers
+Two Vitest projects (see `vitest.workspace.ts`):
+- **Pure-function** (`vitest.config.ts`) — Node/jsdom environment; tests for client-side state machine, crypto helpers, protocol utilities
+- **Worker-runtime** (`vitest.workers.config.ts`) — runs under real `workerd` via `@cloudflare/vitest-pool-workers`; tests for RoomDO, D1 helpers, Worker routes, rate limiting
 
-Run `mix precommit` before submitting changes — it runs the full quality suite.
+Run `npm run precommit` before pushing — runs typecheck + Biome check + full test suite.
 
 ## Design system
 
 Dark-first glassmorphism UI. All surfaces use `backdrop-filter: blur(16px)` with translucent dark backgrounds. Accent colour is emerald green (`#10B981`).
 
-**Fonts:** Outfit (display/headings), Inter (body/UI), JetBrains Mono (code/hashes). **Self-hosted** — Latin-normal WOFF2 files live in [priv/static/fonts/](priv/static/fonts/), sourced from the Fontsource npm packages (`@fontsource/inter`, `@fontsource/outfit`, `@fontsource/jetbrains-mono`). Not loaded from Google Fonts CDN — doing so would ping `fonts.googleapis.com` / `fonts.gstatic.com` on every pageload and leak IP + UA + timestamp to Google. `font-src` and `style-src` in CSP are locked to `'self'`.
+**Fonts:** Outfit (display/headings), Inter (body/UI), JetBrains Mono (code/hashes). **Self-hosted** — Latin-normal WOFF2 files live in [`public/fonts/`](public/fonts/). Not loaded from Google Fonts CDN — doing so would leak IP + UA + timestamp to Google.
 
 **Key CSS tokens:** `--color-primary` (#10B981), `--bg-dark` (#030712), `--text-main` (#f9fafb), `--text-muted` (#9ca3af), `--color-surface` (rgba(17,24,39,0.6)), `--color-surface-border` (rgba(255,255,255,0.1)).
 
 **Component classes:** `.glass-panel`, `.glass-input`, `.glass-button`, `.btn-ghost`, `.btn-danger`, `.btn-icon`, `.entry-card`, `.chat-layout`, `.bubble.sent`, `.bubble.received`, `.modal-card`, `.lock-overlay`, `.wordmark`.
 
-**Chat bubble geometry:** sent `border-radius: 1.5rem 1.5rem 0.25rem 1.5rem` (24px with 4px tail bottom-right), received `1.5rem 1.5rem 1.5rem 0.25rem` (4px tail bottom-left). Sent uses emerald gradient, received uses frosted glass.
+**Chat bubble geometry:** sent `border-radius: 1.5rem 1.5rem 0.25rem 1.5rem` (24px, 4px tail bottom-right), received `1.5rem 1.5rem 1.5rem 0.25rem` (4px tail bottom-left). Sent uses emerald gradient, received uses frosted glass.
 
 **Touch targets:** 56px minimum height on interactive elements (exceeds WCAG 44px). All motion respects `prefers-reduced-motion`. Mobile-first: 320px minimum width.
 
-**SessionStorage keys** (cleared on logout/panic/room-expiry):
-- Session state (6 keys, persisted across lock/re-auth): `stelegano_phone`, `stelegano_room_id`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`, `stelegano_extension_secret`
-- Transient (read-once): `stelegano_handoff_phone` (+ `stelegano_handoff_tier`) — set by `PaymentInitiator` before redirecting to Paystack checkout, read & deleted by `AnonChat.mounted()` when the user lands back on `/chat` from `/payment/callback`. Saves the user from retyping the phone to redeem the extension token. Keeps the phone out of the URL, address bar, history, and server logs.
+**SessionStorage keys** (cleared on panic/room-expiry/logout):
+- Persistent session state (4 keys, survive lock/re-auth): `stelegano_phone`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`
+- Transient (read-once, in `STORAGE_KEYS` so cleared with the rest on expiry/panic): `stelegano_handoff_phone`, `stelegano_handoff_tier` — set before Paystack redirect, read & deleted on return from `/payment/callback`; `stelegano_extension_secret` — set before Paystack redirect, deleted immediately before join on return
 - UX preference (persists across sessions *except panic*): `stelgano_selected_country` — last-picked country in the generator drawer.
 
-**Panic clear (`/x`)** redirects to `/?p=1`. The root layout's inline bootstrap detects the flag, calls `sessionStorage.clear()` (nuking every key including the country preference), and strips `?p=1` from the URL via `history.replaceState` before the user sees the address bar. The flag is the only way server→client state can travel across the redirect without a LiveView connection, and the flag itself leaks nothing (it's just `p=1`).
+**Panic clear (`/x`)** redirects to `/?p=1`. The inline bootstrap script detects `?p=1`, calls `sessionStorage.clear()`, and strips the flag from the URL via `history.replaceState` before the user sees the address bar.

@@ -15,7 +15,6 @@
 //       expired (sweep)  expired (sweep)
 
 const HEX64_RE = /^[a-f0-9]{64}$/;
-const VALID_CURRENCIES = new Set(["USD", "KES", "NGN", "GHS", "ZAR", "EUR", "GBP"]);
 
 export type TokenStatus = "pending" | "paid" | "redeemed";
 
@@ -42,7 +41,8 @@ export type CreatePendingArgs = {
 
 /** Creates a new pending token. Validates token_hash is 64-char lowercase
  *  hex (SHA-256 digest of the client-side extension_secret), amount > 0,
- *  and currency is one of the supported set. Throws on invalid input. */
+ *  Throws on invalid input. Currency is validated by the payment
+ *  provider (Paystack rejects unsupported codes directly). */
 export async function createPending(
   db: D1Database,
   args: CreatePendingArgs,
@@ -53,45 +53,55 @@ export async function createPending(
   if (!Number.isInteger(args.amountCents) || args.amountCents <= 0) {
     throw new Error("amount_cents must be a positive integer");
   }
-  if (!VALID_CURRENCIES.has(args.currency)) {
-    throw new Error(`currency must be one of ${[...VALID_CURRENCIES].join(", ")}`);
+  if (!args.currency || !/^[A-Z]{3}$/.test(args.currency)) {
+    throw new Error("currency must be a 3-letter ISO 4217 code");
   }
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  await db
+  const row = await db
     .prepare(
       `INSERT INTO extension_tokens
         (id, token_hash, status, amount_cents, currency, expires_at, inserted_at, updated_at)
-       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)
+       RETURNING id, token_hash, status, amount_cents, currency, provider_ref,
+                 paid_at, redeemed_at, expires_at, inserted_at, updated_at`,
     )
     .bind(id, args.tokenHash, args.amountCents, args.currency, args.expiresAt, now, now)
-    .run();
+    .first<ExtensionToken>();
 
-  const row = await findByTokenHash(db, args.tokenHash);
   if (!row) {
-    // Should be impossible — we just inserted it. Throw rather than
-    // returning a fake row so the caller hears about real DB problems.
-    throw new Error("createPending: token disappeared after insert");
+    throw new Error("createPending: INSERT RETURNING returned no row");
   }
   return row;
 }
 
-/** Returns the token with the given hash, or null if not found. */
+/** Returns the token with the given hash if it exists and has not expired,
+ *  or null otherwise. Expired-but-not-swept tokens are treated as missing
+ *  so they cannot be redeemed in the window between expiry and the daily cron. */
 export async function findByTokenHash(
   db: D1Database,
   tokenHash: string,
 ): Promise<ExtensionToken | null> {
   if (!HEX64_RE.test(tokenHash)) return null;
+  const now = new Date().toISOString();
   return db
     .prepare(
       `SELECT id, token_hash, status, amount_cents, currency, provider_ref,
               paid_at, redeemed_at, expires_at, inserted_at, updated_at
-       FROM extension_tokens WHERE token_hash = ?`,
+       FROM extension_tokens WHERE token_hash = ? AND expires_at > ?`,
     )
-    .bind(tokenHash)
+    .bind(tokenHash, now)
     .first<ExtensionToken>();
+}
+
+/** Deletes a token row immediately. Used after redemption to close the
+ *  linkability window — a redeemed token's redeemed_at timestamp would
+ *  otherwise sit in D1 until the daily sweep (up to 30 days). */
+export async function deleteToken(db: D1Database, tokenHash: string): Promise<void> {
+  if (!HEX64_RE.test(tokenHash)) return;
+  await db.prepare("DELETE FROM extension_tokens WHERE token_hash = ?").bind(tokenHash).run();
 }
 
 /** Marks a token as paid, optionally recording the provider's reference

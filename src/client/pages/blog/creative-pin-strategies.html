@@ -1,0 +1,388 @@
+<!--
+  title: Creative PIN Strategies — sTELgano Blog
+-->
+
+<article class="max-w-4xl mx-auto space-y-16 py-12 animate-in pb-40">
+  <div class="text-center space-y-8 pt-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] animate-in stagger-1 shadow-[0_0_20px_rgba(0,255,163,0.1)]">
+      <svg class="size-3" aria-hidden="true"><use href="/icons.svg#key_round"/></svg>
+      Security
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tighter text-white font-display animate-in stagger-2 leading-tight">
+      Creative PIN Strategies
+    </h1>
+
+    <p class="text-slate-400 text-lg sm:text-xl font-medium leading-relaxed max-w-2xl mx-auto animate-in stagger-3">
+      Unique PINs Without Memorising a Dozen Numbers
+    </p>
+
+    <div class="flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 animate-in stagger-3">
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#calendar"/></svg> 2026-04-29</span>
+      <span class="flex items-center gap-1.5"><svg class="size-3" aria-hidden="true"><use href="/icons.svg#clock"/></svg> 8 min read</span>
+    </div>
+  </div>
+
+  <div class="space-y-12 animate-in stagger-4">
+
+    <!-- The Challenge -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">The Multi-Channel Problem</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#layers"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>One channel is simple: choose a PIN, keep it in your head. Two or more channels introduce a genuine tension. You have three options, and none of them is obviously right:</p>
+          <ul class="space-y-3 pl-4 border-l-2 border-white/10">
+            <li><span class="text-white font-semibold">Same PIN everywhere.</span> Easy to remember. But a single PIN leak exposes every channel simultaneously &mdash; someone who sees you type your PIN, or learns it through any means, can now try it on every steg number they know you use.</li>
+            <li><span class="text-white font-semibold">Fully independent PINs.</span> Maximum security. But memorising N truly random PINs scales badly. Five channels means five secrets, each of which is as important as the others.</li>
+            <li><span class="text-white font-semibold">A derivation rule.</span> You memorise one master secret and one rule. The rule produces a unique PIN per channel from the steg number. Leaking one channel&rsquo;s PIN reveals nothing about any other channel&rsquo;s PIN. This article is about building your own rule.</li>
+          </ul>
+          <p>The strategies below all follow the same structure: one master PIN (something you already know), combined with a rule applied to the steg number (something the system provides).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- What the Protocol Covers and What It Doesn't -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What the Protocol Covers and What It Doesn&rsquo;t</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6">
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>The access credential is computed as:</p>
+          <div class="font-mono text-xs text-slate-400 bg-white/5 rounded-lg px-4 py-4 border border-white/10 overflow-x-auto">SHA-256(<span class="text-primary">phone</span> + ":" + PIN + ":" + ACCESS_SALT)</div>
+          <p>Because the steg number is the leading input, a computed credential is bound to a specific channel. <span class="text-white font-semibold">Replaying the credential hash itself on a different channel will fail.</span></p>
+          <p>But that is not how password managers work. A PM operates on raw form fields before any JavaScript runs. It prompts to save the digit string you typed, stores it, and auto-fills that same digit string later. The PM never sees the hash &mdash; only the raw PIN. If it auto-fills "1234" and you accept, the client reads your steg number from the phone field, computes the hash, and submits it. Whether that succeeds depends entirely on whether "1234" is the correct PIN for that channel &mdash; nothing in the hash prevents the PM from suggesting it.</p>
+          <p>sTELgano addresses this at the field level. The PIN field uses <span class="font-mono text-white text-sm">type="text"</span> rather than <span class="font-mono text-white text-sm">type="password"</span> — removing the primary signal browsers use to identify a credential pair. Password managers look for a <span class="font-mono text-white text-sm">type="password"</span> field to identify the password and treat the preceding text field as the username; without it, they do not recognise the form as a login form. Visual masking is applied via CSS (<span class="font-mono text-white text-sm">-webkit-text-security: disc</span>) so the field still shows dots. An <span class="font-mono text-white text-sm">autocomplete="one-time-code"</span> marker adds a secondary hint. <span class="text-white font-semibold">A derivation rule is still the recommended practice</span> &mdash; it is the only measure that also covers raw PIN exposure (observation, disclosure), which no field attribute can prevent.</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+          </div>
+          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">Credential Replay</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">An attacker intercepts the computed hex credential for channel A and submits it directly to channel B. The hash fails &mdash; different steg number, different expected value.</p>
+          <p class="text-primary text-xs font-bold uppercase tracking-wider">Covered by the protocol</p>
+        </div>
+        <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#eye"/></svg>
+          </div>
+          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">Raw PIN Exposure</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">Someone learns the raw digit string you typed &mdash; by watching, shoulder-surfing, or any other means. If you reuse the same PIN everywhere, every channel is now accessible. PM saving is partially mitigated at the field level (see above), but observation and disclosure cannot be addressed technically.</p>
+          <p class="text-yellow-500/80 text-xs font-bold uppercase tracking-wider">Partially mitigated technically &mdash; derivation rule closes the gap</p>
+        </div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 space-y-4">
+        <p class="text-slate-400 font-medium leading-relaxed text-base">A derivation rule is the complete defence. The field-level measure reduces the chance a PM saves a PIN at all. But if it does save, and if someone observes your PIN, a derivation rule means channel A&rsquo;s PIN (<span class="font-mono text-white">83012671</span>) tells an attacker nothing about channel B&rsquo;s PIN (<span class="font-mono text-white">83010842</span>). The strategies below are how you build that rule.</p>
+      </div>
+    </section>
+
+    <!-- Example Setup -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">How to Read the Examples</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6">
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>All examples below use the same two steg numbers so you can compare outputs across strategies:</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-1">
+              <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Steg number A</p>
+              <p class="font-mono text-white text-lg">+1 (415) 555-2671</p>
+              <p class="font-mono text-slate-500 text-xs">Digits only: 14155552671</p>
+            </div>
+            <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-1">
+              <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Steg number B</p>
+              <p class="font-mono text-white text-lg">+44 7700 900 842</p>
+              <p class="font-mono text-slate-500 text-xs">Digits only: 447700900842</p>
+            </div>
+          </div>
+          <p>Master PIN throughout all examples: <span class="font-mono text-primary">8301</span></p>
+          <p>Every strategy below is purely mental arithmetic &mdash; no writing, no device, no storage. The rule should be simple enough that you can reconstruct the PIN in your head at any time.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 1 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 1 &mdash; Suffix</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> master PIN + last N digits of the steg number.</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-2 font-mono text-sm">
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel A (last 4):</span><span class="text-primary">8301<span class="text-white">2671</span></span></div>
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel B (last 4):</span><span class="text-primary">8301<span class="text-white">0842</span></span></div>
+          </div>
+          <p>The last four digits of a phone number (the subscriber number in North America, the line number in most numbering plans) are the most unique part of a local number. They are also the part most likely to differ between two steg numbers in the same country.</p>
+          <p class="text-slate-500 text-sm"><span class="text-yellow-500/80 font-semibold">Caveat:</span> Two steg numbers that differ only in a predictable way (e.g. sequential numbers) produce related PINs. Use if your steg numbers are randomly generated &mdash; as they are by the in-app generator.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 2 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 2 &mdash; Prefix</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> first N digits of the steg number + master PIN.</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-2 font-mono text-sm">
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel A (first 4):</span><span class="text-primary"><span class="text-white">1415</span>8301</span></div>
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel B (first 4):</span><span class="text-primary"><span class="text-white">4477</span>8301</span></div>
+          </div>
+          <p>Using the first digits means you are anchoring on the country code and area code. Two steg numbers in the same country with the same area code will share the same prefix &mdash; the channel distinction is then carried entirely by the master PIN position. Prefer Suffix for stronger inter-channel separation if your steg numbers share an area code.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 3 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 3 &mdash; Reversed Suffix</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> master PIN + last N digits of the steg number, reversed.</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-2 font-mono text-sm">
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel A (last 4 reversed):</span><span class="text-primary">8301<span class="text-white">1762</span></span></div>
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel B (last 4 reversed):</span><span class="text-primary">8301<span class="text-white">2480</span></span></div>
+          </div>
+          <p>Reversing the suffix adds a small step that makes the derivation less obvious to a casual observer who knows both your master PIN and the steg number. It is not a cryptographic defence &mdash; anyone who knows your rule can still compute the PIN &mdash; but it reduces exposure from pure memorisation leakage.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 4 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 4 &mdash; Middle Extraction</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> master PIN + digits at a fixed middle position (e.g. positions 4&ndash;7 counting from 1).</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-2 font-mono text-sm">
+            <div class="flex items-start gap-2"><span class="text-slate-500 shrink-0">Channel A:</span><span class="break-all"><span class="text-slate-600">1415</span><span class="text-white">5552</span><span class="text-slate-600">671</span> &rarr; 8301<span class="text-primary">5552</span></span></div>
+            <div class="flex items-start gap-2"><span class="text-slate-500 shrink-0">Channel B:</span><span class="break-all"><span class="text-slate-600">4477</span><span class="text-white">0090</span><span class="text-slate-600">0842</span> &rarr; 8301<span class="text-primary">0090</span></span></div>
+          </div>
+          <p>The middle of a phone number (the exchange prefix in North America, digits 5&ndash;8 in many European formats) varies enough to distinguish most randomly-generated steg numbers. Choose a position window that stays within the number length for all steg numbers you use.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 5 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 5 &mdash; Interleaving</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> alternate digits from master PIN and from the steg number (e.g. M<sub>1</sub>P<sub>1</sub>M<sub>2</sub>P<sub>2</sub>&hellip;).</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-2 font-mono text-sm">
+            <p class="text-slate-500 text-xs">Master: 8301 &bull; Last 4 of A: 2671</p>
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel A:</span><span class="text-primary">8<span class="text-white">2</span>3<span class="text-white">6</span>0<span class="text-white">7</span>1<span class="text-white">1</span></span></div>
+            <p class="text-slate-500 text-xs">Master: 8301 &bull; Last 4 of B: 0842</p>
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel B:</span><span class="text-primary">8<span class="text-white">0</span>3<span class="text-white">8</span>0<span class="text-white">4</span>1<span class="text-white">2</span></span></div>
+          </div>
+          <p>Interleaving produces an 8-digit PIN from a 4-digit master and 4 steg digits. The resulting PIN carries both signals inseparably &mdash; knowing the PIN but not the rule reveals nothing about either component. Harder to reconstruct under pressure; write it down in a private test session first.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 6 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 6 &mdash; Digit Sum</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> master PIN + (sum of all digits of the steg number) mod 100, zero-padded to 2 digits.</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-3 font-mono text-sm">
+            <div>
+              <p class="text-slate-500 text-xs mb-1">Channel A: 1+4+1+5+5+5+5+2+6+7+1 = 42 &rarr; 42 mod 100 = 42</p>
+              <p><span class="text-primary">8301<span class="text-white">42</span></span></p>
+            </div>
+            <div>
+              <p class="text-slate-500 text-xs mb-1">Channel B: 4+4+7+7+0+0+9+0+0+8+4+2 = 45 &rarr; 45 mod 100 = 45</p>
+              <p><span class="text-primary">8301<span class="text-white">45</span></span></p>
+            </div>
+          </div>
+          <p>The digit sum condenses the entire steg number into two digits. It is easy to compute in your head and fully reconstructable without writing anything down. The trade-off is that many phone numbers share the same digit sum &mdash; the space of possible suffixes is only 0&ndash;99. Use a larger modulus (1000, four digits) if you want stronger inter-channel differentiation.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 7 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 7 &mdash; Area Code Anchor</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> area code (or country code + first N local digits) as prefix, master PIN as suffix.</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-2 font-mono text-sm">
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel A (area 415):</span><span class="text-primary"><span class="text-white">415</span>8301</span></div>
+            <div class="flex justify-between items-center"><span class="text-slate-500">Channel B (country+prefix 447):</span><span class="text-primary"><span class="text-white">447</span>8301</span></div>
+          </div>
+          <p>The area code is the geographic identity of a steg number. It is easy to identify by scanning the number and shifts naturally from country to country. If two of your channels happen to share an area code, use the full 6-digit prefix (country code + area code) as the differentiator.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 8 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 8 &mdash; Every Other Digit</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> take every even-indexed digit (positions 2, 4, 6, 8&hellip;) from the steg number, use the first 4, append to master PIN.</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-3 font-mono text-sm">
+            <div>
+              <p class="text-slate-500 text-xs mb-1">Channel A: 1<span class="text-white underline">4</span>1<span class="text-white underline">5</span>5<span class="text-white underline">5</span>5<span class="text-white underline">2</span>671 &rarr; 4552</p>
+              <p><span class="text-primary">8301<span class="text-white">4552</span></span></p>
+            </div>
+            <div>
+              <p class="text-slate-500 text-xs mb-1">Channel B: 4<span class="text-white underline">4</span>7<span class="text-white underline">7</span>0<span class="text-white underline">0</span>9<span class="text-white underline">0</span>0842 &rarr; 4700</p>
+              <p><span class="text-primary">8301<span class="text-white">4700</span></span></p>
+            </div>
+          </div>
+          <p>Sampling alternating digits spreads extraction across the whole number rather than concentrating it at one end. It is slightly harder to compute mentally &mdash; count along the digits and pick every second one. Practice the rule on your specific steg numbers before committing to it.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 9 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 9 &mdash; Nth Channel Index</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> for channel N (1, 2, 3&hellip;), take digits at positions N through N+3 in the steg number, append to master PIN.</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-3 font-mono text-sm">
+            <div>
+              <p class="text-slate-500 text-xs mb-1">Channel 1 (positions 1&ndash;4): 1415 5552671</p>
+              <p><span class="text-primary">8301<span class="text-white">1415</span></span></p>
+            </div>
+            <div>
+              <p class="text-slate-500 text-xs mb-1">Channel 2 (positions 2&ndash;5): 1<u>4155</u>552671</p>
+              <p><span class="text-primary">8301<span class="text-white">4155</span></span></p>
+            </div>
+          </div>
+          <p>This strategy is less about making different channels on the same steg number unique (you would need a different steg number per channel anyway) and more about having a consistent mental habit: &ldquo;this is my second channel, so I start reading the steg number from position 2.&rdquo; The rule reduces cognitive load across many channels because you never have to remember which suffix you chose &mdash; only your channel number.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Strategy 10 -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Strategy 10 &mdash; Custom Position Rule</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
+          <p><span class="text-white font-semibold">Rule:</span> choose any four positions once, memorise them. For every channel, read the steg number digit at each of those positions.</p>
+          <div class="bg-white/5 rounded-lg p-4 border border-white/10 space-y-3 font-mono text-sm">
+            <p class="text-slate-500 text-xs">Positions: 2, 5, 9, 11</p>
+            <div>
+              <p class="text-slate-500 text-xs mb-1">Channel A: 1<span class="text-white underline">4</span>15<span class="text-white underline">5</span>552<span class="text-white underline">6</span>7<span class="text-white underline">1</span> &rarr; 4561</p>
+              <p><span class="text-primary">8301<span class="text-white">4561</span></span></p>
+            </div>
+            <div>
+              <p class="text-slate-500 text-xs mb-1">Channel B: 4<span class="text-white underline">4</span>77<span class="text-white underline">0</span>090<span class="text-white underline">0</span>8<span class="text-white underline">4</span>2 &rarr; 4004</p>
+              <p><span class="text-primary">8301<span class="text-white">4004</span></span></p>
+            </div>
+          </div>
+          <p>You choose the positions once and keep them constant. The positions themselves become part of your private rule &mdash; they are as much a secret as your master PIN. Someone who sees your steg number does not know which positions you read. Someone who knows your positions still needs the master PIN. The two components are independent.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Honest Caveats -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Honest Caveats</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6">
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>These strategies are practical tools, not cryptographic guarantees. A few things to keep in mind before adopting one:</p>
+          <ul class="space-y-5 pl-4 border-l-2 border-white/10">
+            <li>
+              <p class="text-white font-semibold mb-1">Entropy is lower than independent PINs.</p>
+              <p>A derivation rule means the PINs across your channels are correlated. If an attacker knows your master PIN and your rule, they can compute all your channel PINs immediately. Truly independent PINs are harder to crack even with partial knowledge. The trade-off is real: memorisation ease costs some theoretical entropy.</p>
+            </li>
+            <li>
+              <p class="text-white font-semibold mb-1">Two-channel compromise may reveal the rule.</p>
+              <p>If an attacker learns both the steg number and the final PIN for two of your channels, they may be able to infer your derivation rule. This is consistent with sTELgano&rsquo;s stated threat model (intimate-access attackers, not state surveillance) but is worth naming explicitly.</p>
+            </li>
+            <li>
+              <p class="text-white font-semibold mb-1">Rule reuse outside sTELgano defeats the benefit.</p>
+              <p>If you apply the same derivation rule to produce PINs for unrelated services, a compromise elsewhere can leak information about your sTELgano channels. Treat the rule and the master PIN as a pair that only appears inside sTELgano.</p>
+            </li>
+            <li>
+              <p class="text-white font-semibold mb-1">Any rule is better than no rule.</p>
+              <p>The primary alternative &mdash; reusing a single PIN across channels without any derivation &mdash; means a single observation gives an attacker access to every channel. Even a simple suffix rule breaks that link. Perfect is the enemy of good here.</p>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Choosing a Rule -->
+    <section class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Choosing Your Rule</h2>
+        <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
+          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#brain"/></svg>
+        </div>
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>The right rule is the one you will actually use reliably. A sophisticated rule you cannot reconstruct under pressure is worse than a simple rule you can apply in two seconds. Criteria, in order of importance:</p>
+          <ol class="space-y-3 pl-4 border-l-2 border-primary/20 list-none">
+            <li class="flex gap-3"><span class="text-primary font-mono font-bold shrink-0">01</span><span><span class="text-white font-semibold">You can reconstruct it cold.</span> Test your rule when you have not thought about it for a week. If you hesitate, simplify it.</span></li>
+            <li class="flex gap-3"><span class="text-primary font-mono font-bold shrink-0">02</span><span><span class="text-white font-semibold">It produces visibly different PINs for your actual steg numbers.</span> Apply the rule to all your steg numbers and check the results differ. Two steg numbers from the same country with the same area code may produce similar outputs under some strategies.</span></li>
+            <li class="flex gap-3"><span class="text-primary font-mono font-bold shrink-0">03</span><span><span class="text-white font-semibold">It does not require a device or storage.</span> A rule that needs a calculator or a note defeats the passcode test. Mental arithmetic only.</span></li>
+            <li class="flex gap-3"><span class="text-primary font-mono font-bold shrink-0">04</span><span><span class="text-white font-semibold">The master PIN is genuinely private.</span> The derived PINs are only as strong as the component you keep secret. A master PIN that is your birth year, your device PIN, or any other guessable number reduces the security of all channels simultaneously.</span></li>
+          </ol>
+          <p>Pick one strategy, test it on your steg numbers, and commit to it. The goal is a habit that runs automatically, not a puzzle you have to solve each time you open the app.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <div class="glass-card p-8 sm:p-12 text-center space-y-6 border-primary/20">
+      <p class="text-white font-extrabold text-xl font-display">Ready to apply a strategy?</p>
+      <p class="text-slate-400 font-medium">Open the chat, generate a steg number, and choose a rule before you type your first PIN.</p>
+      <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
+        Open Chat
+        <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+      </a>
+    </div>
+
+  </div>
+</article>

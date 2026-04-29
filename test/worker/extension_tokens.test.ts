@@ -70,15 +70,19 @@ describe("createPending", () => {
     ).rejects.toThrow(/positive integer/);
   });
 
-  it("rejects unsupported currency", async () => {
-    await expect(
-      createPending(env.DB, {
-        tokenHash: hex64("bad-ccy"),
-        amountCents: 200,
-        currency: "JPY",
-        expiresAt: TOMORROW,
-      }),
-    ).rejects.toThrow(/currency must be/);
+  it("rejects malformed currency code", async () => {
+    // createPending validates format only (3 uppercase letters); provider-level
+    // currency support is delegated to Paystack which rejects invalid codes directly.
+    for (const bad of ["jpy", "JPYY", "", "12A"]) {
+      await expect(
+        createPending(env.DB, {
+          tokenHash: hex64("bad-ccy"),
+          amountCents: 200,
+          currency: bad,
+          expiresAt: TOMORROW,
+        }),
+      ).rejects.toThrow(/currency must be/);
+    }
   });
 });
 

@@ -34,7 +34,7 @@ import {
   queryDailyMetrics,
   queryDiasporaMetrics,
 } from "./src/lib/analytics";
-import { createPending, deleteExpired, markPaid } from "./src/lib/extension_tokens";
+import { createPending, deleteExpired, deleteToken, markPaid } from "./src/lib/extension_tokens";
 import { refreshRate } from "./src/lib/fx_rate";
 import { getActiveRooms } from "./src/lib/live_counters";
 import {
@@ -405,6 +405,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 
   const html = renderAdminHtml({
     updated: `${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`,
+    aeReady,
     newToday,
     sum90,
     activeRooms,
@@ -426,6 +427,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 
 function renderAdminHtml(d: {
   updated: string;
+  aeReady: boolean;
   newToday: number;
   sum90: number;
   activeRooms: number;
@@ -546,9 +548,9 @@ function renderAdminHtml(d: {
       <!-- Metric cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
         ${adminMetricCard("Active Chats", d.activeRooms, "Live count, pushed by DO", "radio", true)}
-        ${adminMetricCard("New Chats Today", d.newToday, "Last 24h", "plus_circle")}
-        ${adminMetricCard("Messages Today", d.messagesThisDay, "Encrypted, current UTC day", "message_circle")}
-        ${adminMetricCard("Total (90d)", d.sum90, "New rooms, past 90 days", "calendar")}
+        ${adminMetricCard("New Chats Today", d.aeReady ? d.newToday : "—", "Last 24h", "plus_circle")}
+        ${adminMetricCard("Messages Today", d.aeReady ? d.messagesThisDay : "—", "Encrypted, current UTC day", "message_circle")}
+        ${adminMetricCard("Total (90d)", d.aeReady ? d.sum90 : "—", "New rooms, past 90 days", "calendar")}
       </div>
 
       <!-- Per-day breakdown -->
@@ -813,9 +815,9 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
     return jsonResponse({ error: "invalid_token_hash" }, 400);
   }
 
-  // Compute expiry now so the row carries an explicit deadline. v1
-  // sets this 7 days out (the unredeemed-token sweep window).
-  const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  // Compute expiry: 30 days (matching v1's Monetization.create_token/1).
+  // Tokens swept by the daily cron if abandoned before this deadline.
+  const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
   const amountCents = parseInt(env.PRICE_CENTS, 10) || 200;
   const currency = env.PAYMENT_CURRENCY || "USD";
 
@@ -838,6 +840,10 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
   if (initResult.ok) {
     return jsonResponse({ checkout_url: initResult.checkoutUrl });
   }
+
+  // Paystack init failed — delete the pending token we just created so it
+  // doesn't sit as an orphan in D1 for 30 days until the daily sweep.
+  void deleteToken(env.DB, tokenHash);
 
   // Map adapter error codes to client-visible codes. The client's
   // paymentErrorCopy() only knows about a few well-known ones.
