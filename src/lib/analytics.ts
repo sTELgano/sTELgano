@@ -266,6 +266,35 @@ export async function queryDiasporaMetrics(
     .sort((a, b) => b.free_rooms + b.paid_rooms - (a.free_rooms + a.paid_rooms));
 }
 
+/** Validates AE access by running a minimal 1-row query.
+ *  Returns the first GraphQL error message, or null on success. */
+export async function checkAeAccess(accountId: string, apiToken: string): Promise<string | null> {
+  const query = `{
+    viewer {
+      accounts(filter: { accountTag: "${escQ(accountId)}" }) {
+        ${AE_FIELD}(limit: 1) { count }
+      }
+    }
+  }`;
+  let body: AeResponse;
+  try {
+    const resp = await fetch(AE_GRAPHQL, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiToken}` },
+      body: JSON.stringify({ query }),
+    });
+    if (!resp.ok) return `AE HTTP ${resp.status}`;
+    body = (await resp.json()) as AeResponse;
+  } catch {
+    return "AE endpoint unreachable";
+  }
+  if (body.errors?.length) {
+    const first = (body.errors[0] as { message?: string })?.message;
+    return first ?? "AE returned errors";
+  }
+  return null;
+}
+
 /** Per-day event counts over the last `days` days, sorted newest first. */
 export async function queryDailyMetrics(
   accountId: string,
