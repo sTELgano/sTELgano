@@ -328,7 +328,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
           <svg class="size-6 text-primary" aria-hidden="true"><use href="/icons.svg#key_round"/></svg>
         </div>
         <h3 class="text-2xl font-extrabold text-white font-display uppercase tracking-tight">Vault Isolation</h3>
-        <p class="text-slate-400 text-sm leading-relaxed font-medium">To prevent accidental persistence of credentials, sTELgano implements <span class="text-white">Vault Isolation</span>. We use non-standard field attributes and <code class="text-primary/80 font-mono">one-time-code</code> markers to discourage browser password managers from offering to save your Secret Number or PIN. This ensures your primary authentication artifacts stay in your memory, not in a digital vault.</p>
+        <p class="text-slate-400 text-sm leading-relaxed font-medium">To prevent accidental persistence of credentials, sTELgano implements <span class="text-white">Vault Isolation</span>. The PIN field uses <code class="text-primary/80 font-mono">type="text"</code> rather than <code class="text-primary/80 font-mono">type="password"</code> — removing the primary signal browsers use to identify a credential field and pair it with a username. Visual masking (the dot characters) is applied via CSS rather than field type. An <code class="text-primary/80 font-mono">autocomplete="one-time-code"</code> marker provides a secondary hint that this is a transient code, not a reusable saved credential. This ensures your primary authentication artifacts stay in your memory, not in a digital vault.</p>
       </div>
     </div>
   </div>
