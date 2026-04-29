@@ -12,7 +12,7 @@ sTELgano is a privacy-focused anonymous messaging app and open protocol (sTELgan
 
 **Passcode test:** Every design decision must pass: "A suspicious partner unlocks your phone and opens sTELgano. What do they see?" Answer: a blank entry screen with two fields. Nothing else.
 
-**v1 note:** A prior Elixir/Phoenix implementation lives in the `elixir/` subdirectory (deployed from `main`). The Workers v2 codebase is everything outside that subdirectory. See [`elixir/AGENTS.md`](elixir/AGENTS.md) for v1-specific guidance.
+**v1 note:** A prior Elixir/Phoenix implementation existed and is referenced in comments and the migration blog post. It has been removed from the repository. This codebase (Workers v2) is the only active implementation.
 
 ## Common commands
 
