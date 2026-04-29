@@ -29,6 +29,7 @@ import {
   type CountryRow,
   type DailyRow,
   type DiasporaRow,
+  checkAeAccess,
   queryCFCountryMetrics,
   queryCountryMetrics,
   queryDailyMetrics,
@@ -374,6 +375,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   let daily: DailyRow[] = [];
   let diaspora: DiasporaRow[] = [];
   let activeRooms = 0;
+  let aeError: string | null = null;
   const aeReady = Boolean(env.CF_ACCOUNT_ID && env.CF_AE_API_TOKEN);
   try {
     [country, cfCountry, daily, diaspora, activeRooms] = await Promise.all([
@@ -395,6 +397,14 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
     // AE unavailable — show an empty dashboard rather than 500.
   }
 
+  // Run a cheap validation query to surface token/permission errors distinctly
+  // from "no data yet". Only runs when aeReady and no data came back.
+  if (aeReady && daily.length === 0 && country.length === 0) {
+    aeError = await checkAeAccess(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!).catch(
+      () => "AE check failed",
+    );
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const todayRow = daily.find((d) => d.day === today);
   const newToday = todayRow ? todayRow.free_new + todayRow.paid_new : 0;
@@ -406,6 +416,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   const html = renderAdminHtml({
     updated: `${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`,
     aeReady,
+    aeError,
     newToday,
     sum90,
     activeRooms,
@@ -428,6 +439,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 function renderAdminHtml(d: {
   updated: string;
   aeReady: boolean;
+  aeError: string | null;
   newToday: number;
   sum90: number;
   activeRooms: number;
@@ -544,6 +556,19 @@ function renderAdminHtml(d: {
           </button>
         </form>
       </div>
+
+      ${
+        d.aeError
+          ? `<div class="mx-4 sm:mx-0 flex items-start gap-3 px-5 py-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">
+               ${iconSvg("alert_triangle", "size-5 shrink-0 mt-0.5 text-amber-400")}
+               <div>
+                 <p class="font-semibold">Analytics Engine query error</p>
+                 <p class="mt-1 text-amber-400/80 font-mono text-xs break-all">${escapeAttr(d.aeError)}</p>
+                 <p class="mt-2 text-amber-400/60 text-xs">Check that CF_AE_API_TOKEN has <strong>Account Analytics: Read</strong> permission and the account ID matches.</p>
+               </div>
+             </div>`
+          : ""
+      }
 
       <!-- Metric cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
