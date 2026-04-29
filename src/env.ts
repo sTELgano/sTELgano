@@ -17,6 +17,7 @@ export interface Env extends Cloudflare.Env {
   PAYSTACK_FX_BUFFER_PCT?: string; // default "5" applied in code
   PAYMENT_FX_FALLBACK_RATE?: string;
   CF_AE_API_TOKEN?: string;
+  CF_AE_DATASET?: string; // defaults to "stelgano_events"; staging uses "stelgano_events_staging"
   // Secrets set via `wrangler secret put` — not in wrangler.toml, so absent
   // from the CI-generated Cloudflare.Env. Declaring here keeps typecheck
   // passing regardless of whether wrangler types had CF auth.
