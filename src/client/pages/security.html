@@ -269,7 +269,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
         </div>
         <div class="space-y-3">
           <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">N=1 Invariant</h4>
-          <p class="text-sm text-slate-400 leading-relaxed font-medium">At most one message exists per room at any time. When a reply is sent, the previous message is atomically deleted in a single database transaction. No history accumulates.</p>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium">At most one message exists per room at any time. When a reply is sent, the previous message is atomically deleted in the same transaction. This mirrors how real conversations work &mdash; people ask what their partner was replying to, quote it in their reply, or paraphrase it. N=1 enforces that rhythm rather than fighting it. If you need a local record, copy before replying.</p>
         </div>
       </div>
       <div class="glass-card p-6 sm:p-10 space-y-6 group hover:border-primary/30 transition-all duration-500">
@@ -293,7 +293,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
         </div>
         <div class="space-y-3">
           <h4 class="text-white font-extrabold tracking-tight text-xl uppercase font-display">Room Expiry via TTL</h4>
-          <p class="text-sm text-slate-400 leading-relaxed font-medium">Rooms can be set to expire after a time-to-live period. An hourly background job deactivates expired rooms and, in the same transaction, hard-deletes all their messages and every (room_hash, access_hash) record so no long-term linkability of past attempts remains. Expired rooms cannot be rejoined.</p>
+          <p class="text-sm text-slate-400 leading-relaxed font-medium">Rooms self-destruct via a Durable Object alarm set at creation. When the TTL fires, the room broadcasts expiry to all connected clients and atomically wipes every access record and message from its storage. No batch job, no deferred cleanup &mdash; the alarm fires at the exact moment the TTL expires. Expired rooms cannot be rejoined.</p>
         </div>
       </div>
     </div>
@@ -363,6 +363,46 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
             <tr class="group hover:bg-white/3 transition-all"><td class="p-8 font-mono text-xs font-black text-white tracking-[0.2em]">User Profiles</td><td class="p-8"><span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-primary/20 text-[10px] font-bold text-primary/80"><div class="size-1 rounded-full bg-primary"></div>Do not exist &mdash; no accounts</span></td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multi-Channel Limits -->
+  <div id="multi-channel" class="space-y-8 animate-in stagger-5 px-4 scroll-mt-24">
+    <div class="flex items-center gap-4">
+      <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Known Limits</h2>
+      <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+    </div>
+
+    <div class="space-y-6">
+      <div class="glass-card p-6 sm:p-10 space-y-4">
+        <h3 class="text-xl font-extrabold text-white font-display uppercase tracking-tight">Multi-Channel Memorisation Burden</h3>
+        <div class="space-y-3 text-sm text-slate-400 leading-relaxed font-medium">
+          <p>Using sTELgano with more than one person means carrying a unique steg number and PIN per channel. The correct approach &mdash; a unique PIN per channel &mdash; is also the hardest to maintain:</p>
+          <ul class="space-y-2 pl-4">
+            <li><span class="text-white">Unique PIN per channel</span> &mdash; strongest security, but N items to memorise for N channels.</li>
+            <li><span class="text-white">Same PIN everywhere on this site</span> &mdash; a browser autofill saving that PIN would suggest it for every channel, reducing them all to the same credential.</li>
+            <li><span class="text-white">PIN saved in a password manager</span> &mdash; breaks the passcode test (the manager&rsquo;s vault is a forensic trail, and the entry label names the site).</li>
+          </ul>
+          <p>There is no fully convenient answer. This is an honest statement of the trade-off, not a gap we plan to patch.</p>
+        </div>
+      </div>
+
+      <div class="glass-card p-6 sm:p-10 space-y-4">
+        <div class="flex items-center gap-3">
+          <h3 class="text-xl font-extrabold text-white font-display uppercase tracking-tight">Advanced: Derived PINs</h3>
+          <span class="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 font-mono">OPTIONAL PATTERN</span>
+        </div>
+        <div class="space-y-3 text-sm text-slate-400 leading-relaxed font-medium">
+          <p>For users managing multiple channels, one approach reduces memorisation from N items to 2 (a global PIN + a derivation rule) while keeping each channel&rsquo;s PIN unique and autofill-proof:</p>
+          <p class="text-slate-300">Pick a fixed global PIN and a rule that extracts digits from the shared steg number. Apply the rule to each number to derive that channel&rsquo;s final PIN. Example rule shapes:</p>
+          <ul class="space-y-2 pl-4 font-mono text-xs">
+            <li>global + last 2 digits of the number</li>
+            <li>global + middle 3 digits (e.g. digits 4&ndash;6)</li>
+            <li>global + digits at a chosen position, reversed</li>
+          </ul>
+          <p class="text-slate-500 text-xs">Honest caveats: theoretical entropy is slightly lower than fully independent PINs &mdash; immaterial against the server&rsquo;s 10-attempt lockout but relevant for offline brute-force on leaked ciphertext. If two channels are compromised (steg number + final PIN for both), an attacker can infer the global PIN and rule. This is consistent with the stated threat model but worth naming. The rule being shared across channels is also the load-bearing secret &mdash; writing it down removes the benefit.</p>
+        </div>
       </div>
     </div>
   </div>

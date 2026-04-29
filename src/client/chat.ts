@@ -782,6 +782,9 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
                   class="glass-input w-full text-center text-xl sm:text-4xl tracking-[0.2em] sm:tracking-[0.6em] font-mono py-4 sm:py-6 bg-slate-950/40 border-white/10"
                   ${pinAutofocus}
                 >
+                <p class="text-[10px] text-slate-600 text-center font-medium leading-relaxed px-2">
+                  Don&rsquo;t save this &mdash; treat it like a one-time passcode. Saving it would suggest the same PIN for every channel on this site.
+                </p>
               </div>
 
               <button
@@ -1023,10 +1026,10 @@ function renderGeneratorDrawer(g: GeneratorState): string {
               ${[
                 {
                   icon: "user_plus",
-                  title: "1. Save in Phonebook",
-                  text: "Add this number to your partner's actual contact list.",
+                  title: "1. Add to Existing Contact",
+                  text: "Add this number as an extra number on your partner's existing contact — not a new contact.",
                   guidance:
-                    "This camouflages the channel as a regular contact in your native address book.",
+                    "A new contact requires a name or label, which is evidence. Adding a second number to an existing real contact leaves nothing to explain.",
                 },
                 {
                   icon: "arrow_up_right",
