@@ -405,6 +405,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 
   const html = renderAdminHtml({
     updated: `${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`,
+    aeReady,
     newToday,
     sum90,
     activeRooms,
@@ -426,6 +427,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 
 function renderAdminHtml(d: {
   updated: string;
+  aeReady: boolean;
   newToday: number;
   sum90: number;
   activeRooms: number;
@@ -546,9 +548,9 @@ function renderAdminHtml(d: {
       <!-- Metric cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
         ${adminMetricCard("Active Chats", d.activeRooms, "Live count, pushed by DO", "radio", true)}
-        ${adminMetricCard("New Chats Today", d.newToday, "Last 24h", "plus_circle")}
-        ${adminMetricCard("Messages Today", d.messagesThisDay, "Encrypted, current UTC day", "message_circle")}
-        ${adminMetricCard("Total (90d)", d.sum90, "New rooms, past 90 days", "calendar")}
+        ${adminMetricCard("New Chats Today", d.aeReady ? d.newToday : "—", "Last 24h", "plus_circle")}
+        ${adminMetricCard("Messages Today", d.aeReady ? d.messagesThisDay : "—", "Encrypted, current UTC day", "message_circle")}
+        ${adminMetricCard("Total (90d)", d.aeReady ? d.sum90 : "—", "New rooms, past 90 days", "calendar")}
       </div>
 
       <!-- Per-day breakdown -->
