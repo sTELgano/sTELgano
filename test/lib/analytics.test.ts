@@ -13,7 +13,7 @@ import {
   queryDiasporaMetrics,
 } from "../../src/lib/analytics";
 
-const AE_FIELD = "stelgano_eventsAdaptiveGroups";
+const AE_FIELD = "workersAnalyticsEngineAdaptiveGroups";
 
 function makeResponse(groups: unknown[]): Response {
   const body = JSON.stringify({
