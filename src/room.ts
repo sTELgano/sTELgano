@@ -390,6 +390,24 @@ export class RoomDO implements DurableObject {
     }
 
     // Existing room — check access.
+    // Guard second-slot registration: if the room has only one access record
+    // and this access_hash is new, the caller is claiming the second-party
+    // slot. Rate-limit this the same way we rate-limit room creation to
+    // prevent an attacker who knows the room_hash from pre-empting the slot
+    // before the legitimate second party joins.
+    if (
+      this.room.accessRecords.length < 2 &&
+      !this.room.accessRecords.find((r) => r.accessHash === accessHash)
+    ) {
+      const rl = await this.env.RATE_LIMITER_ROOM_CREATE.limit({ key: this.clientIp }).catch(
+        () => ({ success: true }),
+      );
+      if (!rl.success) {
+        await this.padJoin(start);
+        this.send(ws, { ref: evt.ref, error: { reason: "rate_limited" } });
+        return;
+      }
+    }
     const result = this.checkAccess(accessHash);
     if (result.kind === "ok") {
       await this.persist();

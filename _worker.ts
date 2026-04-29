@@ -34,7 +34,7 @@ import {
   queryDailyMetrics,
   queryDiasporaMetrics,
 } from "./src/lib/analytics";
-import { createPending, deleteExpired, markPaid } from "./src/lib/extension_tokens";
+import { createPending, deleteExpired, deleteToken, markPaid } from "./src/lib/extension_tokens";
 import { refreshRate } from "./src/lib/fx_rate";
 import { getActiveRooms } from "./src/lib/live_counters";
 import {
@@ -838,6 +838,10 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
   if (initResult.ok) {
     return jsonResponse({ checkout_url: initResult.checkoutUrl });
   }
+
+  // Paystack init failed — delete the pending token we just created so it
+  // doesn't sit as an orphan in D1 for 30 days until the daily sweep.
+  void deleteToken(env.DB, tokenHash);
 
   // Map adapter error codes to client-visible codes. The client's
   // paymentErrorCopy() only knows about a few well-known ones.
