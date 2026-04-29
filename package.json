@@ -36,7 +36,7 @@
     "@tailwindcss/cli": "^4.0.0",
     "esbuild": "^0.28.0",
     "jsdom": "^29.0.2",
-    "lucide-static": "^1.9.0",
+    "lucide-static": "^1.14.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
