@@ -59,8 +59,8 @@
         </div>
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
           <p>sTELgano embeds the steg number inside the PIN derivation before any cryptographic hashing happens. Concretely, the access credential computed from your PIN is:</p>
-          <div class="font-mono text-xs text-slate-400 bg-white/5 rounded-lg px-4 py-4 border border-white/10 overflow-x-auto">SHA-256(phone + ":" + PIN + <span class="text-primary">phone</span> + ":" + ACCESS_SALT)</div>
-          <p>The practical consequence: <span class="text-white font-semibold">the same typed PIN on two different steg numbers produces two completely different credentials.</span> A password manager that saves your PIN and replays it on another channel cannot produce a valid credential for that channel.</p>
+          <div class="font-mono text-xs text-slate-400 bg-white/5 rounded-lg px-4 py-4 border border-white/10 overflow-x-auto">SHA-256(<span class="text-primary">phone</span> + ":" + PIN + ":" + ACCESS_SALT)</div>
+          <p>The practical consequence: <span class="text-white font-semibold">the same typed PIN on two different steg numbers produces two completely different credentials</span> &mdash; the phone number is the leading component of the hash input. A password manager that saves your PIN value and replays it on another channel will produce a credential bound to the original steg number, not the new one.</p>
           <p>This is the baseline. It means you are protected at the cryptographic layer regardless of what you type. The strategies in this article are for users who want the additional <span class="text-white">awareness</span> of knowing which channel they are on, or who prefer to type something channel-specific as a second mental check.</p>
         </div>
       </div>

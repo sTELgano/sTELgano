@@ -11,15 +11,10 @@
 // Derivation chain:
 //   phone       = normalise(raw_input)
 //   room_hash   = SHA-256(phone + ":" + ROOM_SALT)
-//   access_hash = SHA-256(phone + ":" + PIN + phone + ":" + ACCESS_SALT)
+//   access_hash = SHA-256(phone + ":" + PIN + ":" + ACCESS_SALT)
 //   enc_key     = PBKDF2(password: phone, salt: room_id + ENC_SALT,
 //                        iterations: 600_000, hash: SHA-256, keylen: 256)
 //   sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)
-//
-// The phone number is embedded in the PIN slot of access_hash so that
-// the same typed PIN produces a different access_hash on every channel.
-// A password manager that saves and replays the PIN value cannot produce
-// a valid access_hash for a different steg number.
 
 // ---------------------------------------------------------------------------
 // Public salt constants (domain separators — not secrets)
@@ -76,12 +71,9 @@ export async function roomHash(phone: string): Promise<string> {
   return sha256hex(`${normalise(phone)}:${ROOM_SALT}`);
 }
 
-/** access_hash = SHA-256(phone + ":" + PIN + phone + ":" + ACCESS_SALT)
- *  The phone number is embedded in the PIN slot so that the same typed
- *  PIN produces a different access_hash on each steg number. */
+/** access_hash = SHA-256(phone + ":" + PIN + ":" + ACCESS_SALT) */
 export async function accessHash(phone: string, pin: string): Promise<string> {
-  const p = normalise(phone);
-  return sha256hex(`${p}:${pin}${p}:${ACCESS_SALT}`);
+  return sha256hex(`${normalise(phone)}:${pin}:${ACCESS_SALT}`);
 }
 
 /** sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER_SALT)

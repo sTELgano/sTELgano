@@ -104,8 +104,8 @@
           <div class="border-l-2 border-white/5 pl-6 py-4 hover:border-primary transition-all group/id">
             <div class="space-y-2">
               <span class="text-primary font-mono font-bold text-sm">access_hash</span>
-              <div class="font-mono text-xs text-slate-500 bg-white/2 rounded-lg px-4 py-3 border border-white/5 overflow-x-auto">SHA-256(normalize(phone) + ":" + PIN + normalize(phone) + ":" + ACCESS_SALT)</div>
-              <p class="text-sm text-slate-400 leading-relaxed font-medium">Proves the caller knows the correct PIN. The phone number is embedded in the PIN slot so that the same typed PIN produces a different access_hash for every steg number, neutralising password-manager reuse across channels. Each party also has a different access_hash because they each choose a different PIN.</p>
+              <div class="font-mono text-xs text-slate-500 bg-white/2 rounded-lg px-4 py-3 border border-white/5 overflow-x-auto">SHA-256(normalize(phone) + ":" + PIN + ":" + ACCESS_SALT)</div>
+              <p class="text-sm text-slate-400 leading-relaxed font-medium">Proves the caller knows the correct PIN. Because the phone number is the leading component, the same typed PIN produces a different access_hash for every steg number — password-manager reuse across channels cannot produce a valid credential for a different channel. Each party also has a different access_hash because they each choose a different PIN.</p>
             </div>
           </div>
           <div class="border-l-2 border-white/5 pl-6 py-4 hover:border-primary transition-all group/id">
