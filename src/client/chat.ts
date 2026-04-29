@@ -354,35 +354,6 @@ state.onStateChange((s) => {
 // Event delegation
 // -----------------------------------------------------------------------------
 
-// Strip non-digits — mirrors normalise() in anon.ts without importing it here.
-function digitsOnly(s: string): string {
-  return s.replace(/\D/g, "");
-}
-
-// A password manager that has saved a PIN for stelgano.com will suggest
-// the same raw digit string for every channel on the same domain.
-// To defeat that, we append the normalised steg number to the PIN field
-// value at submission time. The PM then saves a channel-specific string
-// (rawPin + phone) instead of the bare PIN. Auto-filling that string on
-// a different channel produces the wrong combined value, so auth fails.
-//
-// If the PM has already auto-filled a previously-saved combined string on
-// the correct channel, we detect and strip the trailing phone number to
-// recover the raw PIN before passing it to the crypto layer. The hash
-// computation (accessHash) is unchanged — it still uses only rawPin.
-function brandPinField(pinEl: HTMLInputElement, rawPin: string, phone: string): void {
-  pinEl.value = rawPin + digitsOnly(phone);
-}
-
-function extractRawPin(fieldValue: string, phone: string): string {
-  const p = digitsOnly(phone);
-  // Only strip if the suffix matches exactly — p is long enough (10–12+ digits)
-  // that a false positive collision with a user-chosen PIN is negligible.
-  return p.length > 0 && fieldValue.endsWith(p)
-    ? fieldValue.slice(0, -p.length)
-    : fieldValue;
-}
-
 root.addEventListener("submit", (e) => {
   const target = e.target as HTMLElement;
   if (!(target instanceof HTMLFormElement)) return;
@@ -393,27 +364,21 @@ root.addEventListener("submit", (e) => {
 
   if (action === "submit-entry") {
     const phone = String(form.get("s_num") ?? "");
-    const rawPin = extractRawPin(String(form.get("s_key") ?? ""), phone);
+    const pin = String(form.get("s_key") ?? "");
     if (!parsePhoneNumberFromString(phone)?.isValid()) {
       state.setEntryError(
         "That doesn't look like a valid steg number. Use the generator drawer to make one.",
       );
       return;
     }
-    if (!rawPin) {
+    if (!pin) {
       state.setEntryError("Enter your PIN.");
       return;
     }
-    const pinEl = target.querySelector<HTMLInputElement>('input[name="s_key"]');
-    if (pinEl) brandPinField(pinEl, rawPin, phone);
-    void state.submit(phone, rawPin);
+    void state.submit(phone, pin);
   } else if (action === "submit-locked") {
-    const s = state.getState();
-    const phone = s.kind === "locked" ? s.phone : "";
-    const rawPin = extractRawPin(String(form.get("s_key") ?? ""), phone);
-    const pinEl = target.querySelector<HTMLInputElement>('input[name="s_key"]');
-    if (pinEl && phone) brandPinField(pinEl, rawPin, phone);
-    void state.reauthenticate(rawPin);
+    const pin = String(form.get("s_key") ?? "");
+    void state.reauthenticate(pin);
   }
 });
 
