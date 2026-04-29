@@ -38,31 +38,42 @@
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
           <p>One channel is simple: choose a PIN, keep it in your head. Two or more channels introduce a genuine tension. You have three options, and none of them is obviously right:</p>
           <ul class="space-y-3 pl-4 border-l-2 border-white/10">
-            <li><span class="text-white font-semibold">Same PIN everywhere.</span> Easy to remember. But a single compromised channel exposes all of them &mdash; someone who learns your PIN for one steg number can try it on every steg number they know you use.</li>
+            <li><span class="text-white font-semibold">Same PIN everywhere.</span> Easy to remember. But a single PIN leak exposes every channel simultaneously &mdash; someone who sees you type your PIN, or learns it through any means, can now try it on every steg number they know you use.</li>
             <li><span class="text-white font-semibold">Fully independent PINs.</span> Maximum security. But memorising N truly random PINs scales badly. Five channels means five secrets, each of which is as important as the others.</li>
-            <li><span class="text-white font-semibold">A derivation rule.</span> You memorise one master secret and one rule. The rule extracts a unique PIN per channel from the steg number itself. This article is about building your own rule.</li>
+            <li><span class="text-white font-semibold">A derivation rule.</span> You memorise one master secret and one rule. The rule produces a unique PIN per channel from the steg number. Leaking one channel&rsquo;s PIN reveals nothing about any other channel&rsquo;s PIN. This article is about building your own rule.</li>
           </ul>
           <p>The strategies below all follow the same structure: one master PIN (something you already know), combined with a rule applied to the steg number (something the system provides).</p>
         </div>
       </div>
     </section>
 
-    <!-- System-Level Protection -->
+    <!-- Two Separate Threats -->
     <section class="space-y-8">
       <div class="flex items-center gap-4">
-        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What the System Already Does For You</h2>
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Two Separate Threats</h2>
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
-      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6 group hover:border-primary/30 transition-all duration-500">
-        <div class="size-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
-          <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+          </div>
+          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">Hash-Level Reuse</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">A password manager saves a PIN string and replays it on a different channel. The system handles this: the steg number is the leading input to the credential hash, so the same raw PIN produces a different credential on every steg number.</p>
+          <div class="font-mono text-[10px] text-slate-500 bg-white/5 rounded px-3 py-2 border border-white/5 overflow-x-auto">SHA-256(<span class="text-primary">phone</span> + ":" + PIN + ":" + ACCESS_SALT)</div>
+          <p class="text-primary text-xs font-bold uppercase tracking-wider">Covered by the protocol</p>
         </div>
-        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>sTELgano embeds the steg number inside the PIN derivation before any cryptographic hashing happens. Concretely, the access credential computed from your PIN is:</p>
-          <div class="font-mono text-xs text-slate-400 bg-white/5 rounded-lg px-4 py-4 border border-white/10 overflow-x-auto">SHA-256(<span class="text-primary">phone</span> + ":" + PIN + ":" + ACCESS_SALT)</div>
-          <p>The practical consequence: <span class="text-white font-semibold">the same typed PIN on two different steg numbers produces two completely different credentials</span> &mdash; the phone number is the leading component of the hash input. A password manager that saves your PIN value and replays it on another channel will produce a credential bound to the original steg number, not the new one.</p>
-          <p>This is the baseline. It means you are protected at the cryptographic layer regardless of what you type. The strategies in this article are for users who want the additional <span class="text-white">awareness</span> of knowing which channel they are on, or who prefer to type something channel-specific as a second mental check.</p>
+        <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
+          <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
+            <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#eye"/></svg>
+          </div>
+          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">PIN-Level Leak</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">Someone observes your PIN being typed, learns it through social engineering, or finds a channel where you disclosed it. If you reuse the same raw PIN everywhere, every channel is now accessible. The protocol cannot help here &mdash; the attacker simply types the known PIN into other channels themselves.</p>
+          <p class="text-yellow-500/80 text-xs font-bold uppercase tracking-wider">Not covered by the protocol alone</p>
         </div>
+      </div>
+      <div class="glass-card p-6 sm:p-8 space-y-4">
+        <p class="text-slate-400 font-medium leading-relaxed text-base">A derivation rule closes the second gap. If your PIN for channel A is <span class="font-mono text-white">83012671</span> and your PIN for channel B is <span class="font-mono text-white">83010842</span>, learning channel A&rsquo;s PIN gives an attacker nothing they can use on channel B. The strategies below are how you build that rule.</p>
       </div>
     </section>
 
