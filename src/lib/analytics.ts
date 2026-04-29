@@ -31,7 +31,6 @@ const AE_GRAPHQL = "https://api.cloudflare.com/client/v4/graphql";
 // filtered by dataset name — individual <dataset>AdaptiveGroups fields
 // do not exist in the CF GraphQL schema.
 const AE_FIELD = "workersAnalyticsEngineAdaptiveGroups";
-export const DEFAULT_DATASET = "stelgano_events";
 
 export type EventType =
   | "room_free"

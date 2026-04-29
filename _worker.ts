@@ -29,7 +29,6 @@ import {
   type CountryRow,
   type DailyRow,
   type DiasporaRow,
-  DEFAULT_DATASET,
   checkAeAccess,
   queryCFCountryMetrics,
   queryCountryMetrics,
@@ -378,7 +377,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   let activeRooms = 0;
   let aeError: string | null = null;
   const aeReady = Boolean(env.CF_ACCOUNT_ID && env.CF_AE_API_TOKEN);
-  const aeDataset = env.CF_AE_DATASET ?? DEFAULT_DATASET;
+  const aeDataset = env.CF_AE_DATASET;
   try {
     [country, cfCountry, daily, diaspora, activeRooms] = await Promise.all([
       aeReady
