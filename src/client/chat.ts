@@ -771,7 +771,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
                 </div>
                 <input
                   name="s_key"
-                  type="password"
+                  type="text"
                   inputmode="numeric"
                   pattern="[0-9]*"
                   placeholder="Secret PIN"
@@ -779,6 +779,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
                   autocorrect="off"
                   autocapitalize="off"
                   spellcheck="false"
+                  style="-webkit-text-security: disc;"
                   class="glass-input w-full text-center text-xl sm:text-4xl tracking-[0.2em] sm:tracking-[0.6em] font-mono py-4 sm:py-6 bg-slate-950/40 border-white/10"
                   ${pinAutofocus}
                 >
@@ -1607,7 +1608,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
             </div>
             <input
               name="s_key"
-              type="password"
+              type="text"
               inputmode="numeric"
               pattern="[0-9]*"
               placeholder="Secret PIN"
@@ -1615,6 +1616,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
               autocorrect="off"
               autocapitalize="off"
               spellcheck="false"
+              style="-webkit-text-security: disc;"
               class="glass-input w-full text-center text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10 focus:border-primary/40"
               data-autofocus
             >
