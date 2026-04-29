@@ -59,7 +59,7 @@
           <div class="font-mono text-xs text-slate-400 bg-white/5 rounded-lg px-4 py-4 border border-white/10 overflow-x-auto">SHA-256(<span class="text-primary">phone</span> + ":" + PIN + ":" + ACCESS_SALT)</div>
           <p>Because the steg number is the leading input, a computed credential is bound to a specific channel. <span class="text-white font-semibold">Replaying the credential hash itself on a different channel will fail.</span></p>
           <p>But that is not how password managers work. A PM operates on raw form fields before any JavaScript runs. It prompts to save the digit string you typed, stores it, and auto-fills that same digit string later. The PM never sees the hash &mdash; only the raw PIN. If it auto-fills "1234" and you accept, the client reads your steg number from the phone field, computes the hash, and submits it. Whether that succeeds depends entirely on whether "1234" is the correct PIN for that channel &mdash; nothing in the hash prevents the PM from suggesting it.</p>
-          <p>The technical measures against PM saving are <span class="font-mono text-white text-sm">autocomplete="one-time-code"</span> on the PIN field, plus the in-form warning. Neither is foolproof &mdash; browser heuristics change and users can override both.</p>
+          <p>sTELgano applies a second measure at the field level: at form submission, it appends the normalised steg number to the PIN field value before the browser captures it. So instead of saving <span class="font-mono text-white">"1234"</span>, the PM saves <span class="font-mono text-white">"123414155552671"</span> &mdash; a string that embeds the steg number. Auto-filling that string on a different channel produces the wrong combined value; authentication fails and the PM suggestion is rejected. On the same channel, the app detects the trailing phone number, strips it, and recovers the raw PIN transparently. The <span class="font-mono text-white">autocomplete="one-time-code"</span> attribute and the in-form warning are additional layers, but neither is foolproof on its own.</p>
         </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -67,9 +67,9 @@
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
           </div>
-          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">Credential Replay</h3>
-          <p class="text-slate-400 text-sm leading-relaxed font-medium">An attacker intercepts the computed hex credential for channel A and submits it directly to channel B. The hash fails &mdash; different steg number, different expected value.</p>
-          <p class="text-primary text-xs font-bold uppercase tracking-wider">Covered by the protocol</p>
+          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">Credential &amp; PM Replay</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">An attacker replays a captured credential on a different channel &mdash; the hash fails. A password manager saves and suggests a PIN across channels &mdash; the app appends the steg number to the field value at submission, so PMs save a channel-specific string that fails on other channels.</p>
+          <p class="text-primary text-xs font-bold uppercase tracking-wider">Covered by the protocol + field branding</p>
         </div>
         <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
