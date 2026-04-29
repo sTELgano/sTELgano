@@ -15,9 +15,6 @@
 # as a bonus. GitHub Actions (.github/workflows/deploy.yml) replaces
 # the Pages git integration.
 #
-# The v1 (Phoenix/Elixir) deployment lives on `main` and is unaffected
-# by anything in this file.
-#
 # See docs/MIGRATION.md for the broader architecture record.
 
 name = "stelgano"

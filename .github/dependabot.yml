@@ -1,7 +1,7 @@
 version: 2
 updates:
-  # Elixir / Mix dependencies
-  - package-ecosystem: mix
+  # npm dependencies
+  - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
@@ -11,7 +11,7 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
-      - elixir
+      - javascript
     ignore:
       # Major version bumps require manual review — they may be breaking
       - dependency-name: "*"

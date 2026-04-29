@@ -5,108 +5,65 @@ This product includes software developed by third parties.
 A full list of dependencies with their licences follows.
 
 --------------------------------------------------------------------------------
-ELIXIR DEPENDENCIES
+NPM DEPENDENCIES
 --------------------------------------------------------------------------------
 
-bandit — MIT Licence
-  https://github.com/mtrudel/bandit
+@biomejs/biome — MIT Licence
+  https://github.com/biomejs/biome
 
-dns_cluster — MIT Licence
-  https://github.com/phoenixframework/dns_cluster
+@cloudflare/vitest-pool-workers — Apache-2.0 Licence
+  https://github.com/cloudflare/workers-sdk
 
-ecto_sql — Apache-2.0 Licence
-  https://github.com/elixir-ecto/ecto_sql
+@tailwindcss/cli — MIT Licence
+  https://github.com/tailwindlabs/tailwindcss
 
 esbuild — MIT Licence
-  https://github.com/phoenixframework/esbuild
+  https://github.com/evanw/esbuild
 
-gettext — Apache-2.0 Licence
-  https://github.com/elixir-gettext/gettext
+jsdom — MIT Licence
+  https://github.com/jsdom/jsdom
 
-jason — Apache-2.0 Licence
-  https://github.com/michalmuskala/jason
+libphonenumber-js — MIT Licence
+  https://github.com/catamphetamine/libphonenumber-js
 
-lazy_html — MIT Licence
-  https://github.com/phoenixframework/lazy_html
+lucide-static — ISC Licence
+  https://github.com/lucide-icons/lucide
 
-oban — BSL / Commercial (Oban Pro) — core Oban is Apache-2.0
-  https://github.com/sorentwo/oban
+phone-number-generator-js — MIT Licence
+  https://github.com/alimbekovkz/phone-number-generator-js
 
-phoenix — MIT Licence
-  https://github.com/phoenixframework/phoenix
+tailwindcss — MIT Licence
+  https://github.com/tailwindlabs/tailwindcss
 
-phoenix_ecto — MIT Licence
-  https://github.com/phoenixframework/phoenix_ecto
+typescript — Apache-2.0 Licence
+  https://github.com/microsoft/TypeScript
 
-phoenix_html — MIT Licence
-  https://github.com/phoenixframework/phoenix_html
+vitest — MIT Licence
+  https://github.com/vitest-dev/vitest
 
-phoenix_live_dashboard — MIT Licence
-  https://github.com/phoenixframework/phoenix_live_dashboard
-
-phoenix_live_reload — MIT Licence
-  https://github.com/phoenixframework/phoenix_live_reload
-
-phoenix_live_view — MIT Licence
-  https://github.com/phoenixframework/phoenix_live_view
-
-postgrex — Apache-2.0 Licence
-  https://github.com/elixir-ecto/postgrex
-
-req — Apache-2.0 Licence
-  https://github.com/wojtekmach/req
-
-swoosh — MIT Licence
-  https://github.com/swoosh/swoosh
-
-tailwind — MIT Licence
-  https://github.com/phoenixframework/tailwind
-
-telemetry_metrics — Apache-2.0 Licence
-  https://github.com/beam-telemetry/telemetry_metrics
-
-telemetry_poller — Apache-2.0 Licence
-  https://github.com/beam-telemetry/telemetry_poller
-
---------------------------------------------------------------------------------
-JAVASCRIPT DEPENDENCIES (vendored)
---------------------------------------------------------------------------------
-
-topbar — MIT Licence
-  https://github.com/buunguyen/topbar
-
-heroicons — MIT Licence (icons) / Heroicons Licence
-  https://github.com/tailwindlabs/heroicons
-
-daisyUI — MIT Licence
-  https://github.com/saadeghi/daisyui
-  NOTE: daisyUI is vendored but intentionally not used in production styles.
-  It is included in the vendor directory from the Phoenix generator scaffold only.
-
-phoenix (npm) — MIT Licence
-  https://github.com/phoenixframework/phoenix
-
-phoenix_live_view (npm) — MIT Licence
-  https://github.com/phoenixframework/phoenix_live_view
+wrangler — Apache-2.0 Licence
+  https://github.com/cloudflare/workers-sdk
 
 --------------------------------------------------------------------------------
 FONTS
 --------------------------------------------------------------------------------
 
-Figtree — SIL Open Font Licence 1.1
-  https://fonts.google.com/specimen/Figtree
+Inter — SIL Open Font Licence 1.1
+  https://github.com/rsms/inter
+  Sourced from @fontsource/inter. Self-hosted in public/fonts/.
 
-Fraunces — SIL Open Font Licence 1.1
-  https://fonts.google.com/specimen/Fraunces
+Outfit — SIL Open Font Licence 1.1
+  https://github.com/Outfitio/Outfit-Fonts
+  Sourced from @fontsource/outfit. Self-hosted in public/fonts/.
 
-IBM Plex Mono — SIL Open Font Licence 1.1
-  https://fonts.google.com/specimen/IBM+Plex+Mono
+JetBrains Mono — SIL Open Font Licence 1.1
+  https://github.com/JetBrains/JetBrainsMono
+  Sourced from @fontsource/jetbrains-mono. Self-hosted in public/fonts/.
 
-NOTE: These font files are self-hosted in priv/static/fonts/ (sourced from
-the Fontsource npm packages — @fontsource/inter, @fontsource/outfit,
-@fontsource/jetbrains-mono). There are no runtime requests to Google Fonts
-or any other third-party CDN; CSP's font-src and style-src are locked to
-'self'.
+NOTE: These font files are self-hosted in public/fonts/ (sourced from
+the Fontsource npm packages). There are no runtime requests to Google
+Fonts or any other third-party CDN; CSP font-src and style-src are
+locked to 'self'.
 
 --------------------------------------------------------------------------------
 FULL LICENCE TEXTS
@@ -114,10 +71,11 @@ FULL LICENCE TEXTS
 
 Complete licence texts for all dependencies can be retrieved by running:
 
-    mix licenses
+    npm ls --all
 
-in the project root (requires the `licensir` mix task).
+in the project root, or inspected individually in node_modules/.
 
 MIT Licence text: https://opensource.org/licenses/MIT
 Apache-2.0 text: https://www.apache.org/licenses/LICENSE-2.0
+ISC Licence text: https://opensource.org/licenses/ISC
 SIL OFL-1.1 text: https://scripts.sil.org/OFL

@@ -26,7 +26,7 @@ critical issues.
 
 We consider the following in scope:
 
-- **Cryptographic implementation** (`assets/js/crypto/anon.js`) — incorrect
+- **Cryptographic implementation** (`src/client/crypto/anon.ts`) — incorrect
   derivation, weak randomness, IV reuse, decryption oracle, etc.
 - **N=1 invariant violations** — any server-side path that allows more than one
   live message per room, or allows message history to persist
