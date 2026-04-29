@@ -387,7 +387,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
         ? queryCFCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
         : Promise.resolve([] as CFCountryRow[]),
       aeReady
-        ? queryDailyMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, 90, aeDataset)
+        ? queryDailyMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, 30, aeDataset)
         : Promise.resolve([] as DailyRow[]),
       aeReady
         ? queryDiasporaMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
@@ -576,7 +576,7 @@ function renderAdminHtml(d: {
         ${adminMetricCard("Active Chats", d.activeRooms, "Live count, pushed by DO", "radio", true)}
         ${adminMetricCard("New Chats Today", d.aeReady ? d.newToday : "—", "Last 24h", "plus_circle")}
         ${adminMetricCard("Messages Today", d.aeReady ? d.messagesThisDay : "—", "Encrypted, current UTC day", "message_circle")}
-        ${adminMetricCard("Total (90d)", d.aeReady ? d.sum90 : "—", "New rooms, past 90 days", "calendar")}
+        ${adminMetricCard("Total (30d)", d.aeReady ? d.sum90 : "—", "New rooms, past 30 days", "calendar")}
       </div>
 
       <!-- Per-day breakdown -->

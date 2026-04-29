@@ -130,18 +130,19 @@ function escQ(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-/** All-time free/paid room creation counts grouped by country, sorted by
- *  total descending. */
+/** Free/paid room creation counts grouped by steg-number country over the
+ *  last 30 days, sorted by total descending. */
 export async function queryCountryMetrics(
   accountId: string,
   apiToken: string,
   dataset: string,
 ): Promise<CountryRow[]> {
+  const since = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
   const query = `{
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
         ${AE_FIELD}(
-          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"] }
+          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"], datetime_geq: "${since}T00:00:00Z" }
           limit: 10000
           orderBy: [count_DESC]
         ) {
@@ -174,19 +175,19 @@ export async function queryCountryMetrics(
     .sort((a, b) => b.free_rooms + b.paid_rooms - (a.free_rooms + a.paid_rooms));
 }
 
-/** All-time free/paid room creation counts grouped by CF-IPCountry, sorted
- *  by total descending. Complements queryCountryMetrics (steg-number country)
- *  — the two datasets differ for diaspora users, travellers, and VPN users. */
+/** Free/paid room creation counts grouped by CF-IPCountry over the last
+ *  30 days, sorted by total descending. */
 export async function queryCFCountryMetrics(
   accountId: string,
   apiToken: string,
   dataset: string,
 ): Promise<CFCountryRow[]> {
+  const since = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
   const query = `{
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
         ${AE_FIELD}(
-          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"] }
+          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"], datetime_geq: "${since}T00:00:00Z" }
           limit: 10000
           orderBy: [count_DESC]
         ) {
@@ -219,21 +220,20 @@ export async function queryCFCountryMetrics(
     .sort((a, b) => b.free_rooms + b.paid_rooms - (a.free_rooms + a.paid_rooms));
 }
 
-/** Cross-dimension query: (steg-number country, CF-IPCountry) pairs for
- *  room_free and room_paid events, sorted by total descending.
- *  Rows where steg_country !== cf_country are diaspora signals — users
- *  whose phone number originates in a different country than their
- *  current connection location. */
+/** (steg-number country, CF-IPCountry) pairs for room_free and room_paid
+ *  events over the last 30 days, sorted by total descending.
+ *  Rows where steg_country !== cf_country are diaspora signals. */
 export async function queryDiasporaMetrics(
   accountId: string,
   apiToken: string,
   dataset: string,
 ): Promise<DiasporaRow[]> {
+  const since = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
   const query = `{
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
         ${AE_FIELD}(
-          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"] }
+          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"], datetime_geq: "${since}T00:00:00Z" }
           limit: 10000
           orderBy: [count_DESC]
         ) {
@@ -282,7 +282,7 @@ export async function checkAeAccess(
   const query = `{
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
-        ${AE_FIELD}(limit: 1 filter: { dataset: "${escQ(dataset)}" }) { count }
+        ${AE_FIELD}(limit: 1 filter: { dataset: "${escQ(dataset)}", datetime_geq: "${new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10)}T00:00:00Z" }) { count }
       }
     }
   }`;
