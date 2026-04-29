@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env } from "../../src/env";
-import { initialize, hmacSha512Hex, timingSafeHexEqual } from "../../src/lib/paystack";
+import { hmacSha512Hex, initialize, timingSafeHexEqual } from "../../src/lib/paystack";
 
 // ---------------------------------------------------------------------------
 // Helpers shared across initialize() tests

@@ -14,23 +14,20 @@
 // They differ for diaspora users, travellers, and VPN users.
 // queryDiasporaMetrics() groups by both simultaneously to surface those differences.
 //
-// One data point per event covers both per-country and per-day aggregates —
-// they are computed at query time with no row locking and no contention.
+// Reads use the CF Analytics Engine SQL API
+// (POST /client/v4/accounts/{id}/analytics_engine/sql) rather than GraphQL —
+// the GraphQL generic field workersAnalyticsEngineAdaptiveGroups does not expose
+// blob1/blob2/blob3 as dimension fields; the SQL API supports them directly.
 //
-// All custom AE datasets are queried via the generic field
-// "workersAnalyticsEngineAdaptiveGroups" with a dataset filter.
-// Production uses "stelgano_events"; staging uses "stelgano_events_staging"
-// (set via CF_AE_DATASET in wrangler.toml) to keep their data separate.
+// Production dataset: "stelgano_events"
+// Staging dataset:    "stelgano_events_staging"
+// (set per-env via CF_AE_DATASET in wrangler.toml)
 //
 // PRIVACY: no room_hash, no access_hash, no phone digits ever appear in
 // any data point. blob2 and blob3 each carry a 2-char ISO code — neither
 // is stored alongside any individual room or access record.
 
-const AE_GRAPHQL = "https://api.cloudflare.com/client/v4/graphql";
-// All custom AE datasets are queried through this single generic field,
-// filtered by dataset name — individual <dataset>AdaptiveGroups fields
-// do not exist in the CF GraphQL schema.
-const AE_FIELD = "workersAnalyticsEngineAdaptiveGroups";
+const AE_SQL_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
 export type EventType =
   | "room_free"
@@ -82,52 +79,31 @@ export function writeEvent(
 }
 
 // ---------------------------------------------------------------------------
-// GraphQL read helpers — used by the admin dashboard.
-// Return empty arrays when credentials are missing or the query fails.
+// SQL API read helpers — used by the admin dashboard.
 // ---------------------------------------------------------------------------
 
-type AeGroup = {
-  count: number;
-  dimensions: { blob1?: string; blob2?: string; blob3?: string; date?: string };
-};
+type SqlRow = Record<string, unknown>;
+type SqlResult = { data: SqlRow[]; error?: string };
 
-type AeResponse = {
-  data?: {
-    viewer?: {
-      accounts?: Array<Record<string, AeGroup[] | undefined>>;
-    };
-  };
-  errors?: unknown[];
-};
-
-function extractGroups(body: AeResponse): AeGroup[] {
+async function sqlQuery(accountId: string, apiToken: string, sql: string): Promise<SqlResult> {
+  let resp: Response;
   try {
-    return (body.data?.viewer?.accounts?.[0]?.[AE_FIELD] as AeGroup[]) ?? [];
+    resp = await fetch(`${AE_SQL_BASE}/${accountId}/analytics_engine/sql`, {
+      method: "POST",
+      headers: { "content-type": "text/plain", authorization: `Bearer ${apiToken}` },
+      body: sql,
+    });
   } catch {
-    return [];
+    return { data: [], error: "AE endpoint unreachable" };
   }
+  if (!resp.ok) return { data: [], error: `AE HTTP ${resp.status}` };
+  const json = (await resp.json()) as { data?: SqlRow[] };
+  return { data: json.data ?? [] };
 }
 
-async function graphqlQuery(
-  _accountId: string,
-  apiToken: string,
-  query: string,
-): Promise<AeResponse> {
-  const resp = await fetch(AE_GRAPHQL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiToken}`,
-    },
-    body: JSON.stringify({ query }),
-  });
-  if (!resp.ok) return {};
-  return (await resp.json()) as AeResponse;
-}
-
-/** Sanitises a string for safe embedding inside a GraphQL string literal. */
-function escQ(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+/** ISO date string 30 days ago, formatted for toDateTime(). */
+function since30(): string {
+  return `${new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10)} 00:00:00`;
 }
 
 /** Free/paid room creation counts grouped by steg-number country over the
@@ -137,32 +113,26 @@ export async function queryCountryMetrics(
   apiToken: string,
   dataset: string,
 ): Promise<CountryRow[]> {
-  const since = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
-  const query = `{
-    viewer {
-      accounts(filter: { accountTag: "${escQ(accountId)}" }) {
-        ${AE_FIELD}(
-          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"], datetime_geq: "${since}T00:00:00Z" }
-          limit: 10000
-          orderBy: [count_DESC]
-        ) {
-          count
-          dimensions { blob1 blob2 }
-        }
-      }
-    }
-  }`;
-
-  const body = await graphqlQuery(accountId, apiToken, query).catch((): AeResponse => ({}));
-  const groups = extractGroups(body);
+  const { data } = await sqlQuery(
+    accountId,
+    apiToken,
+    `SELECT blob1, blob2, count() AS cnt
+     FROM ${dataset}
+     WHERE timestamp >= toDateTime('${since30()}')
+       AND blob1 IN ('room_free', 'room_paid')
+     GROUP BY blob1, blob2
+     ORDER BY cnt DESC
+     LIMIT 10000`,
+  ).catch((): SqlResult => ({ data: [] }));
 
   const map = new Map<string, { free: number; paid: number }>();
-  for (const g of groups) {
-    const iso = g.dimensions.blob2;
+  for (const row of data) {
+    const iso = row.blob2 as string;
     if (!iso) continue;
+    const cnt = Number(row.cnt ?? 0);
     const r = map.get(iso) ?? { free: 0, paid: 0 };
-    if (g.dimensions.blob1 === "room_free") r.free += g.count;
-    else if (g.dimensions.blob1 === "room_paid") r.paid += g.count;
+    if (row.blob1 === "room_free") r.free += cnt;
+    else if (row.blob1 === "room_paid") r.paid += cnt;
     map.set(iso, r);
   }
 
@@ -182,32 +152,26 @@ export async function queryCFCountryMetrics(
   apiToken: string,
   dataset: string,
 ): Promise<CFCountryRow[]> {
-  const since = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
-  const query = `{
-    viewer {
-      accounts(filter: { accountTag: "${escQ(accountId)}" }) {
-        ${AE_FIELD}(
-          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"], datetime_geq: "${since}T00:00:00Z" }
-          limit: 10000
-          orderBy: [count_DESC]
-        ) {
-          count
-          dimensions { blob1 blob3 }
-        }
-      }
-    }
-  }`;
-
-  const body = await graphqlQuery(accountId, apiToken, query).catch((): AeResponse => ({}));
-  const groups = extractGroups(body);
+  const { data } = await sqlQuery(
+    accountId,
+    apiToken,
+    `SELECT blob1, blob3, count() AS cnt
+     FROM ${dataset}
+     WHERE timestamp >= toDateTime('${since30()}')
+       AND blob1 IN ('room_free', 'room_paid')
+     GROUP BY blob1, blob3
+     ORDER BY cnt DESC
+     LIMIT 10000`,
+  ).catch((): SqlResult => ({ data: [] }));
 
   const map = new Map<string, { free: number; paid: number }>();
-  for (const g of groups) {
-    const iso = g.dimensions.blob3;
+  for (const row of data) {
+    const iso = row.blob3 as string;
     if (!iso) continue;
+    const cnt = Number(row.cnt ?? 0);
     const r = map.get(iso) ?? { free: 0, paid: 0 };
-    if (g.dimensions.blob1 === "room_free") r.free += g.count;
-    else if (g.dimensions.blob1 === "room_paid") r.paid += g.count;
+    if (row.blob1 === "room_free") r.free += cnt;
+    else if (row.blob1 === "room_paid") r.paid += cnt;
     map.set(iso, r);
   }
 
@@ -228,34 +192,28 @@ export async function queryDiasporaMetrics(
   apiToken: string,
   dataset: string,
 ): Promise<DiasporaRow[]> {
-  const since = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
-  const query = `{
-    viewer {
-      accounts(filter: { accountTag: "${escQ(accountId)}" }) {
-        ${AE_FIELD}(
-          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"], datetime_geq: "${since}T00:00:00Z" }
-          limit: 10000
-          orderBy: [count_DESC]
-        ) {
-          count
-          dimensions { blob1 blob2 blob3 }
-        }
-      }
-    }
-  }`;
-
-  const body = await graphqlQuery(accountId, apiToken, query).catch((): AeResponse => ({}));
-  const groups = extractGroups(body);
+  const { data } = await sqlQuery(
+    accountId,
+    apiToken,
+    `SELECT blob1, blob2, blob3, count() AS cnt
+     FROM ${dataset}
+     WHERE timestamp >= toDateTime('${since30()}')
+       AND blob1 IN ('room_free', 'room_paid')
+     GROUP BY blob1, blob2, blob3
+     ORDER BY cnt DESC
+     LIMIT 10000`,
+  ).catch((): SqlResult => ({ data: [] }));
 
   const map = new Map<string, { free: number; paid: number }>();
-  for (const g of groups) {
-    const steg = g.dimensions.blob2 ?? "";
-    const cf = g.dimensions.blob3 ?? "";
+  for (const row of data) {
+    const steg = (row.blob2 as string) ?? "";
+    const cf = (row.blob3 as string) ?? "";
     if (!steg || !cf) continue;
     const key = `${steg}:${cf}`;
+    const cnt = Number(row.cnt ?? 0);
     const r = map.get(key) ?? { free: 0, paid: 0 };
-    if (g.dimensions.blob1 === "room_free") r.free += g.count;
-    else if (g.dimensions.blob1 === "room_paid") r.paid += g.count;
+    if (row.blob1 === "room_free") r.free += cnt;
+    else if (row.blob1 === "room_paid") r.paid += cnt;
     map.set(key, r);
   }
 
@@ -272,37 +230,19 @@ export async function queryDiasporaMetrics(
     .sort((a, b) => b.free_rooms + b.paid_rooms - (a.free_rooms + a.paid_rooms));
 }
 
-/** Validates AE access by running a minimal 1-row query.
- *  Returns the first GraphQL error message, or null on success. */
+/** Validates AE access with a minimal query.
+ *  Returns an error string on failure, or null on success. */
 export async function checkAeAccess(
   accountId: string,
   apiToken: string,
   dataset: string,
 ): Promise<string | null> {
-  const query = `{
-    viewer {
-      accounts(filter: { accountTag: "${escQ(accountId)}" }) {
-        ${AE_FIELD}(limit: 1 filter: { dataset: "${escQ(dataset)}", datetime_geq: "${new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10)}T00:00:00Z" }) { count }
-      }
-    }
-  }`;
-  let body: AeResponse;
-  try {
-    const resp = await fetch(AE_GRAPHQL, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiToken}` },
-      body: JSON.stringify({ query }),
-    });
-    if (!resp.ok) return `AE HTTP ${resp.status}`;
-    body = (await resp.json()) as AeResponse;
-  } catch {
-    return "AE endpoint unreachable";
-  }
-  if (body.errors?.length) {
-    const first = (body.errors[0] as { message?: string })?.message;
-    return first ?? "AE returned errors";
-  }
-  return null;
+  const { error } = await sqlQuery(
+    accountId,
+    apiToken,
+    `SELECT 1 FROM ${dataset} WHERE timestamp >= toDateTime('${since30()}') LIMIT 1`,
+  );
+  return error ?? null;
 }
 
 /** Per-day event counts over the last `days` days, sorted newest first. */
@@ -312,31 +252,24 @@ export async function queryDailyMetrics(
   days: number,
   dataset: string,
 ): Promise<DailyRow[]> {
-  const sinceMs = Date.now() - (days - 1) * 86_400_000;
-  const since = new Date(sinceMs).toISOString().slice(0, 10);
+  const since = `${new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10)} 00:00:00`;
 
-  const query = `{
-    viewer {
-      accounts(filter: { accountTag: "${escQ(accountId)}" }) {
-        ${AE_FIELD}(
-          filter: { dataset: "${escQ(dataset)}", datetime_geq: "${since}T00:00:00Z" }
-          limit: 10000
-          orderBy: [date_DESC]
-        ) {
-          count
-          dimensions { blob1 date }
-        }
-      }
-    }
-  }`;
-
-  const body = await graphqlQuery(accountId, apiToken, query).catch((): AeResponse => ({}));
-  const groups = extractGroups(body);
+  const { data } = await sqlQuery(
+    accountId,
+    apiToken,
+    `SELECT blob1, toDate(timestamp) AS day, count() AS cnt
+     FROM ${dataset}
+     WHERE timestamp >= toDateTime('${since}')
+     GROUP BY blob1, day
+     ORDER BY day DESC
+     LIMIT 10000`,
+  ).catch((): SqlResult => ({ data: [] }));
 
   const map = new Map<string, DailyRow>();
-  for (const g of groups) {
-    const day = g.dimensions.date;
+  for (const row of data) {
+    const day = row.day as string;
     if (!day) continue;
+    const cnt = Number(row.cnt ?? 0);
     const r = map.get(day) ?? {
       day,
       free_new: 0,
@@ -345,21 +278,21 @@ export async function queryDailyMetrics(
       paid_expired: 0,
       messages_sent: 0,
     };
-    switch (g.dimensions.blob1) {
+    switch (row.blob1) {
       case "room_free":
-        r.free_new += g.count;
+        r.free_new += cnt;
         break;
       case "room_paid":
-        r.paid_new += g.count;
+        r.paid_new += cnt;
         break;
       case "room_expired_free":
-        r.free_expired += g.count;
+        r.free_expired += cnt;
         break;
       case "room_expired_paid":
-        r.paid_expired += g.count;
+        r.paid_expired += cnt;
         break;
       case "message_sent":
-        r.messages_sent += g.count;
+        r.messages_sent += cnt;
         break;
     }
     map.set(day, r);
