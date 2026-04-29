@@ -101,10 +101,7 @@ export async function findByTokenHash(
  *  otherwise sit in D1 until the daily sweep (up to 30 days). */
 export async function deleteToken(db: D1Database, tokenHash: string): Promise<void> {
   if (!HEX64_RE.test(tokenHash)) return;
-  await db
-    .prepare("DELETE FROM extension_tokens WHERE token_hash = ?")
-    .bind(tokenHash)
-    .run();
+  await db.prepare("DELETE FROM extension_tokens WHERE token_hash = ?").bind(tokenHash).run();
 }
 
 /** Marks a token as paid, optionally recording the provider's reference
