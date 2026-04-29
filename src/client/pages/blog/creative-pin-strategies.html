@@ -47,33 +47,41 @@
       </div>
     </section>
 
-    <!-- Two Separate Threats -->
+    <!-- What the Protocol Covers and What It Doesn't -->
     <section class="space-y-8">
       <div class="flex items-center gap-4">
-        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">Two Separate Threats</h2>
+        <h2 class="text-[10px] font-bold uppercase tracking-[0.5em] text-primary/60 ml-1">What the Protocol Covers and What It Doesn&rsquo;t</h2>
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
+      </div>
+      <div class="glass-card p-6 sm:p-10 md:p-12 space-y-6">
+        <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
+          <p>The access credential is computed as:</p>
+          <div class="font-mono text-xs text-slate-400 bg-white/5 rounded-lg px-4 py-4 border border-white/10 overflow-x-auto">SHA-256(<span class="text-primary">phone</span> + ":" + PIN + ":" + ACCESS_SALT)</div>
+          <p>Because the steg number is the leading input, a computed credential is bound to a specific channel. <span class="text-white font-semibold">Replaying the credential hash itself on a different channel will fail.</span></p>
+          <p>But that is not how password managers work. A PM operates on raw form fields before any JavaScript runs. It prompts to save the digit string you typed, stores it, and auto-fills that same digit string later. The PM never sees the hash &mdash; only the raw PIN. If it auto-fills "1234" and you accept, the client reads your steg number from the phone field, computes the hash, and submits it. Whether that succeeds depends entirely on whether "1234" is the correct PIN for that channel &mdash; nothing in the hash prevents the PM from suggesting it.</p>
+          <p>The technical measures against PM saving are <span class="font-mono text-white text-sm">autocomplete="one-time-code"</span> on the PIN field, plus the in-form warning. Neither is foolproof &mdash; browser heuristics change and users can override both.</p>
+        </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
           </div>
-          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">Hash-Level Reuse</h3>
-          <p class="text-slate-400 text-sm leading-relaxed font-medium">A password manager saves a PIN string and replays it on a different channel. The system handles this: the steg number is the leading input to the credential hash, so the same raw PIN produces a different credential on every steg number.</p>
-          <div class="font-mono text-[10px] text-slate-500 bg-white/5 rounded px-3 py-2 border border-white/5 overflow-x-auto">SHA-256(<span class="text-primary">phone</span> + ":" + PIN + ":" + ACCESS_SALT)</div>
+          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">Credential Replay</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">An attacker intercepts the computed hex credential for channel A and submits it directly to channel B. The hash fails &mdash; different steg number, different expected value.</p>
           <p class="text-primary text-xs font-bold uppercase tracking-wider">Covered by the protocol</p>
         </div>
         <div class="glass-card p-6 sm:p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
           <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all">
             <svg class="size-6 text-slate-500 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#eye"/></svg>
           </div>
-          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">PIN-Level Leak</h3>
-          <p class="text-slate-400 text-sm leading-relaxed font-medium">Someone observes your PIN being typed, learns it through social engineering, or finds a channel where you disclosed it. If you reuse the same raw PIN everywhere, every channel is now accessible. The protocol cannot help here &mdash; the attacker simply types the known PIN into other channels themselves.</p>
-          <p class="text-yellow-500/80 text-xs font-bold uppercase tracking-wider">Not covered by the protocol alone</p>
+          <h3 class="text-white font-extrabold text-sm uppercase tracking-wider font-display">Raw PIN Exposure</h3>
+          <p class="text-slate-400 text-sm leading-relaxed font-medium">Someone learns the raw digit string you typed &mdash; by watching, through a PM record, or any other means. If you reuse the same PIN everywhere, every channel is now accessible to them.</p>
+          <p class="text-yellow-500/80 text-xs font-bold uppercase tracking-wider">Not covered by the protocol</p>
         </div>
       </div>
       <div class="glass-card p-6 sm:p-8 space-y-4">
-        <p class="text-slate-400 font-medium leading-relaxed text-base">A derivation rule closes the second gap. If your PIN for channel A is <span class="font-mono text-white">83012671</span> and your PIN for channel B is <span class="font-mono text-white">83010842</span>, learning channel A&rsquo;s PIN gives an attacker nothing they can use on channel B. The strategies below are how you build that rule.</p>
+        <p class="text-slate-400 font-medium leading-relaxed text-base">A derivation rule is the defence against raw PIN exposure. If your typed PIN for channel A is <span class="font-mono text-white">83012671</span> and for channel B is <span class="font-mono text-white">83010842</span>, learning channel A&rsquo;s PIN gives an attacker nothing they can type on channel B. The strategies below are how you build that rule.</p>
       </div>
     </section>
 
