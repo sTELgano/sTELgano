@@ -13,7 +13,7 @@ import {
   queryDiasporaMetrics,
 } from "../../src/lib/analytics";
 
-const AE_FIELD = "stelgano_eventsAdaptiveGroups";
+const AE_FIELD = "workersAnalyticsEngineAdaptiveGroups";
 
 function makeResponse(groups: unknown[]): Response {
   const body = JSON.stringify({
@@ -43,7 +43,7 @@ describe("queryCountryMetrics", () => {
       ),
     );
 
-    const result = await queryCountryMetrics("acct", "token");
+    const result = await queryCountryMetrics("acct", "token", "test_ds");
     // sorted by total descending: NG (20) > KE (15)
     expect(result).toHaveLength(2);
     expect(result[0]!.country_code).toBe("NG");
@@ -57,14 +57,14 @@ describe("queryCountryMetrics", () => {
   it("returns [] on fetch error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network error")));
 
-    const result = await queryCountryMetrics("acct", "token");
+    const result = await queryCountryMetrics("acct", "token", "test_ds");
     expect(result).toEqual([]);
   });
 
   it("returns [] on empty groups", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeResponse([])));
 
-    const result = await queryCountryMetrics("acct", "token");
+    const result = await queryCountryMetrics("acct", "token", "test_ds");
     expect(result).toEqual([]);
   });
 });
@@ -82,7 +82,7 @@ describe("queryCFCountryMetrics", () => {
       ),
     );
 
-    const result = await queryCFCountryMetrics("acct", "token");
+    const result = await queryCFCountryMetrics("acct", "token", "test_ds");
     // sorted by total: US (18) > GB (7)
     expect(result).toHaveLength(2);
     expect(result[0]!.country_code).toBe("US");
@@ -105,7 +105,7 @@ describe("queryCFCountryMetrics", () => {
       ),
     );
 
-    const result = await queryCFCountryMetrics("acct", "token");
+    const result = await queryCFCountryMetrics("acct", "token", "test_ds");
     // only KE should survive — empty string and missing blob3 are skipped
     expect(result).toHaveLength(1);
     expect(result[0]!.country_code).toBe("KE");
@@ -125,7 +125,7 @@ describe("queryDiasporaMetrics", () => {
       ),
     );
 
-    const result = await queryDiasporaMetrics("acct", "token");
+    const result = await queryDiasporaMetrics("acct", "token", "test_ds");
     expect(result).toHaveLength(2);
     // KE:GB total=12, NG:US total=4 → KE:GB first
     expect(result[0]!.steg_country).toBe("KE");
@@ -151,7 +151,7 @@ describe("queryDiasporaMetrics", () => {
       ),
     );
 
-    const result = await queryDiasporaMetrics("acct", "token");
+    const result = await queryDiasporaMetrics("acct", "token", "test_ds");
     // only the KE:US row survives
     expect(result).toHaveLength(1);
     expect(result[0]!.steg_country).toBe("KE");
@@ -171,7 +171,7 @@ describe("queryDiasporaMetrics", () => {
       ),
     );
 
-    const result = await queryDiasporaMetrics("acct", "token");
+    const result = await queryDiasporaMetrics("acct", "token", "test_ds");
     expect(result).toHaveLength(1);
     expect(result[0]!.steg_country).toBe("KE");
     expect(result[0]!.cf_country).toBe("GB");
@@ -182,7 +182,7 @@ describe("queryDiasporaMetrics", () => {
   it("returns [] on network error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
 
-    const result = await queryDiasporaMetrics("acct", "token");
+    const result = await queryDiasporaMetrics("acct", "token", "test_ds");
     expect(result).toEqual([]);
   });
 });

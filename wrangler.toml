@@ -135,6 +135,7 @@ MONETIZATION_ENABLED = "true"
 # Engine via the GraphQL API. Not a secret: safe to commit. Get it from
 # the Cloudflare dashboard URL or `wrangler whoami`.
 CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
+CF_AE_DATASET = "stelgano_events"
 
 # ---------------------------------------------------------------------------
 # Staging environment (staging branch → stelgano-staging Worker)
@@ -188,10 +189,10 @@ type = "ratelimit"
 namespace_id = "2003"
 simple = { limit = 3, period = 60 }
 
-# Analytics Engine not inherited — repeat for staging (shares the same dataset).
+# Analytics Engine not inherited — repeat for staging with a separate dataset.
 [[env.staging.analytics_engine_datasets]]
 binding = "ANALYTICS"
-dataset = "stelgano_events"
+dataset = "stelgano_events_staging"
 
 [[env.staging.d1_databases]]
 binding = "DB"
@@ -212,3 +213,4 @@ PAID_TTL_DAYS = "365"
 # Enable monetization in staging so the full paid-tier flow can be exercised.
 MONETIZATION_ENABLED = "true"
 CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
+CF_AE_DATASET = "stelgano_events_staging"

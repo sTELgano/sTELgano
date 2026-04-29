@@ -377,19 +377,20 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   let activeRooms = 0;
   let aeError: string | null = null;
   const aeReady = Boolean(env.CF_ACCOUNT_ID && env.CF_AE_API_TOKEN);
+  const aeDataset = env.CF_AE_DATASET;
   try {
     [country, cfCountry, daily, diaspora, activeRooms] = await Promise.all([
       aeReady
-        ? queryCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!)
+        ? queryCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
         : Promise.resolve([] as CountryRow[]),
       aeReady
-        ? queryCFCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!)
+        ? queryCFCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
         : Promise.resolve([] as CFCountryRow[]),
       aeReady
-        ? queryDailyMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, 90)
+        ? queryDailyMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, 90, aeDataset)
         : Promise.resolve([] as DailyRow[]),
       aeReady
-        ? queryDiasporaMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!)
+        ? queryDiasporaMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
         : Promise.resolve([] as DiasporaRow[]),
       getActiveRooms(env.DB),
     ]);
@@ -400,7 +401,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   // Run a cheap validation query to surface token/permission errors distinctly
   // from "no data yet". Only runs when aeReady and no data came back.
   if (aeReady && daily.length === 0 && country.length === 0) {
-    aeError = await checkAeAccess(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!).catch(
+    aeError = await checkAeAccess(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset).catch(
       () => "AE check failed",
     );
   }

@@ -17,17 +17,20 @@
 // One data point per event covers both per-country and per-day aggregates —
 // they are computed at query time with no row locking and no contention.
 //
-// The "stelgano_events" dataset maps to the GraphQL field name
-// "stelgano_eventsAdaptiveGroups" per the AE naming convention:
-//   <dataset_name>AdaptiveGroups
+// All custom AE datasets are queried via the generic field
+// "workersAnalyticsEngineAdaptiveGroups" with a dataset filter.
+// Production uses "stelgano_events"; staging uses "stelgano_events_staging"
+// (set via CF_AE_DATASET in wrangler.toml) to keep their data separate.
 //
 // PRIVACY: no room_hash, no access_hash, no phone digits ever appear in
 // any data point. blob2 and blob3 each carry a 2-char ISO code — neither
 // is stored alongside any individual room or access record.
 
 const AE_GRAPHQL = "https://api.cloudflare.com/client/v4/graphql";
-const DATASET = "stelgano_events";
-const AE_FIELD = `${DATASET}AdaptiveGroups`;
+// All custom AE datasets are queried through this single generic field,
+// filtered by dataset name — individual <dataset>AdaptiveGroups fields
+// do not exist in the CF GraphQL schema.
+const AE_FIELD = "workersAnalyticsEngineAdaptiveGroups";
 
 export type EventType =
   | "room_free"
@@ -132,12 +135,13 @@ function escQ(s: string): string {
 export async function queryCountryMetrics(
   accountId: string,
   apiToken: string,
+  dataset: string,
 ): Promise<CountryRow[]> {
   const query = `{
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
         ${AE_FIELD}(
-          filter: { blob1_in: ["room_free", "room_paid"] }
+          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"] }
           limit: 10000
           orderBy: [count_DESC]
         ) {
@@ -176,12 +180,13 @@ export async function queryCountryMetrics(
 export async function queryCFCountryMetrics(
   accountId: string,
   apiToken: string,
+  dataset: string,
 ): Promise<CFCountryRow[]> {
   const query = `{
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
         ${AE_FIELD}(
-          filter: { blob1_in: ["room_free", "room_paid"] }
+          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"] }
           limit: 10000
           orderBy: [count_DESC]
         ) {
@@ -222,12 +227,13 @@ export async function queryCFCountryMetrics(
 export async function queryDiasporaMetrics(
   accountId: string,
   apiToken: string,
+  dataset: string,
 ): Promise<DiasporaRow[]> {
   const query = `{
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
         ${AE_FIELD}(
-          filter: { blob1_in: ["room_free", "room_paid"] }
+          filter: { dataset: "${escQ(dataset)}", blob1_in: ["room_free", "room_paid"] }
           limit: 10000
           orderBy: [count_DESC]
         ) {
@@ -268,11 +274,15 @@ export async function queryDiasporaMetrics(
 
 /** Validates AE access by running a minimal 1-row query.
  *  Returns the first GraphQL error message, or null on success. */
-export async function checkAeAccess(accountId: string, apiToken: string): Promise<string | null> {
+export async function checkAeAccess(
+  accountId: string,
+  apiToken: string,
+  dataset: string,
+): Promise<string | null> {
   const query = `{
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
-        ${AE_FIELD}(limit: 1) { count }
+        ${AE_FIELD}(limit: 1 filter: { dataset: "${escQ(dataset)}" }) { count }
       }
     }
   }`;
@@ -300,6 +310,7 @@ export async function queryDailyMetrics(
   accountId: string,
   apiToken: string,
   days: number,
+  dataset: string,
 ): Promise<DailyRow[]> {
   const sinceMs = Date.now() - (days - 1) * 86_400_000;
   const since = new Date(sinceMs).toISOString().slice(0, 10);
@@ -308,7 +319,7 @@ export async function queryDailyMetrics(
     viewer {
       accounts(filter: { accountTag: "${escQ(accountId)}" }) {
         ${AE_FIELD}(
-          filter: { datetime_geq: "${since}T00:00:00Z" }
+          filter: { dataset: "${escQ(dataset)}", datetime_geq: "${since}T00:00:00Z" }
           limit: 10000
           orderBy: [date_DESC]
         ) {
