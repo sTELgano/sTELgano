@@ -784,6 +784,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): st
                 >
                 <p class="text-[10px] text-slate-600 text-center font-medium leading-relaxed px-2">
                   Don&rsquo;t save this &mdash; treat it like a one-time passcode. Saving it would suggest the same PIN for every channel on this site.
+                  <a href="/blog/creative-pin-strategies" class="underline underline-offset-2 hover:text-slate-400 transition-colors">PIN tips &rsaquo;</a>
                 </p>
               </div>
 
