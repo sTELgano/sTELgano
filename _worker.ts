@@ -27,9 +27,9 @@ import type { Env } from "./src/env";
 import {
   type CFCountryRow,
   type CountryRow,
+  checkAeAccess,
   type DailyRow,
   type DiasporaRow,
-  checkAeAccess,
   queryCFCountryMetrics,
   queryCountryMetrics,
   queryDailyMetrics,

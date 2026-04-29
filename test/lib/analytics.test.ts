@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Unit tests for src/lib/analytics.ts — the GraphQL query helpers.
+// Unit tests for src/lib/analytics.ts — the SQL API query helpers.
 // Uses vi.stubGlobal to mock fetch; the write-side (writeEvent) is
 // fire-and-forget against an AE binding unavailable in Node and is
 // tested implicitly through the worker-runtime tests.
@@ -13,16 +13,8 @@ import {
   queryDiasporaMetrics,
 } from "../../src/lib/analytics";
 
-const AE_FIELD = "workersAnalyticsEngineAdaptiveGroups";
-
-function makeResponse(groups: unknown[]): Response {
-  const body = JSON.stringify({
-    data: {
-      viewer: {
-        accounts: [{ [AE_FIELD]: groups }],
-      },
-    },
-  });
+function makeResponse(rows: unknown[]): Response {
+  const body = JSON.stringify({ data: rows });
   return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
 }
 
@@ -36,9 +28,9 @@ describe("queryCountryMetrics", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         makeResponse([
-          { count: 10, dimensions: { blob1: "room_free", blob2: "KE" } },
-          { count: 5, dimensions: { blob1: "room_paid", blob2: "KE" } },
-          { count: 20, dimensions: { blob1: "room_free", blob2: "NG" } },
+          { blob1: "room_free", blob2: "KE", cnt: 10 },
+          { blob1: "room_paid", blob2: "KE", cnt: 5 },
+          { blob1: "room_free", blob2: "NG", cnt: 20 },
         ]),
       ),
     );
@@ -61,7 +53,7 @@ describe("queryCountryMetrics", () => {
     expect(result).toEqual([]);
   });
 
-  it("returns [] on empty groups", async () => {
+  it("returns [] on empty rows", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeResponse([])));
 
     const result = await queryCountryMetrics("acct", "token", "test_ds");
@@ -75,9 +67,9 @@ describe("queryCFCountryMetrics", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         makeResponse([
-          { count: 15, dimensions: { blob1: "room_free", blob3: "US" } },
-          { count: 3, dimensions: { blob1: "room_paid", blob3: "US" } },
-          { count: 7, dimensions: { blob1: "room_free", blob3: "GB" } },
+          { blob1: "room_free", blob3: "US", cnt: 15 },
+          { blob1: "room_paid", blob3: "US", cnt: 3 },
+          { blob1: "room_free", blob3: "GB", cnt: 7 },
         ]),
       ),
     );
@@ -93,14 +85,14 @@ describe("queryCFCountryMetrics", () => {
     expect(result[1]!.paid_rooms).toBe(0);
   });
 
-  it("skips groups with absent blob3", async () => {
+  it("skips rows with absent blob3", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         makeResponse([
-          { count: 10, dimensions: { blob1: "room_free", blob3: "KE" } },
-          { count: 5, dimensions: { blob1: "room_free", blob3: "" } },
-          { count: 3, dimensions: { blob1: "room_free" } },
+          { blob1: "room_free", blob3: "KE", cnt: 10 },
+          { blob1: "room_free", blob3: "", cnt: 5 },
+          { blob1: "room_free", cnt: 3 },
         ]),
       ),
     );
@@ -119,8 +111,8 @@ describe("queryDiasporaMetrics", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         makeResponse([
-          { count: 12, dimensions: { blob1: "room_free", blob2: "KE", blob3: "GB" } },
-          { count: 4, dimensions: { blob1: "room_paid", blob2: "NG", blob3: "US" } },
+          { blob1: "room_free", blob2: "KE", blob3: "GB", cnt: 12 },
+          { blob1: "room_paid", blob2: "NG", blob3: "US", cnt: 4 },
         ]),
       ),
     );
@@ -143,10 +135,10 @@ describe("queryDiasporaMetrics", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         makeResponse([
-          { count: 10, dimensions: { blob1: "room_free", blob2: "KE", blob3: "US" } },
-          { count: 5, dimensions: { blob1: "room_free", blob2: "", blob3: "US" } },
-          { count: 3, dimensions: { blob1: "room_free", blob2: "KE", blob3: "" } },
-          { count: 2, dimensions: { blob1: "room_free" } },
+          { blob1: "room_free", blob2: "KE", blob3: "US", cnt: 10 },
+          { blob1: "room_free", blob2: "", blob3: "US", cnt: 5 },
+          { blob1: "room_free", blob2: "KE", blob3: "", cnt: 3 },
+          { blob1: "room_free", cnt: 2 },
         ]),
       ),
     );
@@ -164,9 +156,9 @@ describe("queryDiasporaMetrics", () => {
       "fetch",
       vi.fn().mockResolvedValue(
         makeResponse([
-          { count: 8, dimensions: { blob1: "room_free", blob2: "KE", blob3: "GB" } },
-          { count: 3, dimensions: { blob1: "room_paid", blob2: "KE", blob3: "GB" } },
-          { count: 5, dimensions: { blob1: "room_free", blob2: "KE", blob3: "GB" } },
+          { blob1: "room_free", blob2: "KE", blob3: "GB", cnt: 8 },
+          { blob1: "room_paid", blob2: "KE", blob3: "GB", cnt: 3 },
+          { blob1: "room_free", blob2: "KE", blob3: "GB", cnt: 5 },
         ]),
       ),
     );
