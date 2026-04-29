@@ -60,20 +60,19 @@ export async function createPending(
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  await db
+  const row = await db
     .prepare(
       `INSERT INTO extension_tokens
         (id, token_hash, status, amount_cents, currency, expires_at, inserted_at, updated_at)
-       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)
+       RETURNING id, token_hash, status, amount_cents, currency, provider_ref,
+                 paid_at, redeemed_at, expires_at, inserted_at, updated_at`,
     )
     .bind(id, args.tokenHash, args.amountCents, args.currency, args.expiresAt, now, now)
-    .run();
+    .first<ExtensionToken>();
 
-  const row = await findByTokenHash(db, args.tokenHash);
   if (!row) {
-    // Should be impossible — we just inserted it. Throw rather than
-    // returning a fake row so the caller hears about real DB problems.
-    throw new Error("createPending: token disappeared after insert");
+    throw new Error("createPending: INSERT RETURNING returned no row");
   }
   return row;
 }
