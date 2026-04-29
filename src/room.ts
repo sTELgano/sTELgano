@@ -17,7 +17,7 @@
 
 import type { Env } from "./env";
 import { type EventType, writeEvent } from "./lib/analytics";
-import { findByTokenHash, markRedeemed } from "./lib/extension_tokens";
+import { deleteToken, findByTokenHash, markRedeemed } from "./lib/extension_tokens";
 import { decrementActiveRooms, incrementActiveRooms } from "./lib/live_counters";
 import {
   type ClientEvent,
@@ -284,6 +284,7 @@ export class RoomDO implements DurableObject {
       this.room.tier === "paid" ? "room_expired_paid" : "room_expired_free";
     void decrementActiveRooms(this.env.DB);
     writeEvent(this.env.ANALYTICS, expiredType);
+    await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
     this.room = null;
   }
@@ -624,6 +625,12 @@ export class RoomDO implements DurableObject {
       this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
       return;
     }
+
+    // Delete the token row immediately after redemption so a redeemed
+    // token's redeemed_at timestamp does not sit in D1 for up to 30 days
+    // until the daily sweep. Closing this linkability window is the same
+    // privacy goal as v1's separate-transaction design.
+    void deleteToken(this.env.DB, tokenHash);
 
     // Extend the room's TTL and reschedule its self-destruct alarm.
     // Floor to the hour (v1 `round_to_hour/1`) so the exact redemption

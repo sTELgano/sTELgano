@@ -78,20 +78,34 @@ export async function createPending(
   return row;
 }
 
-/** Returns the token with the given hash, or null if not found. */
+/** Returns the token with the given hash if it exists and has not expired,
+ *  or null otherwise. Expired-but-not-swept tokens are treated as missing
+ *  so they cannot be redeemed in the window between expiry and the daily cron. */
 export async function findByTokenHash(
   db: D1Database,
   tokenHash: string,
 ): Promise<ExtensionToken | null> {
   if (!HEX64_RE.test(tokenHash)) return null;
+  const now = new Date().toISOString();
   return db
     .prepare(
       `SELECT id, token_hash, status, amount_cents, currency, provider_ref,
               paid_at, redeemed_at, expires_at, inserted_at, updated_at
-       FROM extension_tokens WHERE token_hash = ?`,
+       FROM extension_tokens WHERE token_hash = ? AND expires_at > ?`,
     )
-    .bind(tokenHash)
+    .bind(tokenHash, now)
     .first<ExtensionToken>();
+}
+
+/** Deletes a token row immediately. Used after redemption to close the
+ *  linkability window — a redeemed token's redeemed_at timestamp would
+ *  otherwise sit in D1 until the daily sweep (up to 30 days). */
+export async function deleteToken(db: D1Database, tokenHash: string): Promise<void> {
+  if (!HEX64_RE.test(tokenHash)) return;
+  await db
+    .prepare("DELETE FROM extension_tokens WHERE token_hash = ?")
+    .bind(tokenHash)
+    .run();
 }
 
 /** Marks a token as paid, optionally recording the provider's reference

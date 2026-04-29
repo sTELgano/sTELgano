@@ -33,7 +33,7 @@ export const LOCKOUT_MINUTES = 30;
  *  classifying room_hash values as "exists" vs. "does not exist" by
  *  measuring reply latency. Must be larger than the normal worst-case
  *  inter-branch delta. */
-export const JOIN_TIME_FLOOR_MS = 40;
+export const JOIN_TIME_FLOOR_MS = 500;
 
 /** Default TTL for free-tier rooms. */
 export const FREE_TTL_DAYS = 7;

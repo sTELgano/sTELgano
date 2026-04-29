@@ -93,7 +93,7 @@ database_id = "8dc2edd6-cde2-49cb-a1bb-fffb33c6e274"
 migrations_dir = "migrations"
 
 # KV namespace for exchange rate caching. Written daily by the
-# "0 6 * * *" cron via refreshRate() and read by initialize() in
+# "0 3 * * *" cron via refreshRate() and read by initialize() in
 # src/lib/paystack.ts when PAYSTACK_SETTLEMENT_CURRENCY ≠ PAYMENT_CURRENCY.
 # Create with: wrangler kv:namespace create RATE_CACHE
 [[kv_namespaces]]
@@ -134,9 +134,6 @@ PRICE_CENTS = "500"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
 MONETIZATION_ENABLED = "true"
-# Percent buffer added on top of FX-converted amounts to absorb rate drift.
-# Only used when PAYSTACK_SETTLEMENT_CURRENCY is set. Default: 5
-PAYSTACK_FX_BUFFER_PCT = "5"
 # Cloudflare account ID — needed by the admin dashboard to query Analytics
 # Engine via the GraphQL API. Not a secret: safe to commit. Get it from
 # the Cloudflare dashboard URL or `wrangler whoami`.
@@ -212,7 +209,6 @@ PAYMENT_CURRENCY = "USD"
 PRICE_CENTS = "10"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
-PAYSTACK_FX_BUFFER_PCT = "5"
 # Enable monetization in staging so the full paid-tier flow can be exercised.
 MONETIZATION_ENABLED = "true"
 CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
