@@ -35,7 +35,13 @@ import {
   queryDailyMetrics,
   queryDiasporaMetrics,
 } from "./src/lib/analytics";
-import { createPending, deleteExpired, deleteToken, markPaid } from "./src/lib/extension_tokens";
+import {
+  createPending,
+  deleteExpired,
+  deleteToken,
+  findByTokenHash,
+  markPaid,
+} from "./src/lib/extension_tokens";
 import { refreshRate } from "./src/lib/fx_rate";
 import { getActiveRooms } from "./src/lib/live_counters";
 import {
@@ -809,13 +815,18 @@ async function handlePaystackWebhook(request: Request, env: Env): Promise<Respon
   }
 
   // Double-verify with Paystack's own API. If verification fails,
-  // still return 200 — don't reveal whether the reference was known
-  // to us or not.
+  // check if we even know this reference.
   const verified = await verifyTransaction(reference, env);
   if (!verified) {
-    // Verification failed — likely a race or transient issue. Return
-    // 503 so Paystack retries the webhook until it succeeds.
-    console.error(`Paystack transaction verification failed for reference: ${reference}`);
+    const token = await findByTokenHash(env.DB, reference);
+    if (!token) {
+      // Good signature + unknown reference → 200 silent-swallow.
+      // This ensures we do not leak which references exist in our DB.
+      return jsonResponse({ status: "ok" });
+    }
+    // Verification failed for a KNOWN reference — likely a race or transient issue.
+    // Return 503 so Paystack retries the webhook until it succeeds.
+    console.error(`Paystack transaction verification failed for known reference: ${reference}`);
     return jsonResponse({ status: "error", message: "verification_failed" }, 503);
   }
 
