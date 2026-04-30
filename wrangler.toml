@@ -109,6 +109,13 @@ crons = ["0 3 * * *"]
 enabled = true
 head_sampling_rate = 1.0
 
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+
 # Production environment variables.
 #
 # Secrets — set via `wrangler secret put`, never committed:

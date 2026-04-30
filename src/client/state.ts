@@ -1059,7 +1059,11 @@ export class ChatState {
     if (!this.client || this.state.kind !== "chat") return;
 
     try {
-      await this.client.redeemExtension(secret);
+      const res = await this.client.redeemExtension(secret);
+      // Success! Update local state immediately.
+      if (this.state.kind === "chat") {
+        this.setState({ ...this.state, ttlExpiresAt: res.ttl_expires_at });
+      }
       // Success! Clear the secret so we don't try again on next join.
       try {
         sessionStorage.removeItem("stelegano_extension_secret");

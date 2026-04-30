@@ -656,7 +656,7 @@ export class RoomDO implements DurableObject {
     // token's redeemed_at timestamp does not sit in D1 for up to 30 days
     // until the daily sweep. Closing this linkability window is the same
     // privacy goal as v1's separate-transaction design.
-    void deleteToken(this.env.DB, tokenHash);
+    await deleteToken(this.env.DB, tokenHash);
 
     // Extend the room's TTL and reschedule its self-destruct alarm.
     // Floor to the hour (v1 `round_to_hour/1`) so the exact redemption

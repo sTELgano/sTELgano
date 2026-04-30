@@ -779,6 +779,9 @@ async function handlePaystackWebhook(request: Request, env: Env): Promise<Respon
 
   const expected = await hmacSha512Hex(env.PAYSTACK_SECRET_KEY, rawBody);
   if (!timingSafeHexEqual(signature.toLowerCase(), expected)) {
+    console.error(
+      `Paystack webhook signature mismatch. Header: ${signature.slice(0, 8)}..., Expected: ${expected.slice(0, 8)}...`,
+    );
     return jsonResponse({ error: "invalid_signature" }, 401);
   }
 
@@ -810,7 +813,10 @@ async function handlePaystackWebhook(request: Request, env: Env): Promise<Respon
   // to us or not.
   const verified = await verifyTransaction(reference, env);
   if (!verified) {
-    return jsonResponse({ status: "ok" });
+    // Verification failed — likely a race or transient issue. Return
+    // 503 so Paystack retries the webhook until it succeeds.
+    console.error(`Paystack transaction verification failed for reference: ${reference}`);
+    return jsonResponse({ status: "error", message: "verification_failed" }, 503);
   }
 
   try {
