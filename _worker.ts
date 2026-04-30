@@ -770,6 +770,7 @@ function adminMetricCard(
 //     without naming the token. Mirrors v1.
 
 async function handlePaystackWebhook(request: Request, env: Env): Promise<Response> {
+  console.log("Paystack Webhook received");
   if (env.MONETIZATION_ENABLED !== "true") {
     return jsonResponse({ error: "not_found" }, 404);
   }

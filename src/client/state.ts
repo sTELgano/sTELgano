@@ -21,7 +21,14 @@
 // handle_event clause and produces 0+ setState() calls before
 // resolving.
 
-import { parsePhoneNumberFromString } from "libphonenumber-js";
+import {
+  AsYouType,
+  getCountries,
+  getCountryCallingCode,
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from "libphonenumber-js";
+import { type CountryNames, generatePhoneNumber } from "phone-number-generator-js";
 import type { JoinReply, MessagePayload } from "../protocol";
 import {
   decrypt,
@@ -32,11 +39,35 @@ import {
   encrypt,
   fromBase64,
   generateExtensionToken,
-  normalise,
   type ProgressCallback,
   toBase64,
 } from "./crypto/anon";
 import { RoomClient, type RoomClientError } from "./room_client";
+
+// Mapping of ISO codes to Flag Emojis
+function getFlag(iso: string): string {
+  if (iso === "XK") return "🇽🇰";
+  return iso
+    .toUpperCase()
+    .replace(/./g, (char) => String.fromCodePoint(127397 + char.charCodeAt(0)));
+}
+
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+
+export const COUNTRY_DATA = getCountries()
+  .map((iso) => ({
+    iso,
+    flag: getFlag(iso),
+    dialCode: `+${getCountryCallingCode(iso)}`,
+    name: regionNames.of(iso) || iso,
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+// Adapter for phone-number-generator-js
+export const COUNTRY_LIST: Array<{ name: string; iso: string }> = COUNTRY_DATA.map((c) => ({
+  name: c.name,
+  iso: c.iso,
+}));
 
 // ---------------------------------------------------------------------------
 // Public state shape
@@ -94,127 +125,130 @@ export type GeneratorState = {
   copiedNumber: boolean;
 };
 
-export type State =
+type BaseState = {
+  /** Optional overlay for informational pages (Terms, Spec, etc.) to prevent reloads. */
+  overlay?: { title: string; html: string; loading: boolean } | null;
+};
+
+export type State = BaseState &
   /** Initial. Form is empty (or the phone is pre-populated from
    *  sessionStorage / generator drawer / handoff). */
-  | {
-      kind: "entry";
-      /** True when the phone field was set by the generator drawer
-       *  or the post-payment handoff — UI renders it read-only. */
-      phoneLocked: boolean;
-      /** Pre-populated phone, or "" when blank. */
-      phone: string;
-      /** Eye-toggle state for the phone field. v1 default: false
-       *  (password-style masking). */
-      phoneVisible: boolean;
-      /** Error banner copy (e.g. "Wrong PIN") — null means no
-       *  banner. Cleared on next submit. */
-      error: string | null;
-      /** When error is a failed-auth, how many attempts remain
-       *  before the 30-minute lockout. */
-      attemptsRemaining: number | null;
-      /** Generator drawer state — opens over the entry form. */
-      generator: GeneratorState;
-    }
-  /** PBKDF2 in flight. The 600k iterations take ~1.5–2.5s. */
-  | {
-      kind: "deriving";
-      phone: string;
-      pin: string;
-      /** 0–100; updated by the worker. */
-      progress: number;
-    }
-  /** Monetization-on case: room doesn't exist on the server yet, the
-   *  user has to pick a tier. Skipped when monetization is off (the
-   *  state machine auto-fires continueFree() in that path). */
-  | {
-      kind: "new_channel";
-      phone: string;
-      pin: string;
-      roomHash: string;
-      accessHash: string;
-      senderHash: string;
-      /** True while the paid-tier button is in flight (token
-       *  generation + POST /api/payment/initiate + redirect). */
-      paymentLoading: boolean;
-      /** Error banner copy after a failed payment init, null
-       *  otherwise. Cleared when the user clicks a tier again. */
-      paymentError: string | null;
-      /** Free TTL in days from server config — rendered in the Free button. */
-      freeTtlDays: number;
-      /** Price in minor currency units (e.g. cents). */
-      priceCents: number;
-      /** ISO 4217 currency code (e.g. "USD"). */
-      currency: string;
-    }
-  /** Opening the WebSocket and joining. Brief — under a second
-   *  typically. */
-  | { kind: "connecting"; phone: string }
-  /** The chat surface. */
-  | {
-      kind: "chat";
-      phone: string;
-      senderHash: string;
-      /** N=1: at most one. */
-      current: PlainMessage | null;
-      /** True iff the OTHER party is composing. UI shows the
-       *  indicator; resets on next state change. */
-      counterpartyTyping: boolean;
-      /** Inline edit of own message. The edit textarea is
-       *  uncontrolled — the initial value comes from
-       *  current.plaintext at the moment startEdit() is called, and
-       *  saveEdit(text) reads the textarea's DOM value directly.
-       *  Keeps the textarea focus stable across renders. */
-      editing: boolean;
-      /** Destruction modal: renders over the chat when true. */
-      confirmExpire: boolean;
-      /** ISO timestamp when the room TTL expires. null = no TTL (or unknown). */
-      ttlExpiresAt: string | null;
-      /** True while a payment redirect is in flight from the Extend button. */
-      paymentLoading: boolean;
-      /** Error copy after a failed extend attempt. */
-      paymentError: string | null;
-    }
-  /** Wrong PIN OR 30-min lockout. PIN re-entry only — phone stays
-   *  the same. Splits from v1 into two sub-flows keyed by `reason`. */
-  | {
-      kind: "locked";
-      phone: string;
-      reason: "unauthorized" | "locked";
-      attemptsRemaining?: number;
-      /** Error copy for a failed unlock attempt, e.g. "Wrong PIN". */
-      lockError: string | null;
-      /** Number of pips shown in v1's corner — how many failed
-       *  attempts so far in this lock session. */
-      lockAttempts: number;
-    }
-  /** Terminal. Room TTL hit, expire_room fired, or connection
-   *  bounced after expiry. */
-  | { kind: "expired" };
+  (
+    | {
+        kind: "entry";
+        /** Pre-populated phone, or "" when blank. */
+        phone: string;
+        /** Typed PIN. masked in UI. */
+        pin: string;
+        /** Confirmation PIN. */
+        confirmPin: string;
+        /** ISO country code for the dropdown e.g. "US". */
+        countryIso: string;
+        /** True when the phone field was set by a previous session
+         *  or the post-payment handoff — UI renders it read-only. */
+        phoneLocked: boolean;
+        /** Eye-toggle state for the phone field. */
+        phoneVisible: boolean;
+        /** Whether the terms have been accepted. */
+        acceptedTerms: boolean;
+        /** Whether the user has confirmed they've saved their identity. */
+        confirmedSaved: boolean;
+        /** Current onboarding step (0-2), or null if skipped/finished. */
+        onboardingStep: number | null;
+        /** Error banner copy (e.g. "Wrong PIN") — null means no
+         *  banner. Cleared on next submit. */
+        error: string | null;
+        /** When error is a failed-auth, how many attempts remain
+         *  before the 30-minute lockout. */
+        attemptsRemaining: number | null;
+        /** True while generating a new number. */
+        generating: boolean;
+        /** Whether the country dropdown is visible. */
+        showCountries: boolean;
+        /** Live filter for the country dropdown. */
+        searchQuery: string;
+        /** True if the phone number is valid according to libphonenumber-js. */
+        phoneValid: boolean;
+      }
+    /** PBKDF2 in flight. The 600k iterations take ~1.5–2.5s. */
+    | {
+        kind: "deriving";
+        phone: string;
+        pin: string;
+        /** 0–100; updated by the worker. */
+        progress: number;
+      }
+    /** Monetization-on case: room doesn't exist on the server yet, the
+     *  user has to pick a tier. Skipped when monetization is off (the
+     *  state machine auto-fires continueFree() in that path). */
+    | {
+        kind: "new_channel";
+        phone: string;
+        pin: string;
+        roomHash: string;
+        accessHash: string;
+        senderHash: string;
+        /** True while the paid-tier button is in flight (token
+         *  generation + POST /api/payment/initiate + redirect). */
+        paymentLoading: boolean;
+        /** Error banner copy after a failed payment init, null
+         *  otherwise. Cleared when the user clicks a tier again. */
+        paymentError: string | null;
+        /** Free TTL in days from server config — rendered in the Free button. */
+        freeTtlDays: number;
+        /** Price in minor currency units (e.g. cents). */
+        priceCents: number;
+        /** ISO 4217 currency code (e.g. "USD"). */
+        currency: string;
+      }
+    /** Opening the WebSocket and joining. Brief — under a second
+     *  typically. */
+    | { kind: "connecting"; phone: string }
+    /** The chat surface. */
+    | {
+        kind: "chat";
+        phone: string;
+        senderHash: string;
+        /** N=1: at most one. */
+        current: PlainMessage | null;
+        /** True iff the OTHER party is composing. UI shows the
+         *  indicator; resets on next state change. */
+        counterpartyTyping: boolean;
+        /** Inline edit of own message. The edit textarea is
+         *  uncontrolled — the initial value comes from
+         *  current.plaintext at the moment startEdit() is called, and
+         *  saveEdit(text) reads the textarea's DOM value directly.
+         *  Keeps the textarea focus stable across renders. */
+        editing: boolean;
+        /** Destruction modal: renders over the chat when true. */
+        confirmExpire: boolean;
+        /** ISO timestamp when the room TTL expires. null = no TTL (or unknown). */
+        ttlExpiresAt: string | null;
+        /** True while a payment redirect is in flight from the Extend button. */
+        paymentLoading: boolean;
+        /** Error copy after a failed extend attempt. */
+        paymentError: string | null;
+      }
+    /** Wrong PIN OR 30-min lockout. PIN re-entry only — phone stays
+     *  the same. Splits from v1 into two sub-flows keyed by `reason`. */
+    | {
+        kind: "locked";
+        phone: string;
+        reason: "unauthorized" | "locked";
+        attemptsRemaining?: number;
+        /** Error copy for a failed unlock attempt, e.g. "Wrong PIN". */
+        lockError: string | null;
+        /** Number of pips shown in v1's corner — how many failed
+         *  attempts so far in this lock session. */
+        lockAttempts: number;
+      }
+    /** Terminal. Room TTL hit, expire_room fired, or connection
+     *  bounced after expiry. */
+    | { kind: "expired" }
+  );
 
 // ---------------------------------------------------------------------------
-// Generator helpers
 // ---------------------------------------------------------------------------
-
-const COUNTRY_PERSIST_KEY = "stelgano_selected_country";
-
-function initialGenerator(): GeneratorState {
-  let savedCountry: string | null = null;
-  try {
-    savedCountry = sessionStorage.getItem(COUNTRY_PERSIST_KEY);
-  } catch {
-    // sessionStorage disabled
-  }
-  return {
-    open: false,
-    selectedCountry: savedCountry,
-    searchQuery: "",
-    showCountries: false,
-    generatedNumber: null,
-    generating: false,
-    copiedNumber: false,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // SessionStorage keys (cleared on logout / panic / room expiry)
@@ -265,6 +299,14 @@ function readHandoffPhone(): string {
   }
 }
 
+function readHandoffPin(): string {
+  try {
+    return sessionStorage.getItem("stelegano_handoff_pin") ?? "";
+  } catch {
+    return "";
+  }
+}
+
 /** Reads stelegano_handoff_tier. Set by initiatePayment
  *  before the Paystack redirect; read once on return to decide
  *  whether to skip the new_channel screen. */
@@ -276,11 +318,10 @@ function readHandoffTier(): string | null {
   }
 }
 
-/** Clears the handoff phone/tier once they've been successfully used
- *  to join a room. */
 function clearHandoff(): void {
   try {
     sessionStorage.removeItem("stelegano_handoff_phone");
+    sessionStorage.removeItem("stelegano_handoff_pin");
     sessionStorage.removeItem("stelegano_handoff_tier");
   } catch {
     // ignore
@@ -327,13 +368,22 @@ export class ChatState {
   private config: Config = DEFAULT_CONFIG;
 
   constructor() {
-    // On mount, check for the post-payment handoff. If present, the
-    // user is returning from Paystack and we pre-populate the phone
-    // (and lock the field) so they don't retype it.
-    const handoff = readHandoffPhone();
-    // phoneVisible=true when phone comes from handoff — user should see the
-    // number they're returning to without having to toggle it.
-    this.state = this.initialEntry(handoff, !!handoff, !!handoff);
+    const handoffPhone = readHandoffPhone();
+    const handoffPin = readHandoffPin();
+
+    // If we have both, we skip the entry form entirely on return.
+    if (handoffPhone && handoffPin) {
+      this.state = this.initialEntry(handoffPhone, true, true);
+      // Fill the PIN so submit() can pick it up.
+      this.state.pin = handoffPin;
+      this.state.confirmPin = handoffPin;
+      this.state.acceptedTerms = true;
+      this.state.confirmedSaved = true;
+      // Defer submission to the next tick so the state machine is ready.
+      setTimeout(() => this.submit(), 0);
+    } else {
+      this.state = this.initialEntry(handoffPhone, !!handoffPhone, !!handoffPhone);
+    }
   }
 
   private initialEntry(
@@ -343,12 +393,21 @@ export class ChatState {
   ): Extract<State, { kind: "entry" }> {
     return {
       kind: "entry",
+      phone: phone || readHandoffPhone(),
+      pin: "",
+      confirmPin: "",
+      countryIso: "US",
       phoneLocked,
-      phone,
       phoneVisible,
+      acceptedTerms: false,
+      confirmedSaved: false,
+      onboardingStep: null,
       error: null,
       attemptsRemaining: null,
-      generator: initialGenerator(),
+      generating: false,
+      showCountries: false,
+      searchQuery: "",
+      phoneValid: false,
     };
   }
 
@@ -393,18 +452,55 @@ export class ChatState {
    *  (PBKDF2, off-thread), opens the WS, joins. Routes to
    *  new_channel/connecting/chat/locked based on the join reply.
    *  Callers are responsible for validating inputs before calling. */
-  async submit(phone: string, pin: string): Promise<void> {
-    if (!pin) return;
-    // Validate that the phone is a valid international number with a
-    // resolvable country. Two-attempt parse: raw input first (handles
-    // "+1 555 012 3456"), then digits-with-plus (handles the re-auth
-    // path where state stores the already-normalised form "15550123456").
-    const parsed =
-      parsePhoneNumberFromString(phone) ?? parsePhoneNumberFromString(`+${normalise(phone)}`);
-    if (!parsed?.isValid() || !parsed.country) return;
+  async submit(phoneOverride?: string, pinOverride?: string): Promise<void> {
+    const s = this.state;
+    // We allow submit from 'entry' (standard) or 'locked' (re-auth)
+    if (s.kind !== "entry" && s.kind !== "locked") return;
 
-    const normalisedPhone = normalise(phone);
-    if (!normalisedPhone) return;
+    const phone = phoneOverride ?? (s.kind === "entry" ? s.phone : s.phone);
+    const pin = pinOverride ?? (s.kind === "entry" ? s.pin : "");
+    const confirmPin = s.kind === "entry" ? s.confirmPin : pin;
+    const acceptedTerms = s.kind === "entry" ? s.acceptedTerms : true;
+    const confirmedSaved = s.kind === "entry" ? s.confirmedSaved : true;
+
+    // Validation
+    if (!phone) {
+      if (s.kind === "entry") this.setState({ ...s, error: "phone number required" });
+      return;
+    }
+
+    if (!pin) {
+      if (s.kind === "entry") this.setState({ ...s, error: "PIN required" });
+      else this.setState({ ...s, lockError: "PIN required" });
+      return;
+    }
+
+    if (pin !== confirmPin) {
+      if (s.kind === "entry") this.setState({ ...s, error: "PINs do not match" });
+      else this.setState({ ...s, lockError: "PINs do not match" });
+      return;
+    }
+
+    if (!acceptedTerms || !confirmedSaved) {
+      if (s.kind === "entry")
+        this.setState({ ...s, error: "Please accept terms and confirm you saved your number" });
+      return;
+    }
+
+    // Normalise based on current country if not already international
+    const countryIso = s.kind === "entry" ? s.countryIso : "US";
+    const fullPhone = phone.startsWith("+")
+      ? phone
+      : `${COUNTRY_DATA.find((c) => c.iso === countryIso)?.dialCode}${phone}`;
+    const parsed = parsePhoneNumberFromString(fullPhone);
+
+    if (!parsed?.isValid()) {
+      if (s.kind === "entry") this.setState({ ...s, error: `invalid ${countryIso} phone number` });
+      else this.setState({ ...s, lockError: `invalid phone number` });
+      return;
+    }
+
+    const normalisedPhone = this.normalised(fullPhone);
 
     // Phase 1: derive identifiers (instant — three SHA-256 calls).
     // room_hash and access_hash can derive in parallel; sender_hash
@@ -472,14 +568,18 @@ export class ChatState {
     }
   }
 
+  /** Normalises a phone number to digits only. */
+  private normalised(raw: string): string {
+    return raw.replace(/\D/g, "");
+  }
+
   // -------------------------------------------------------------------------
   // Action: locked → re-enter PIN (re-derive without re-typing phone)
   // -------------------------------------------------------------------------
 
   async reauthenticate(pin: string): Promise<void> {
     if (this.state.kind !== "locked") return;
-    const phone = this.state.phone;
-    await this.submit(phone, pin);
+    await this.submit(this.state.phone, pin);
   }
 
   // -------------------------------------------------------------------------
@@ -533,6 +633,10 @@ export class ChatState {
     try {
       sessionStorage.setItem("stelegano_extension_secret", secret);
       sessionStorage.setItem("stelegano_handoff_phone", phone);
+      // Persist the PIN so we can auto-submit on return.
+      if ("pin" in s) {
+        sessionStorage.setItem("stelegano_handoff_pin", s.pin);
+      }
       // v1 also stashed handoff_tier=free so the return path
       // auto-creates the room as free (the extension upgrades it
       // on redeem). Match.
@@ -753,132 +857,155 @@ export class ChatState {
   // Generator drawer (entry-state only)
   // -------------------------------------------------------------------------
 
-  openGenerator(): void {
-    if (this.state.kind !== "entry") return;
-    this.setState({
-      ...this.state,
-      generator: { ...this.state.generator, open: true },
-    });
+  // -------------------------------------------------------------------------
+  // New Integrated Identity Actions
+  // -------------------------------------------------------------------------
+
+  setPhone(phone: string): void {
+    const s = this.state;
+    if (s.kind !== "entry" || s.phoneLocked) return;
+
+    // Strip non-digits except leading plus to avoid double-formatting confusion
+    const digits = phone.startsWith("+")
+      ? `+${phone.slice(1).replace(/\D/g, "")}`
+      : phone.replace(/\D/g, "");
+
+    // Use AsYouType for real-time formatting
+    const formatter = digits.startsWith("+")
+      ? new AsYouType()
+      : new AsYouType(s.countryIso as CountryCode);
+    const formatted = formatter.input(digits);
+    const parsed = parsePhoneNumberFromString(formatted, s.countryIso as CountryCode);
+
+    // Smart country detection
+    let countryIso = s.countryIso;
+    if (digits.startsWith("+") && parsed?.country) {
+      countryIso = parsed.country;
+    }
+
+    const isValid = parsed ? parsed.isValid() : false;
+    let error = s.error;
+    if (digits.length > 5 && !isValid) {
+      error = "Invalid phone number";
+    } else if (isValid && error === "Invalid phone number") {
+      error = null;
+    }
+
+    this.setState({ ...s, phone: formatted, countryIso, phoneValid: isValid, error });
   }
 
-  closeGenerator(): void {
-    if (this.state.kind !== "entry") return;
-    this.setState({
-      ...this.state,
-      generator: { ...this.state.generator, open: false, showCountries: false },
-    });
+  setCountry(iso: string): void {
+    const s = this.state;
+    if (s.kind !== "entry" || s.phoneLocked) return;
+    this.setState({ ...s, countryIso: iso, showCountries: false, searchQuery: "", error: null });
   }
 
-  setCountrySearch(query: string, showDropdown = true): void {
-    if (this.state.kind !== "entry") return;
-    this.setState({
-      ...this.state,
-      generator: {
-        ...this.state.generator,
-        searchQuery: query,
-        showCountries: showDropdown,
-      },
-    });
+  toggleCountries(): void {
+    const s = this.state;
+    if (s.kind !== "entry" || s.phoneLocked) return;
+    this.setState({ ...s, showCountries: !s.showCountries, searchQuery: "" });
+  }
+
+  openCountries(): void {
+    const s = this.state;
+    if (s.kind !== "entry" || s.phoneLocked || s.showCountries) return;
+    this.setState({ ...s, showCountries: true, searchQuery: "" });
   }
 
   closeCountries(): void {
-    if (this.state.kind !== "entry") return;
-    this.setState({
-      ...this.state,
-      generator: { ...this.state.generator, showCountries: false },
-    });
+    const s = this.state;
+    if (s.kind !== "entry" || !s.showCountries) return;
+    this.setState({ ...s, showCountries: false, searchQuery: "" });
   }
 
-  /** Pick a country from the dropdown. Persists to sessionStorage so
-   *  next visit pre-selects, and auto-fires generation. */
-  async selectCountry(
-    country: string,
-    generate: (countryName: string) => Promise<string>,
-  ): Promise<void> {
-    if (this.state.kind !== "entry") return;
+  setSearchQuery(q: string): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+    this.setState({ ...s, searchQuery: q });
+  }
+
+  async generateNewNumber(): Promise<void> {
+    const s = this.state;
+    if (s.kind !== "entry" || s.phoneLocked || s.generating) return;
+
+    this.setState({ ...s, generating: true });
+
     try {
-      sessionStorage.setItem(COUNTRY_PERSIST_KEY, country);
+      // Since we use phone-number-generator-js, we need to map the ISO back to
+      // the country name string it expects. A simple mapping or using the label.
+      // For now, we'll use a representative set or the existing COUNTRY_LIST.
+      const countryName = COUNTRY_LIST.find((c) => c.iso === s.countryIso)?.name ?? "United States";
+
+      // v1 has a 600ms cosmetic delay for "calculating" feel.
+      await new Promise((r) => setTimeout(r, 600));
+
+      const num = await generatePhoneNumber({ countryName: countryName as CountryNames });
+
+      const formatter = num.startsWith("+")
+        ? new AsYouType()
+        : new AsYouType(s.countryIso as CountryCode);
+      const formatted = formatter.input(num);
+      const parsed = parsePhoneNumberFromString(formatted, s.countryIso as CountryCode);
+      const isValid = parsed ? parsed.isValid() : false;
+
+      this.setState({ ...s, phone: formatted, generating: false, phoneValid: isValid });
     } catch {
-      // ignore
-    }
-    this.setState({
-      ...this.state,
-      generator: {
-        ...this.state.generator,
-        selectedCountry: country,
-        searchQuery: "",
-        showCountries: false,
-        generating: true,
-        generatedNumber: null,
-      },
-    });
-    // v1 has a 600ms cosmetic delay for "calculating" feel.
-    await new Promise((r) => setTimeout(r, 600));
-    try {
-      const number = await generate(country);
-      if (this.state.kind !== "entry") return; // drawer closed mid-flight
-
-      // Auto-copy to clipboard for quick sharing.
-      let copied = false;
-      try {
-        await navigator.clipboard.writeText(number);
-        copied = true;
-      } catch {
-        // clipboard API unavailable — proceed without copying
-      }
-
-      this.setState({
-        ...this.state,
-        generator: {
-          ...this.state.generator,
-          generating: false,
-          generatedNumber: number,
-          copiedNumber: copied,
-        },
-      });
-
-      if (copied) {
-        setTimeout(() => {
-          if (this.state.kind !== "entry") return;
-          if (this.state.generator.generatedNumber === number) {
-            this.setState({
-              ...this.state,
-              generator: { ...this.state.generator, copiedNumber: false },
-            });
-          }
-        }, 2000);
-      }
-    } catch {
-      if (this.state.kind !== "entry") return;
-      this.setState({
-        ...this.state,
-        generator: { ...this.state.generator, generating: false },
-      });
+      this.setState({ ...s, generating: false });
     }
   }
 
-  /** Re-generate using the same country. */
-  async regenerate(generate: (countryName: string) => Promise<string>): Promise<void> {
-    if (this.state.kind !== "entry") return;
-    const country = this.state.generator.selectedCountry;
-    if (!country) return;
-    await this.selectCountry(country, generate);
+  setPin(pin: string): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+
+    let error = s.error;
+    if (pin && s.confirmPin && pin !== s.confirmPin) {
+      error = "PINs do not match";
+    } else if (pin && pin.length < 4) {
+      error = "PIN must be at least 4 digits";
+    } else if (error === "PINs do not match" || error === "PIN must be at least 4 digits") {
+      error = null;
+    }
+
+    this.setState({ ...s, pin, error });
   }
 
-  /** Apply the generated number to the entry phone field. Locks the
-   *  phone (so the user can't edit a generated steg number) and
-   *  closes the drawer. */
-  applyGenerated(): void {
-    if (this.state.kind !== "entry") return;
-    const number = this.state.generator.generatedNumber;
-    if (!number) return;
-    this.setState({
-      ...this.state,
-      phone: number,
-      phoneLocked: true,
-      phoneVisible: true,
-      generator: { ...this.state.generator, open: false, showCountries: false },
-    });
+  setConfirmPin(confirmPin: string): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+
+    let error = s.error;
+    if (s.pin && confirmPin && s.pin !== confirmPin) {
+      error = "PINs do not match";
+    } else if (error === "PINs do not match") {
+      error = null;
+    }
+
+    this.setState({ ...s, confirmPin, error });
+  }
+
+  setAcceptedTerms(acceptedTerms: boolean): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+    this.setState({ ...s, acceptedTerms });
+  }
+
+  setConfirmedSaved(confirmedSaved: boolean): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+    this.setState({ ...s, confirmedSaved });
+  }
+
+  setOnboardingStep(onboardingStep: number | null): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+    this.setState({ ...s, onboardingStep });
+  }
+
+  togglePhoneVisible(): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+    this.setState({ ...s, phoneVisible: !s.phoneVisible, error: null });
   }
 
   /** Enter inline-edit mode for the current (own, unread) message. */
@@ -1172,6 +1299,38 @@ export class ChatState {
       entry.error = "Connection lost. Reconnect to continue.";
       this.setState(entry);
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Action: Overlay handling (Terms, Spec, etc.)
+  // -------------------------------------------------------------------------
+
+  async openOverlay(path: string): Promise<void> {
+    const title =
+      path === "/"
+        ? "Home"
+        : path.slice(1).charAt(0).toUpperCase() + path.slice(2).replace(".html", "");
+
+    this.setState({ ...this.state, overlay: { title, html: "", loading: true } });
+
+    try {
+      const r = await fetch(path);
+      const text = await r.text();
+      // Extract main content from the HTML if possible
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, "text/html");
+      const main = doc.querySelector("main");
+      // If no <main>, try to find the first <header> + <section> combos or just use body
+      const content = main ? main.innerHTML : doc.body.innerHTML;
+
+      this.setState({ ...this.state, overlay: { title, html: content, loading: false } });
+    } catch {
+      this.setState({ ...this.state, overlay: null });
+    }
+  }
+
+  closeOverlay(): void {
+    this.setState({ ...this.state, overlay: null });
   }
 
   // -------------------------------------------------------------------------

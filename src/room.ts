@@ -17,8 +17,9 @@
 
 import type { Env } from "./env";
 import { type EventType, writeEvent } from "./lib/analytics";
-import { deleteToken, findByTokenHash, markRedeemed } from "./lib/extension_tokens";
+import { deleteToken, findByTokenHash, markPaid, markRedeemed } from "./lib/extension_tokens";
 import { decrementActiveRooms, incrementActiveRooms } from "./lib/live_counters";
+import { verifyTransaction } from "./lib/paystack";
 import {
   type ClientEvent,
   type ErrorReason,
@@ -634,8 +635,18 @@ export class RoomDO implements DurableObject {
     }
 
     if (token.status === "pending") {
-      this.send(ws, { ref: evt.ref, error: { reason: "payment_pending" } });
-      return;
+      // Proactive verification fallback: if the webhook hasn't arrived
+      // yet, check directly with Paystack. This eliminates the race.
+      const verified = await verifyTransaction(tokenHash, this.env);
+      if (verified) {
+        // Transaction confirmed! Mark it paid in D1 immediately.
+        await markPaid(this.env.DB, tokenHash, "proactive_verify");
+        // Proceed with the local check as if it were already paid.
+        token.status = "paid";
+      } else {
+        this.send(ws, { ref: evt.ref, error: { reason: "payment_pending" } });
+        return;
+      }
     }
 
     if (token.status !== "paid") {
