@@ -628,10 +628,18 @@ export class RoomDO implements DurableObject {
     const tokenHash = await sha256hex(secret);
 
     const token = await findByTokenHash(this.env.DB, tokenHash);
-    if (!token || token.status !== "paid") {
-      // Not found OR still pending (webhook hasn't landed) OR
-      // already redeemed. All collapse to "invalid_token" so the
-      // client can't distinguish.
+    if (!token) {
+      this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
+      return;
+    }
+
+    if (token.status === "pending") {
+      this.send(ws, { ref: evt.ref, error: { reason: "payment_pending" } });
+      return;
+    }
+
+    if (token.status !== "paid") {
+      // Already redeemed or expired/deleted.
       this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
       return;
     }

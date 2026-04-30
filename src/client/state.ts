@@ -259,24 +259,31 @@ function paymentErrorCopy(code: string): string {
 
 function readHandoffPhone(): string {
   try {
-    const v = sessionStorage.getItem("stelegano_handoff_phone");
-    if (v) sessionStorage.removeItem("stelegano_handoff_phone");
-    return v ?? "";
+    return sessionStorage.getItem("stelegano_handoff_phone") ?? "";
   } catch {
     return "";
   }
 }
 
-/** Reads and clears stelegano_handoff_tier. Set by initiatePayment
+/** Reads stelegano_handoff_tier. Set by initiatePayment
  *  before the Paystack redirect; read once on return to decide
  *  whether to skip the new_channel screen. */
 function readHandoffTier(): string | null {
   try {
-    const v = sessionStorage.getItem("stelegano_handoff_tier");
-    if (v) sessionStorage.removeItem("stelegano_handoff_tier");
-    return v;
+    return sessionStorage.getItem("stelegano_handoff_tier");
   } catch {
     return null;
+  }
+}
+
+/** Clears the handoff phone/tier once they've been successfully used
+ *  to join a room. */
+function clearHandoff(): void {
+  try {
+    sessionStorage.removeItem("stelegano_handoff_phone");
+    sessionStorage.removeItem("stelegano_handoff_tier");
+  } catch {
+    // ignore
   }
 }
 
@@ -962,7 +969,6 @@ export class ChatState {
     let pendingSecret: string | null = null;
     try {
       pendingSecret = sessionStorage.getItem("stelegano_extension_secret");
-      if (pendingSecret) sessionStorage.removeItem("stelegano_extension_secret");
     } catch {
       // sessionStorage disabled
     }
@@ -1010,6 +1016,8 @@ export class ChatState {
       sessionStorage.setItem("stelegano_room_hash", roomHash);
       sessionStorage.setItem("stelegano_access_hash", accessHash);
       sessionStorage.setItem("stelegano_sender_hash", senderHash);
+      // Consume the handoff markers now that join is successful.
+      clearHandoff();
     } catch {
       // sessionStorage disabled — ignore
     }
@@ -1038,10 +1046,40 @@ export class ChatState {
     // atomically during join (via extension_secret in the join payload),
     // so this call will return invalid_token and be silently swallowed.
     // For existing-room extends (the "Extend" button in chat), this is
-    // the primary redemption path — the join ignored the secret and this
-    // call does the actual upgrade.
+    // the primary redemption path — the join ignored the secret.
+    //
+    // If the webhook is delayed, the server returns payment_pending.
+    // We retry a few times before giving up.
     if (pendingSecret && this.client) {
-      this.client.redeemExtension(pendingSecret).catch(() => {});
+      this.attemptRedeem(pendingSecret);
+    }
+  }
+
+  private async attemptRedeem(secret: string, attempt = 0): Promise<void> {
+    if (!this.client || this.state.kind !== "chat") return;
+
+    try {
+      await this.client.redeemExtension(secret);
+      // Success! Clear the secret so we don't try again on next join.
+      try {
+        sessionStorage.removeItem("stelegano_extension_secret");
+      } catch {
+        // ignore
+      }
+    } catch (err) {
+      const e = err as RoomClientError;
+      if (e.reason === "payment_pending" && attempt < 10) {
+        // Webhook hasn't landed yet. Wait 3s and retry.
+        setTimeout(() => this.attemptRedeem(secret, attempt + 1), 3000);
+      } else if (e.reason === "invalid_token") {
+        // Truly invalid or already redeemed. Clear it.
+        try {
+          sessionStorage.removeItem("stelegano_extension_secret");
+        } catch {
+          // ignore
+        }
+      }
+      // other errors (internal_error, monetization_disabled) just stop
     }
   }
 

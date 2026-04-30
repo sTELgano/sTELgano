@@ -150,6 +150,7 @@ export type ErrorReason =
   | "not_deletable"
   | "expire_failed"
   | "invalid_token"
+  | "payment_pending"
   | "monetization_disabled"
   | "invalid_topic"
   | "internal_error"
