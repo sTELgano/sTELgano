@@ -106,7 +106,7 @@ crons = ["0 3 * * *"]
 
 # Observability: Workers Logs, no third-party telemetry.
 [observability]
-enabled = false
+enabled = true
 head_sampling_rate = 1
 
 [observability.logs]
