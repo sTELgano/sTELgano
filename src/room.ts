@@ -689,8 +689,9 @@ export class RoomDO implements DurableObject {
 
     // Telemetry: blob2 = steg-number country, blob3 = CF-IPCountry.
     // cfCountry survives hibernation via WsAttachment.cfCountry.
-    const iso = evt.data.country_iso ?? "";
-    const cfCountry = (ws.deserializeAttachment() as WsAttachment | null)?.cfCountry ?? "";
+    const att = ws.deserializeAttachment() as WsAttachment | null;
+    const iso = evt.data.country_iso ?? att?.stegCountry ?? "";
+    const cfCountry = att?.cfCountry ?? "";
     writeEvent(this.env.ANALYTICS, "room_paid", iso, cfCountry);
 
     const ttlIso = new Date(newTtlMs).toISOString();

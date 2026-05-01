@@ -1224,7 +1224,7 @@ export class ChatState {
     if (!this.client || this.state.kind !== "chat") return;
 
     try {
-      const res = await this.client.redeemExtension(secret);
+      const res = await this.client.redeemExtension(secret, this.state.countryIso);
       // Success! Update local state immediately.
       if (this.state.kind === "chat") {
         this.setState({ ...this.state, ttlExpiresAt: res.ttl_expires_at });
