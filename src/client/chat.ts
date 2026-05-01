@@ -17,33 +17,17 @@
 // elixir/lib/stelgano_web/live/chat_live.ex so that nothing in the
 // shipped HTML drifts from what designers signed off on in v1.
 
-import { AsYouType, parsePhoneNumberFromString } from "libphonenumber-js";
-import { CountryNames, generatePhoneNumber } from "phone-number-generator-js";
+import { ChatState, COUNTRY_DATA, type Config, type PlainMessage, type State } from "./state";
 
-import {
-  ChatState,
-  type Config,
-  type GeneratorState,
-  type PlainMessage,
-  type State,
-} from "./state";
+const root = document.getElementById("chat-root")!;
 
-// Adapter from CountryNames enum to the value the generator
-// expects. The enum keys are snake_cased versions of the values
-// (values have spaces). Building the list once at module load
-// avoids per-render enumeration.
-const COUNTRY_LIST: Array<{ name: string; iso: string }> = Object.values(CountryNames)
-  // De-dupe — the enum has a couple of aliases (e.g. DR_Congo /
-  // The_Democratic_Republic_Of_The_Congo both map to "DR Congo").
-  .filter((v, i, a) => a.indexOf(v) === i)
-  .map((v) => ({ name: v, iso: "" }))
-  .sort((a, b) => a.name.localeCompare(b.name));
-
-async function generateFor(countryName: string): Promise<string> {
-  return generatePhoneNumber({ countryName: countryName as CountryNames });
+function renderWordmark(): string {
+  return `
+    <div class="wordmark text-lg sm:text-2xl leading-tight group">
+      <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
+    </div>
+  `;
 }
-
-const root = document.getElementById("chat-root");
 if (!root) throw new Error("chat-root element missing");
 
 const state = new ChatState();
@@ -72,10 +56,6 @@ fetch("/api/config")
   })
   .catch(() => {});
 
-// Last country inferred from the phone input — preserved across re-renders
-// (e.g. visibility toggle) so the country badge doesn't flash away.
-let lastInferredCountry: string | null = null;
-
 // Track the previous state kind so entrance animations only fire when
 // transitioning between states, not on intra-state updates (e.g. eye
 // toggle, typing indicator, copiedNumber). Without this every
@@ -86,6 +66,41 @@ let prevState: State | null = null;
 
 state.onStateChange((s) => {
   // 1. THE FAST PATHS — surgical DOM updates to avoid blinking on minor changes
+  if (prevState) {
+    // Global: surgical overlay updates (Terms, etc)
+    if (JSON.stringify(s.overlay) !== JSON.stringify(prevState.overlay)) {
+      const existing = document.getElementById("info-overlay");
+      if (s.overlay) {
+        if (existing) {
+          const content = existing.querySelector(".custom-scrollbar");
+          if (content) {
+            content.innerHTML = s.overlay.loading
+              ? `<div class="flex flex-col items-center justify-center h-64 space-y-4">
+                  <div class="size-12 rounded-full border-2 border-primary/10 border-t-primary animate-spin"></div>
+                  <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Loading Protocol...</p>
+                </div>`
+              : `<div class="informational-content">${s.overlay.html}</div>`;
+          }
+          const title = existing.querySelector("h3");
+          if (title) title.textContent = s.overlay.title;
+        } else {
+          root.insertAdjacentHTML("beforeend", renderOverlay(s));
+        }
+      } else if (existing) {
+        existing.remove();
+      }
+
+      // If ONLY the overlay changed and it's not a kind transition, we can skip the rest
+      if (
+        s.kind === prevState.kind &&
+        JSON.stringify({ ...s, overlay: null }) === JSON.stringify({ ...prevState, overlay: null })
+      ) {
+        prevState = JSON.parse(JSON.stringify(s)) as State;
+        return;
+      }
+    }
+  }
+
   if (prevState && prevState.kind === s.kind) {
     // ENTRY: surgical updates
     if (s.kind === "entry") {
@@ -108,16 +123,6 @@ state.onStateChange((s) => {
         if (btn) btn.innerHTML = icon(s.phoneVisible ? "eye_off" : "eye", "size-5 sm:size-6");
       }
 
-      // Update phone value & country badge
-      if (s.phone !== ps.phone) {
-        const input = document.getElementById("phone-input") as HTMLInputElement;
-        if (input && input.value !== s.phone) input.value = s.phone;
-
-        const formatter = new AsYouType();
-        formatter.input(s.phone);
-        updatePhoneCountry(formatter.getCountry() ?? null);
-      }
-
       // Update Error container
       if (s.error !== ps.error || s.attemptsRemaining !== ps.attemptsRemaining) {
         const container = document.getElementById("entry-error-container");
@@ -126,81 +131,96 @@ state.onStateChange((s) => {
         }
       }
 
-      // Update Generator Drawer state (open/close)
-      if (s.generator.open !== ps.generator.open) {
-        const container = document.getElementById("generator-drawer-container");
-        const drawer = document.getElementById("generator-drawer");
-        const backdrop = document.getElementById("drawer-backdrop");
-
-        if (container) {
-          if (s.generator.open) {
-            container.classList.remove("invisible", "pointer-events-none");
-            container.classList.add("visible");
-          } else {
-            container.classList.remove("visible");
-            container.classList.add("invisible", "pointer-events-none");
-          }
-        }
-
-        if (drawer) {
-          if (s.generator.open) {
-            drawer.classList.remove("translate-x-full");
-            drawer.classList.add("translate-x-0");
-          } else {
-            drawer.classList.remove("translate-x-0");
-            drawer.classList.add("translate-x-full");
-          }
-        }
-
-        if (backdrop) {
-          if (s.generator.open) {
-            backdrop.classList.remove("opacity-0", "pointer-events-none");
-            backdrop.classList.add("opacity-100");
-          } else {
-            backdrop.classList.remove("opacity-100");
-            backdrop.classList.add("opacity-0", "pointer-events-none");
-          }
-        }
+      // Update Submit Button State
+      const canSubmit =
+        s.phoneValid &&
+        s.pin.length >= 4 &&
+        s.pin === s.confirmPin &&
+        s.acceptedTerms &&
+        s.confirmedSaved;
+      const prevCanSubmit =
+        ps.phoneValid &&
+        ps.pin.length >= 4 &&
+        ps.pin === ps.confirmPin &&
+        ps.acceptedTerms &&
+        ps.confirmedSaved;
+      if (canSubmit !== prevCanSubmit) {
+        const btn = root.querySelector("button[type='submit']") as HTMLButtonElement;
+        if (btn) btn.disabled = !canSubmit;
       }
 
-      // Intra-generator updates (dropdown search)
+      // Surgical updates for country picker and search
       if (
-        s.generator.searchQuery !== ps.generator.searchQuery ||
-        s.generator.showCountries !== ps.generator.showCountries
+        s.showCountries !== ps.showCountries ||
+        s.searchQuery !== ps.searchQuery ||
+        s.countryIso !== ps.countryIso
       ) {
-        const container = document.getElementById("drawer-country-dropdown-container");
-        if (container) container.innerHTML = renderGeneratorDropdown(s.generator);
+        const wrapper = document.getElementById("country-dropdown-wrapper");
+        if (wrapper) wrapper.innerHTML = renderCountryPicker(s);
 
-        const input = document.getElementById("drawer-country-input") as HTMLInputElement;
-        if (input && input.value !== s.generator.searchQuery) input.value = s.generator.searchQuery;
-      }
+        const trigger = document.getElementById("country-search-trigger") as HTMLInputElement;
+        if (trigger) {
+          const currentCountry =
+            COUNTRY_DATA.find((c) => c.iso === s.countryIso) ?? COUNTRY_DATA[0]!;
+          // Use value instead of innerText, avoids selection loss
+          if (trigger.value !== (s.showCountries ? s.searchQuery : currentCountry.name)) {
+            trigger.value = s.showCountries ? s.searchQuery : currentCountry.name;
+          }
 
-      // Generator Panel updates (derived number, loading states)
-      if (
-        s.generator.generatedNumber !== ps.generator.generatedNumber ||
-        s.generator.generating !== ps.generator.generating ||
-        s.generator.selectedCountry !== ps.generator.selectedCountry ||
-        s.generator.copiedNumber !== ps.generator.copiedNumber
-      ) {
-        const container = document.getElementById("generator-panel-container");
-        if (container) {
-          container.innerHTML = renderGeneratorPanel(s.generator);
-        }
-        const footer = document.getElementById("generator-apply-footer");
-        if (footer) {
-          const applyBtn = s.generator.generatedNumber
-            ? `<button type="button" data-action="apply-generated" class="btn-primary w-full py-4 uppercase tracking-widest text-sm">Apply to Workspace ${icon("arrow_right", "size-4")}</button>`
-            : `<button type="button" disabled class="w-full py-4 rounded-2xl bg-white/5 border border-white/5 text-slate-600 font-bold uppercase tracking-widest text-sm cursor-not-allowed italic">Select Country First</button>`;
-          footer.innerHTML = applyBtn;
+          const flagEl = document.getElementById("country-picker-flag");
+          if (flagEl && flagEl.innerHTML !== currentCountry.flag) {
+            flagEl.innerHTML = currentCountry.flag;
+          }
         }
       }
 
-      // If anything ELSE changed in the entry state that we don't handle surgically,
-      // fall through to slow path to ensure UI correctness.
+      // Update phone field (formatting + validation feedback)
+      if (s.phone !== ps.phone || s.phoneValid !== ps.phoneValid) {
+        const input = document.getElementById("phone-input") as HTMLInputElement;
+        if (input) {
+          if (input.value !== s.phone) {
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            input.value = s.phone;
+            if (start !== null && end !== null) {
+              try {
+                input.setSelectionRange(start, end);
+              } catch (_e) {}
+            }
+          }
+          if (s.phoneValid) {
+            input.classList.remove("border-white/10", "focus:border-primary/50");
+            input.classList.add("border-primary/50", "ring-1", "ring-primary/20");
+          } else if (s.phone.length > 5) {
+            input.classList.remove("border-primary/50", "ring-1", "ring-primary/20");
+            input.classList.add("border-white/10", "focus:border-primary/50");
+          }
+        }
+      }
+
+      // Update PIN fields surgically if they differ from DOM (prevents wiping)
+      if (s.pin !== ps.pin) {
+        const input = root.querySelector<HTMLInputElement>("input[name='s_key']");
+        if (input && input.value !== s.pin) input.value = s.pin;
+      }
+      if (s.confirmPin !== ps.confirmPin) {
+        const input = root.querySelector<HTMLInputElement>("input[name='s_key_confirm']");
+        if (input && input.value !== s.confirmPin) input.value = s.confirmPin;
+      }
+      if (s.acceptedTerms !== ps.acceptedTerms) {
+        const input = root.querySelector<HTMLInputElement>("input[name='accept_terms']");
+        if (input) input.checked = s.acceptedTerms;
+      }
+      if (s.confirmedSaved !== ps.confirmedSaved) {
+        const input = root.querySelector<HTMLInputElement>("input[name='confirm_saved']");
+        if (input) input.checked = s.confirmedSaved;
+      }
+
       const entriesMatch =
         s.phoneLocked === ps.phoneLocked &&
-        s.generator.searchQuery === ps.generator.searchQuery &&
-        s.generator.showCountries === ps.generator.showCountries;
+        s.phoneVisible === ps.phoneVisible &&
+        s.generating === ps.generating &&
+        s.onboardingStep === ps.onboardingStep;
 
       if (entriesMatch) {
         prevState = JSON.parse(JSON.stringify(s)) as State;
@@ -264,10 +284,19 @@ state.onStateChange((s) => {
       // Check if any "Slow Path" properties changed. If they did, we fall through
       // to the full innerHTML wipe to ensure overlays (modals, errors) render.
       const needsSlowPath =
-        s.confirmExpire !== ps.confirmExpire ||
         s.paymentError !== ps.paymentError ||
         s.paymentLoading !== ps.paymentLoading ||
         s.ttlExpiresAt !== ps.ttlExpiresAt;
+
+      // Surgical modal toggling
+      if (s.confirmExpire !== ps.confirmExpire) {
+        const modal = document.getElementById("destruction-modal");
+        if (s.confirmExpire && !modal) {
+          root.insertAdjacentHTML("beforeend", renderDestructionModal());
+        } else if (!s.confirmExpire && modal) {
+          modal.remove();
+        }
+      }
 
       if (!needsSlowPath) {
         prevState = JSON.parse(JSON.stringify(s)) as State;
@@ -295,7 +324,28 @@ state.onStateChange((s) => {
 
   const kindsChanged = !prevKind || s.kind !== prevKind;
   prevKind = s.kind;
+  const oldPrevState = prevState;
   prevState = JSON.parse(JSON.stringify(s)) as State;
+
+  // Fast-path: Entry state intra-updates (search filtering, etc)
+  if (
+    oldPrevState &&
+    oldPrevState.kind === "entry" &&
+    s.kind === "entry" &&
+    s.showCountries === oldPrevState.showCountries
+  ) {
+    // Only search query changed? Update the list surgically.
+    if (s.searchQuery !== oldPrevState.searchQuery) {
+      const listContainer = root.querySelector("#country-list-container");
+      if (listContainer) {
+        console.log("[UI] Fast-path update: country-list");
+        listContainer.innerHTML = renderCountryListItems(s);
+        return;
+      }
+    }
+  }
+
+  console.log("[UI] Slow-path: Full render");
   root.innerHTML = render(s, kindsChanged);
 
   let focusRestored = false;
@@ -338,14 +388,11 @@ state.onStateChange((s) => {
     focusFirstField();
   }
 
-  // After any re-render of the entry screen, re-apply phone formatting so
-  // the country display and AsYouType formatting survive the innerHTML swap.
-  if (s.kind === "entry") {
-    const phoneInput = root.querySelector<HTMLInputElement>('input[name="s_num"]');
-    if (phoneInput?.value) {
-      formatPhoneInput(phoneInput);
-    } else {
-      updatePhoneCountry(lastInferredCountry);
+  // Auto-focus logic: if showCountries just flipped true, make sure the input is focused
+  if (s.kind === "entry" && s.showCountries) {
+    const searchInput = root.querySelector<HTMLInputElement>("#country-search-trigger");
+    if (searchInput && document.activeElement !== searchInput) {
+      searchInput.focus();
     }
   }
 });
@@ -363,19 +410,7 @@ root.addEventListener("submit", (e) => {
   const form = new FormData(target);
 
   if (action === "submit-entry") {
-    const phone = String(form.get("s_num") ?? "");
-    const pin = String(form.get("s_key") ?? "");
-    if (!parsePhoneNumberFromString(phone)?.isValid()) {
-      state.setEntryError(
-        "That doesn't look like a valid steg number. Use the generator drawer to make one.",
-      );
-      return;
-    }
-    if (!pin) {
-      state.setEntryError("Enter your PIN.");
-      return;
-    }
-    void state.submit(phone, pin);
+    void state.submit();
   } else if (action === "submit-locked") {
     const pin = String(form.get("s_key") ?? "");
     void state.reauthenticate(pin);
@@ -383,46 +418,77 @@ root.addEventListener("submit", (e) => {
 });
 
 root.addEventListener("click", (e) => {
+  // Hijack internal links to informational pages to prevent full page reloads.
+  const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>("a[href]");
+  if (anchor && anchor.origin === window.location.origin && !anchor.hasAttribute("data-action")) {
+    const path = anchor.getAttribute("href") || "";
+    const infoPaths = ["/", "/terms", "/privacy", "/security", "/spec", "/pricing", "/blog"];
+    if (infoPaths.includes(path)) {
+      e.preventDefault();
+      // Logo/Home click returns to entry without reload
+      if (path === "/" && state.getState().kind !== "entry") {
+        state.logout();
+      } else {
+        void state.openOverlay(path);
+      }
+      return;
+    }
+  }
+
   const target = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
   if (!target) return;
   const action = target.dataset.action;
   if (!action) return;
 
   switch (action) {
-    case "toggle-phone-visibility": {
-      const phoneInput = root.querySelector<HTMLInputElement>('input[name="s_num"]');
-      state.togglePhoneVisibility(phoneInput?.value);
+    case "continue-free":
+      void state.continueFree();
       break;
-    }
-    case "open-generator":
-      state.openGenerator();
+    case "close-overlay":
+      state.closeOverlay();
       break;
-    case "close-generator":
-      state.closeGenerator();
+    case "generate-new":
+      void state.generateNewNumber();
+      break;
+    case "toggle-countries":
+      console.log("[UI] Toggle countries picker");
+      state.toggleCountries();
       break;
     case "select-country": {
-      const country = target.dataset.country ?? "";
-      if (country) void state.selectCountry(country, generateFor);
+      const iso = target.dataset.iso;
+      console.log("[UI] Select country:", iso);
+      if (iso) state.setCountry(iso);
       break;
     }
-    case "regenerate":
-      void state.regenerate(generateFor);
+    case "toggle-phone-visibility":
+      state.togglePhoneVisible();
       break;
-    case "copy-generated": {
-      const number = target.dataset.number ?? "";
-      if (number) {
-        navigator.clipboard.writeText(number).catch(() => {});
+    case "onboarding-next": {
+      const s = state.getState();
+      if (s.kind === "entry") {
+        const step = s.onboardingStep ?? 0;
+        state.setOnboardingStep(step >= 2 ? null : step + 1);
       }
       break;
     }
-    case "apply-generated":
-      state.applyGenerated();
+    case "onboarding-skip":
+      state.setOnboardingStep(null);
       break;
-    case "close-countries":
-      state.closeCountries();
+    case "go-home":
+      if (state.getState().kind !== "entry") {
+        state.logout();
+      } else {
+        void state.openOverlay("/");
+      }
       break;
-    case "continue-free":
-      void state.continueFree();
+    case "open-terms":
+      void state.openOverlay("/terms");
+      break;
+    case "open-privacy":
+      void state.openOverlay("/privacy");
+      break;
+    case "open-spec":
+      void state.openOverlay("/spec");
       break;
     case "initiate-payment":
       void state.initiatePayment();
@@ -477,10 +543,7 @@ root.addEventListener("click", (e) => {
   }
 });
 
-// Textarea char counter + typing indicator + auto-resize. We update
-// these in-place (no re-render) so focus stays on the textarea.
-// The country search input triggers a re-render to filter the
-// dropdown; input loses focus but re-focuses via [data-autofocus].
+// Textarea char counter + typing indicator + auto-resize.
 root.addEventListener(
   "input",
   (e) => {
@@ -490,57 +553,60 @@ root.addEventListener(
       updateCharCount(target.value.length);
       autoResize(target);
     } else if (target instanceof HTMLInputElement && target.name === "s_num") {
-      formatPhoneInput(target);
-    } else if (target instanceof HTMLInputElement && target.id === "drawer-country-input") {
-      state.setCountrySearch(target.value, true);
+      state.setPhone(target.value);
+    } else if (target instanceof HTMLInputElement && target.name === "s_key") {
+      state.setPin(target.value);
+    } else if (target instanceof HTMLInputElement && target.name === "s_key_confirm") {
+      state.setConfirmPin(target.value);
+    } else if (target instanceof HTMLInputElement && target.name === "accept_terms") {
+      state.setAcceptedTerms(target.checked);
+    } else if (target instanceof HTMLInputElement && target.name === "confirm_saved") {
+      state.setConfirmedSaved(target.checked);
+    } else if (target instanceof HTMLInputElement && target.id === "country-search-trigger") {
+      state.setSearchQuery(target.value);
     }
   },
   true,
 );
 
-// Open country dropdown when the search input is focused (e.g. tab in).
-root.addEventListener(
-  "focus",
-  (e) => {
-    const target = e.target as HTMLElement;
-    if (target instanceof HTMLInputElement && target.id === "drawer-country-input") {
-      const s = state.getState();
-      if (s.kind === "entry" && !s.generator.showCountries) {
-        state.setCountrySearch(target.value, true);
-      }
-    }
-  },
-  true,
-);
+// Focus-based opening for the country search
+root.addEventListener("focusin", (e) => {
+  const target = e.target as HTMLElement;
+  if (target.id === "country-search-trigger") {
+    state.openCountries();
+  }
+});
 
-// Close country dropdown on Escape; also cancel chat edits.
+// Click-based opening (backup for focus)
+root.addEventListener("mousedown", (e) => {
+  const target = e.target as HTMLElement;
+  if (target.id === "country-search-trigger") {
+    state.openCountries();
+  }
+});
+
+// Click-outside to close custom dropdowns
+document.addEventListener("click", (e) => {
+  const target = e.target as HTMLElement;
+  const inDoc = document.contains(target);
+
+  const s = state.getState();
+  if (s.kind === "entry" && s.showCountries) {
+    const inContainer = !!target.closest("#country-picker-container");
+
+    if (inDoc && !inContainer) {
+      state.closeCountries();
+    }
+  }
+});
+
+// Close modals on Escape.
 root.addEventListener("keydown", (e) => {
   const target = e.target as HTMLElement;
-  if (target instanceof HTMLInputElement && target.id === "drawer-country-input") {
-    if (e.key === "Escape") {
-      state.closeCountries();
-      e.preventDefault();
-    }
-    return;
-  }
-
   if (!(target instanceof HTMLTextAreaElement) || target.id !== "chat-textarea") return;
   if (e.key === "Escape") {
     const s = state.getState();
     if (s.kind === "chat" && s.editing) state.cancelEdit();
-  }
-});
-
-// Close country dropdown when clicking outside the search input + dropdown.
-document.addEventListener("click", (e) => {
-  const s = state.getState();
-  if (s.kind !== "entry" || !s.generator.showCountries) return;
-  const clicked = e.target as HTMLElement;
-  if (
-    !clicked.closest("#drawer-country-input") &&
-    !clicked.closest("[data-action='select-country']")
-  ) {
-    state.closeCountries();
   }
 });
 
@@ -616,462 +682,375 @@ function autoResize(ta: HTMLTextAreaElement) {
   ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`;
 }
 
-function formatPhoneInput(input: HTMLInputElement): void {
-  let val = input.value;
-  if (val.length > 0 && !val.startsWith("+")) {
-    val = `+${val.replace(/\D/g, "")}`;
-  }
-  const formatter = new AsYouType();
-  const formatted = formatter.input(val);
-  if (formatted !== input.value) input.value = formatted;
-  const country = formatter.getCountry() ?? null;
-  lastInferredCountry = country;
-  updatePhoneCountry(country);
-}
-
-function updatePhoneCountry(country: string | null): void {
-  const el = document.getElementById("phone-country-display");
-  if (!el) return;
-  if (!country) {
-    el.textContent = "";
-    return;
-  }
-  el.textContent = `(${country})`;
-}
-
 // -----------------------------------------------------------------------------
 // Render — one function per state kind
 // -----------------------------------------------------------------------------
 
 function render(s: State, animate: boolean): string {
+  let html = "";
   switch (s.kind) {
     case "entry":
-      return renderEntry(s, animate);
+      html = renderEntry(s);
+      break;
     case "deriving":
-      return renderDeriving(s, animate);
+      html = renderDeriving(s, animate);
+      break;
     case "new_channel":
-      return renderNewChannel(s);
+      html = renderNewChannel(s);
+      break;
     case "connecting":
-      return renderConnecting();
+      html = renderConnecting();
+      break;
     case "chat":
-      return renderChat(s);
+      html = renderChat(s);
+      break;
     case "locked":
-      return renderLocked(s);
+      html = renderLocked(s);
+      break;
     case "expired":
-      return renderExpired();
+      html = renderExpired();
+      break;
   }
+  return html + renderOverlay(s);
+}
+
+function renderOverlay(s: State): string {
+  if (!s.overlay) return "";
+
+  const content = s.overlay.loading
+    ? `
+      <div class="flex flex-col items-center justify-center h-64 space-y-4">
+        <div class="size-12 rounded-full border-2 border-primary/10 border-t-primary animate-spin"></div>
+        <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Loading Protocol...</p>
+      </div>`
+    : `<div class="informational-content">${s.overlay.html}</div>`;
+
+  return `
+    <div id="info-overlay" class="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-3xl animate-in duration-300">
+      <div class="w-full max-w-4xl h-full max-h-[90vh] glass-card-premium flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 shadow-[0_0_100px_rgba(0,0,0,0.8)]">
+        <!-- Overlay Header -->
+        <div class="flex items-center justify-between p-6 sm:px-10 border-b border-white/10 shrink-0 bg-slate-950/40">
+          <div class="space-y-1">
+            <h3 class="text-xl sm:text-2xl font-extrabold text-white font-display tracking-tight">${s.overlay.title}</h3>
+            <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-primary/60">System Information Overlay</p>
+          </div>
+          <button
+            data-action="close-overlay"
+            class="size-10 sm:size-12 rounded-xl bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center border border-white/5"
+          >
+            ${icon("x", "size-5 sm:size-6")}
+          </button>
+        </div>
+        
+        <!-- Overlay Content -->
+        <div class="flex-1 overflow-y-auto p-6 sm:p-10 custom-scrollbar overscroll-contain">
+          ${content}
+        </div>
+        
+        <!-- Overlay Footer -->
+        <div class="p-6 border-t border-white/10 text-center shrink-0 bg-slate-950/40">
+           <button
+            data-action="close-overlay"
+            class="btn-secondary py-3 px-8 text-sm uppercase tracking-widest font-black"
+          >
+            Back to Chat
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // -------------------------------- :entry --------------------------------
 
-function renderEntry(s: Extract<State, { kind: "entry" }>, animate: boolean): string {
-  const a = animate ? " animate-in" : "";
-  const phoneType = s.phoneVisible ? "text" : "password";
-  const phoneTrackClass = s.phoneVisible ? "tracking-wider" : "tracking-widest";
-  const phoneLockedOpacity = s.phoneLocked ? "opacity-80" : "";
-  const phoneReadonly = s.phoneLocked ? "readonly" : "";
-  const phoneAutofocus = !s.phoneLocked ? "data-autofocus" : "";
-  const pinAutofocus = s.phoneLocked ? "data-autofocus" : "";
+function renderCountryListItems(s: Extract<State, { kind: "entry" }>): string {
+  const query = s.searchQuery.toLowerCase();
+  const filtered = COUNTRY_DATA.filter(
+    (c) =>
+      c.name.toLowerCase().includes(query) ||
+      c.dialCode.includes(query) ||
+      c.iso.toLowerCase().includes(query),
+  );
 
-  const errorBanner = `
-    <div id="entry-error-container">
-      ${
-        s.error
-          ? `<div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
-              ${icon("alert_circle", "size-6 text-danger shrink-0")}
-              <div class="space-y-1">
-                <p class="text-sm font-bold text-danger">${escapeHtml(s.error)}</p>
-                ${
-                  s.attemptsRemaining !== null && s.attemptsRemaining !== undefined
-                    ? `<p class="text-[10px] text-danger/60 font-mono uppercase tracking-widest font-black">
-                         Security Lock: ${s.attemptsRemaining} ${s.attemptsRemaining === 1 ? "attempt" : "attempts"} remaining
-                       </p>`
-                    : ""
-                }
-              </div>
-            </div>`
-          : ""
-      }
-    </div>
-  `;
+  if (filtered.length === 0) {
+    return `<div class="p-8 text-center text-slate-500 text-xs font-medium">No countries found</div>`;
+  }
 
-  const lockedBadge = s.phoneLocked
-    ? `<span class="text-[10px] font-mono text-primary font-bold">LOCKED</span>`
-    : "";
-
-  return `
-    <div class="flex flex-col items-center justify-start h-full overflow-y-auto py-8 sm:py-20${a}">
-      <div class="w-full max-w-xl space-y-12">
-        <!-- Branding -->
-        <div class="text-center space-y-4">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-4 shadow-[0_0_15px_rgba(0,255,163,0.1)]">
-            ${icon("ban", "size-3")} Secure Chat Session
+  return filtered
+    .map(
+      (c) => `
+      <button
+        type="button"
+        data-action="select-country"
+        data-iso="${c.iso}"
+        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-primary/10 transition-colors group"
+      >
+        <span class="text-xl flex-none">${c.flag}</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-bold text-white truncate group-hover:text-primary transition-colors">
+            ${escapeHtml(c.name)}
           </div>
-          <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tighter text-white font-display leading-[0.9]">
-            Open <span class="text-gradient">Chat.</span>
-          </h1>
-          <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed px-4">
-            Enter your details below to secure your connection.
-          </p>
-          <div class="flex items-center justify-center gap-2 text-[10px] font-bold text-primary/60 uppercase tracking-widest">
-            ${icon("eye_off", "size-4 text-primary")} Incognito Mode recommended
+          <div class="text-[10px] text-slate-500 font-medium">
+            ${c.dialCode}
           </div>
         </div>
+        ${c.iso === s.countryIso ? `<div class="text-primary">${icon("check", "size-4")}</div>` : ""}
+      </button>
+    `,
+    )
+    .join("");
+}
 
-        <div class="glass-card-premium p-8 sm:p-10${a} overflow-hidden">
-          <div class="p-5 sm:p-10 space-y-10">
-            ${errorBanner}
+function renderCountryPicker(s: Extract<State, { kind: "entry" }>): string {
+  if (!s.showCountries) return "";
+
+  return `
+    <div class="absolute top-full left-0 mt-2 w-full bg-slate-900/90 backdrop-blur-3xl border border-white/10 rounded-lg shadow-2xl z-[100] overflow-hidden animate-in zoom-in-95 duration-200">
+      <!-- Country List -->
+      <div id="country-list-container" class="max-h-64 overflow-y-auto custom-scrollbar p-1">
+        ${renderCountryListItems(s)}
+      </div>
+    </div>
+  `;
+}
+
+function renderEntry(s: Extract<State, { kind: "entry" }>): string {
+  if (s.onboardingStep !== null) {
+    return renderOnboarding(s.onboardingStep);
+  }
+
+  const phoneType = s.phoneVisible ? "text" : "password";
+  const phoneLockedOpacity = s.phoneLocked ? "opacity-60" : "";
+  const phoneReadonly = s.phoneLocked ? "readonly" : "";
+  const phoneAutofocus = s.phoneLocked ? "" : "data-autofocus";
+  const pinAutofocus = s.phoneLocked ? "data-autofocus" : "";
+
+  const currentCountry = COUNTRY_DATA.find((c) => c.iso === s.countryIso) ?? COUNTRY_DATA[0]!;
+
+  return `
+    <div class="flex flex-col h-full w-full overflow-hidden">
+      <!-- Universal Header -->
+      <div class="px-4 sm:px-6 py-3 sm:py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl shrink-0">
+        <a href="/" data-action="go-home" class="group transition-transform active:scale-95">
+          ${renderWordmark()}
+        </a>
+        <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">
+          ${icon("lock", "size-3")} Secure Link
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-6 py-8 sm:py-16">
+        <div class="w-full max-w-xl mx-auto space-y-10 sm:space-y-12">
+          <!-- Branding -->
+          <div class="text-center space-y-4">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-4 shadow-[0_0_15px_rgba(0,255,163,0.1)]">
+              ${icon("ban", "size-3")} Private Instance
+            </div>
+            <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tighter text-white font-display leading-[0.9]">
+              Open <span class="text-gradient">Chat.</span>
+            </h1>
+            <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed">
+              Derive a one-time identity and join your private channel.
+            </p>
+          </div>
+
+        <div class="glass-card-premium p-6 sm:p-10">
+          <div class="p-4 sm:p-6 space-y-10">
+            <div id="entry-error-container">
+              ${s.error ? renderEntryErrorBlock(s) : ""}
+            </div>
 
             <form data-action="submit-entry" autocomplete="off" class="space-y-8 sm:space-y-10">
-              <!-- Phone Field -->
+              <!-- Integrated Identity Cluster -->
               <div class="space-y-4">
                 <div class="flex items-center justify-between px-1">
-                  <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.3em] text-slate-500">
-                    Secret Number <span id="phone-country-display" class="text-primary/60 normal-case tracking-normal font-normal" aria-live="polite"></span>
+                  <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                    One-Time Identifier
                   </label>
-                  ${lockedBadge}
-                </div>
-                <div id="phone-container" class="relative group">
-                  <input
-                    id="phone-input"
-                    name="s_num"
-                    type="${phoneType}"
-                    class="glass-input w-full pr-14 font-mono text-lg sm:text-xl font-bold bg-slate-950/40 ${phoneLockedOpacity} ${phoneTrackClass}"
-                    value="${escapeHtml(s.phone)}"
-                    ${phoneReadonly}
-                    placeholder="e.g. +254..."
-                    inputmode="tel"
-                    autocomplete="off"
-                    autocorrect="off"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    ${phoneAutofocus}
-                  >
-                  <button
-                    id="phone-toggle-btn"
-                    type="button"
-                    data-action="toggle-phone-visibility"
-                    class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all"
-                    tabindex="-1"
-                  >
-                    ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5 sm:size-6")}
+                  <button type="button" data-action="onboarding-next" class="text-[9px] text-primary/60 hover:text-primary transition-colors font-bold uppercase tracking-widest">
+                    Quick Start &rsaquo;
                   </button>
+                </div>
+                
+                <div class="flex flex-col gap-3">
+                  <!-- Searchable Country Selector -->
+                  <div class="relative w-full group" id="country-picker-container">
+                    <div id="country-picker-flag" class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-lg">
+                      ${currentCountry.flag}
+                    </div>
+                    <input
+                      type="text"
+                      id="country-search-trigger"
+                      class="glass-input w-full !pl-12 !pr-10 font-bold bg-slate-950/40 !text-sm transition-all focus:bg-slate-900/60 !h-full"
+                      value="${s.showCountries ? s.searchQuery : currentCountry.name}"
+                      placeholder="Select Region..."
+                      autocomplete="off"
+                    />
+                    <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-primary transition-colors">
+                      ${icon("chevron_down", "size-4")}
+                    </div>
+
+                    <div id="country-dropdown-wrapper">
+                      ${renderCountryPicker(s)}
+                    </div>
+                  </div>
+
+                  <!-- Integrated Phone Input -->
+                  <div class="relative flex-1 group">
+                      <input
+                        id="phone-input"
+                        name="s_num"
+                        type="${phoneType}"
+                        class="glass-input w-full !pr-24 font-mono !text-lg font-bold bg-slate-950/40 ${phoneLockedOpacity} !h-full ${s.phoneValid ? "border-primary/50 ring-1 ring-primary/20" : ""}"
+                        value="${escapeHtml(s.phone)}"
+                        ${phoneReadonly}
+                        placeholder="Enter number..."
+                        inputmode="tel"
+                        ${phoneAutofocus}
+                      >
+                    <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <button
+                        type="button"
+                        data-action="generate-new"
+                        ${s.generating ? "disabled" : ""}
+                        class="p-2 rounded-xl text-slate-500 hover:text-primary transition-all ${s.generating ? "opacity-20" : ""}"
+                        title="Generate regional identity"
+                      >
+                        ${icon("refresh_cw", `size-5 ${s.generating ? "animate-spin" : ""}`)}
+                      </button>
+                      <button
+                        type="button"
+                        data-action="toggle-phone-visibility"
+                        class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
+                      >
+                        ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5")}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <!-- PIN Input -->
-              <div class="space-y-4">
-                <div class="flex items-center justify-between px-1">
-                  <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest sm:tracking-[0.3em] text-slate-500">
-                    Private PIN
-                  </label>
-                  <span class="text-[9px] sm:text-[10px] font-mono text-slate-500 font-bold whitespace-nowrap">
-                    SECURED LOCALLY
-                  </span>
+              <!-- Double-PIN Cluster -->
+              <div class="space-y-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="space-y-3">
+                    <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
+                      Private PIN
+                    </label>
+                    <input
+                      name="s_key"
+                      type="password"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="Set 4-6 digits"
+                      autocomplete="new-password"
+                      class="glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
+                      value="${escapeHtml(s.pin)}"
+                      ${pinAutofocus}
+                    >
+                  </div>
+                  <div class="space-y-3">
+                    <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
+                      Confirm PIN
+                    </label>
+                    <input
+                      name="s_key_confirm"
+                      type="password"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="Repeat PIN"
+                      autocomplete="new-password"
+                      class="glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
+                      value="${escapeHtml(s.confirmPin)}"
+                    >
+                  </div>
                 </div>
-                <input
-                  name="s_key"
-                  type="text"
-                  inputmode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="Secret PIN"
-                  autocomplete="one-time-code"
-                  autocorrect="off"
-                  autocapitalize="off"
-                  spellcheck="false"
-                  style="-webkit-text-security: disc;"
-                  class="glass-input w-full text-center text-xl sm:text-4xl tracking-[0.2em] sm:tracking-[0.6em] font-mono py-4 sm:py-6 bg-slate-950/40 border-white/10"
-                  ${pinAutofocus}
-                >
-                <p class="text-[10px] text-slate-600 text-center font-medium leading-relaxed px-2">
-                  Don&rsquo;t save this &mdash; treat it like a one-time passcode. Saving it would suggest the same PIN for every channel on this site.
-                  <a href="/blog/creative-pin-strategies" class="underline underline-offset-2 hover:text-slate-400 transition-colors">PIN tips &rsaquo;</a>
+                <p class="text-[10px] text-slate-500 text-center font-medium leading-relaxed px-2 italic">
+                  PIN is never saved on servers. If forgotten, identity is lost.
                 </p>
+              </div>
+
+              <!-- Final Checkbox Confirmation -->
+              <div class="space-y-4 pt-4 border-t border-white/5">
+                <label class="flex items-start gap-3 cursor-pointer group">
+                  <input type="checkbox" name="accept_terms" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.acceptedTerms ? "checked" : ""}>
+                  <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
+                    I accept the <a data-action="open-terms" class="cursor-pointer text-primary hover:underline">Terms of Service</a> and Privacy Protocol.
+                  </span>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer group text-left">
+                  <input type="checkbox" name="confirm_saved" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.confirmedSaved ? "checked" : ""}>
+                  <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
+                    I confirm that I have <span class="text-white font-bold underline decoration-primary/40">saved my number</span>. Access cannot be recovered later.
+                  </span>
+                </label>
               </div>
 
               <button
                 type="submit"
-                class="btn-primary w-full py-4 sm:py-5 text-lg sm:text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+                class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+                ${!(s.phoneValid && s.pin.length >= 4 && s.pin === s.confirmPin && s.acceptedTerms && s.confirmedSaved) ? "disabled" : ""}
               >
-                Open Chat
-                ${icon("zap", "size-5 sm:size-6 group-hover:scale-125 transition-transform")}
+                Open Private Space
+                ${icon("zap", "size-6 group-hover:scale-125 transition-transform")}
               </button>
             </form>
-
-            <div class="pt-8 border-t border-white/5 flex flex-col items-center gap-5 text-center">
-              <p class="text-slate-400 text-sm font-medium">
-                Don't have a secret number yet?
-              </p>
-              <button
-                type="button"
-                data-action="open-generator"
-                class="btn-secondary w-full py-4 sm:py-5 text-lg sm:text-xl inline-flex items-center justify-center gap-2 group"
-              >
-                ${icon("sparkles", "size-5 text-primary group-hover:rotate-12 transition-transform")}
-                Generate New Number
-              </button>
-            </div>
           </div>
         </div>
       </div>
     </div>
-    ${renderGeneratorDrawer(s.generator)}
   `;
 }
 
-// -------------------------- generator drawer --------------------------
+function renderOnboarding(step: number): string {
+  const steps = [
+    {
+      title: "Server Blindness",
+      text: "sTELgano never sees your messages, PIN, or real identity. All encryption happens locally on your device.",
+      icon: "shield_check",
+      color: "text-primary",
+    },
+    {
+      title: "One-Time Identification",
+      text: "Your 'Secret Number' is a transient ID. Treat it like a burner phone — once you lose it, the channel is gone.",
+      icon: "zap",
+      color: "text-amber-400",
+    },
+    {
+      title: "No Recovery Possible",
+      text: "Because we store nothing, we cannot reset your PIN or recover your number. You are the sole custodian.",
+      icon: "ban",
+      color: "text-red-400",
+    },
+  ];
 
-function renderGeneratorDropdown(g: GeneratorState): string {
-  const q = g.searchQuery.toLowerCase();
-  const filtered = q
-    ? COUNTRY_LIST.filter((c) => c.name.toLowerCase().includes(q)).sort((a, b) => {
-        const aStarts = a.name.toLowerCase().startsWith(q);
-        const bStarts = b.name.toLowerCase().startsWith(q);
-        if (aStarts !== bStarts) return aStarts ? -1 : 1;
-        return 0;
-      })
-    : COUNTRY_LIST;
-  const countriesToShow = filtered.slice(0, 60);
-
-  if (!g.showCountries || countriesToShow.length === 0) return "";
+  const s = steps[step]!;
 
   return `
-    <div class="absolute z-100 w-full mt-2 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto animate-in fade-in slide-in-from-top-2 hide-scrollbar">
-      ${countriesToShow
-        .map(
-          (c) => `
-            <button
-              type="button"
-              data-action="select-country"
-              data-country="${escapeHtml(c.name)}"
-              class="w-full px-6 py-4 text-left hover:bg-white/5 text-slate-300 hover:text-white transition-all border-b border-white/5 last:border-0 flex items-center justify-between group"
-            >
-              <span class="font-bold tracking-wide text-sm">${escapeHtml(c.name)}</span>
-              ${icon("chevron_right", "size-4 opacity-0 group-hover:opacity-100 transition-opacity")}
-            </button>`,
-        )
-        .join("")}
-    </div>`;
-}
-
-function renderGeneratorPanel(g: GeneratorState): string {
-  if (g.generatedNumber) {
-    return `
-      <div class="space-y-8 animate-in scale-in">
-        <div class="relative py-12 px-6 rounded-4xl bg-slate-950/50 border border-white/5 group">
-          <div class="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent"></div>
-          <div class="relative z-10 space-y-6 text-center">
-            <button
-              type="button"
-              data-action="copy-generated"
-              data-number="${escapeHtml(g.generatedNumber)}"
-              class="font-mono font-black text-white tracking-widest text-4xl drop-shadow-[0_0_20px_rgba(0,255,163,0.3)] break-all px-2 block w-full hover:scale-105 transition-transform"
-              title="Copy to clipboard"
-            >
-              ${escapeHtml(new AsYouType().input(g.generatedNumber))}
-            </button>
-
-            <div class="flex flex-col items-center gap-3">
-              <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest text-emerald-400">
-                ${
-                  g.copiedNumber
-                    ? `${icon("check", "size-3")} Copied to Clipboard`
-                    : `${icon("sparkles", "size-3")} Identity Ready`
-                }
-              </div>
-              <button
-                type="button"
-                data-action="regenerate"
-                ${g.generating ? "disabled" : ""}
-                class="text-[9px] font-black uppercase tracking-[0.3em] text-slate-600 hover:text-primary transition-colors flex items-center justify-center gap-1.5 mx-auto mt-4 ${g.generating ? "opacity-20 pointer-events-none" : ""}"
-              >
-                ${icon("refresh_cw", `size-3 ${g.generating ? "animate-spin" : ""}`)}
-                ${g.generating ? "Generating..." : "Re-Generate"}
-              </button>
-            </div>
-          </div>
+    <div class="flex flex-col items-center justify-center h-full p-6 animate-in fade-in slide-in-from-bottom-5">
+      <div class="w-full max-w-sm text-center space-y-12">
+        <div class="size-24 sm:size-32 rounded-3xl bg-white/5 border border-white/10 mx-auto flex items-center justify-center glow-primary">
+          ${icon(s.icon, `size-12 sm:size-16 ${s.color}`)}
         </div>
-      </div>`;
-  }
+        
+        <div class="space-y-4">
+          <h2 class="text-3xl sm:text-4xl font-black tracking-tight text-white font-display">${s.title}</h2>
+          <p class="text-slate-400 text-base sm:text-lg leading-relaxed font-medium">
+            ${s.text}
+          </p>
+        </div>
 
-  return `
-    <div class="flex flex-col items-center gap-6 py-12 text-center">
-      <div class="size-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-        ${icon("globe", "size-9 text-slate-500")}
-      </div>
-      <p class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 max-w-60">
-        Select a country above to generate a targeted identity
-      </p>
-    </div>`;
-}
-
-function renderGeneratorDrawer(g: GeneratorState): string {
-  const containerVis = g.open ? "visible" : "invisible pointer-events-none";
-  const backdropOp = g.open ? "opacity-100" : "opacity-0";
-  const drawerSlide = g.open ? "translate-x-0" : "translate-x-full";
-
-  const inputRightIcon = g.selectedCountry
-    ? icon("badge_check", "size-5 text-emerald-400")
-    : icon("search", "size-5");
-
-  const applyBtn = g.generatedNumber
-    ? `
-      <button
-        type="button"
-        data-action="apply-generated"
-        class="btn-primary w-full py-4 uppercase tracking-widest text-sm"
-      >
-        Apply to Workspace ${icon("arrow_right", "size-4")}
-      </button>`
-    : `
-      <button
-        type="button"
-        disabled
-        class="w-full py-4 rounded-2xl bg-white/5 border border-white/5 text-slate-600 font-bold uppercase tracking-widest text-sm cursor-not-allowed italic"
-      >
-        Select Country First
-      </button>`;
-
-  const placeholder = g.selectedCountry ?? "Search country...";
-
-  return `
-    <div id="generator-drawer-container" class="fixed inset-0 z-50 transition-all duration-500 ${containerVis}">
-      <!-- Backdrop -->
-      <div
-        id="drawer-backdrop"
-        data-action="close-generator"
-        class="absolute inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity duration-500 ${backdropOp}"
-      ></div>
-
-      <div
-        id="generator-drawer"
-        class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-500 ease-out ${drawerSlide} h-dvh max-sm:border-l-0 max-sm:border-t"
-      >
-
-        <!-- Header -->
-        <div class="p-6 border-b border-white/5 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-              ${icon("sparkles", "size-5 text-primary")}
-            </div>
-            <div>
-              <h3 class="text-white font-bold tracking-tight uppercase text-sm">
-                Identity Generator
-              </h3>
-              <p class="text-[10px] text-slate-500 font-medium uppercase tracking-widest">
-                Derive a new steg number
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            data-action="close-generator"
-            class="size-10 rounded-xl hover:bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-all"
-          >
-            ${icon("x", "size-6")}
+        <div class="flex flex-col gap-4">
+          <button type="button" data-action="onboarding-next" class="btn-primary w-full py-5 text-lg">
+            ${step === 2 ? "Understood, Proceed" : "Next Protocol"}
+          </button>
+          <button type="button" data-action="onboarding-skip" class="text-xs font-black uppercase tracking-[0.3em] text-slate-600 hover:text-white transition-colors">
+            Skip Onboarding
           </button>
         </div>
 
-        <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-6 sm:p-8 space-y-10 hide-scrollbar">
-
-          <!-- Country Selector -->
-          <div class="space-y-4">
-            <label class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 ml-1">
-              Select Preferred Country
-            </label>
-
-            <div class="relative group">
-              <div class="relative">
-                <input
-                  type="text"
-                  id="drawer-country-input"
-                  placeholder="${escapeHtml(placeholder)}"
-                  value="${escapeHtml(g.searchQuery)}"
-                  class="glass-input w-full bg-slate-950/40 border-white/10 text-white font-bold text-lg focus:border-primary/40 py-4 px-6 rounded-2xl pr-12 transition-all tracking-wider"
-                  autocomplete="off"
-                >
-                <div class="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500">
-                  ${inputRightIcon}
-                </div>
-              </div>
-              <div id="drawer-country-dropdown-container">
-                ${renderGeneratorDropdown(g)}
-              </div>
-            </div>
-          </div>
-
-          <!-- Generator output -->
-          <div id="generator-panel-container" class="w-full">
-            ${renderGeneratorPanel(g)}
-          </div>
-
-          <!-- Forensic Safety -->
-          <div class="p-6 rounded-3xl bg-white/5 border border-white/5 space-y-4 text-left w-full max-w-sm mx-auto">
-            <div class="flex items-center gap-3">
-              <div class="size-8 rounded-xl bg-white/5 flex items-center justify-center border border-white/5">
-                ${icon("shield_check", "size-4 text-slate-400")}
-              </div>
-              <h4 class="text-xs font-black uppercase tracking-widest text-white">Forensic Safety</h4>
-            </div>
-            <p class="text-[11px] text-slate-400 leading-relaxed font-medium">
-              Identities are <span class="text-white font-bold">volatile</span>. Share immediately. Closing this drawer after applying does not save the number to history.
-            </p>
-          </div>
-
-          <!-- Onboarding Instructions -->
-          <div class="space-y-8 pt-10">
-            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 text-center mb-6">
-              Protocol Onboarding &amp; Guidance
-            </h3>
-            <div class="space-y-6">
-              ${[
-                {
-                  icon: "user_plus",
-                  title: "1. Add to Existing Contact",
-                  text: "Add this number as an extra number on your partner's existing contact — not a new contact.",
-                  guidance:
-                    "A new contact requires a name or label, which is evidence. Adding a second number to an existing real contact leaves nothing to explain.",
-                },
-                {
-                  icon: "arrow_up_right",
-                  title: "2. Share Channel ID",
-                  text: "Give this number to your partner.",
-                  guidance:
-                    "Communicate this number securely. Your PIN is personal and stays on your device.",
-                },
-                {
-                  icon: "shield_check",
-                  title: "3. Establishment",
-                  text: "Once both parties connect, a zero-trace link is armed.",
-                  guidance: "All messages are locally encrypted and wiped atomically upon reply.",
-                },
-              ]
-                .map(
-                  (s) => `
-                  <div class="glass-card p-8 flex flex-col md:flex-row gap-8 items-start relative group hover:border-white/10 transition-all duration-500">
-                    <div class="size-16 rounded-2xl bg-white/5 flex items-center justify-center text-primary border border-white/5 shadow-inner group-hover:scale-110 transition-transform duration-500">
-                      ${icon(s.icon, "size-8")}
-                    </div>
-                    <div class="flex-1 space-y-4">
-                      <div class="space-y-1">
-                        <h4 class="font-bold text-white text-xl font-display tracking-tight">${s.title}</h4>
-                        <p class="text-slate-400 leading-relaxed font-medium">${s.text}</p>
-                      </div>
-                      <div class="p-4 rounded-xl bg-slate-900/50 border border-white/5 text-xs text-slate-500 leading-relaxed italic">
-                        ${s.guidance}
-                      </div>
-                    </div>
-                  </div>`,
-                )
-                .join("")}
-            </div>
-          </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="p-6 border-t border-white/5 bg-slate-900/50">
-          <div id="generator-apply-footer">${applyBtn}</div>
+        <div class="flex justify-center gap-2">
+          ${[0, 1, 2].map((i) => `<div class="size-1.5 rounded-full ${i === step ? "bg-primary" : "bg-white/10"}"></div>`).join("")}
         </div>
       </div>
     </div>
@@ -1136,8 +1115,16 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
     : "";
 
   return `
-    <div class="flex flex-col items-center justify-start h-full overflow-y-auto p-6 py-12 sm:py-20 animate-in">
-      <div class="w-full max-w-lg space-y-10">
+    <div class="flex flex-col h-full w-full overflow-hidden">
+      <!-- Universal Header -->
+      <div class="px-4 sm:px-6 py-3 sm:py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl shrink-0">
+        <a href="/" data-action="go-home" class="group transition-transform active:scale-95">
+          ${renderWordmark()}
+        </a>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-6 py-12 sm:py-20 animate-in">
+        <div class="w-full max-w-lg mx-auto space-y-10">
         <div class="text-center space-y-4">
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(0,255,163,0.1)]">
             ${icon("sparkles", "size-3")} New Channel Detected
@@ -1273,8 +1260,8 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
       <!-- Navigation Header -->
       <div class="px-4 sm:px-6 py-3 sm:py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl sticky top-0 z-50">
         <div class="flex items-center gap-3 sm:gap-4">
-          <a href="/" class="wordmark text-lg sm:text-2xl leading-tight group">
-            <span class="wm-symbol">s</span><span class="wm-accent">TEL</span><span class="text-white">gano</span>
+          <a href="/" data-action="go-home" class="group transition-transform active:scale-95">
+            ${renderWordmark()}
           </a>
           <div class="hidden sm:block h-6 w-px bg-white/20"></div>
           <span class="hidden lg:inline text-[9px] font-bold uppercase tracking-[0.3em] text-primary">
@@ -1535,7 +1522,7 @@ function renderWaitingArea(
 
 function renderDestructionModal(): string {
   return `
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-3xl animate-in duration-300">
+    <div id="destruction-modal" class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-3xl animate-in duration-300">
       <div class="w-full max-w-sm glass-card p-10 border-danger/40 relative overflow-hidden">
         <div class="absolute -right-10 -bottom-10 size-40 bg-danger/5 rounded-full blur-3xl"></div>
 
@@ -1617,7 +1604,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
               autocapitalize="off"
               spellcheck="false"
               style="-webkit-text-security: disc;"
-              class="glass-input w-full text-center text-4xl tracking-[0.6em] font-mono py-6 bg-slate-950/40 border-white/10 focus:border-primary/40"
+              class="glass-input w-full text-center !text-4xl tracking-[0.6em] font-mono !py-6 bg-slate-950/40 border-white/10 focus:border-primary/40"
               data-autofocus
             >
             ${errorBlock}

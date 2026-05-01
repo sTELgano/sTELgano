@@ -17,8 +17,9 @@
 
 import type { Env } from "./env";
 import { type EventType, writeEvent } from "./lib/analytics";
-import { deleteToken, findByTokenHash, markRedeemed } from "./lib/extension_tokens";
+import { deleteToken, findByTokenHash, markPaid, markRedeemed } from "./lib/extension_tokens";
 import { decrementActiveRooms, incrementActiveRooms } from "./lib/live_counters";
+import { verifyTransaction } from "./lib/paystack";
 import {
   type ClientEvent,
   type ErrorReason,
@@ -628,10 +629,28 @@ export class RoomDO implements DurableObject {
     const tokenHash = await sha256hex(secret);
 
     const token = await findByTokenHash(this.env.DB, tokenHash);
-    if (!token || token.status !== "paid") {
-      // Not found OR still pending (webhook hasn't landed) OR
-      // already redeemed. All collapse to "invalid_token" so the
-      // client can't distinguish.
+    if (!token) {
+      this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
+      return;
+    }
+
+    if (token.status === "pending") {
+      // Proactive verification fallback: if the webhook hasn't arrived
+      // yet, check directly with Paystack. This eliminates the race.
+      const verified = await verifyTransaction(tokenHash, this.env);
+      if (verified) {
+        // Transaction confirmed! Mark it paid in D1 immediately.
+        await markPaid(this.env.DB, tokenHash, "proactive_verify");
+        // Proceed with the local check as if it were already paid.
+        token.status = "paid";
+      } else {
+        this.send(ws, { ref: evt.ref, error: { reason: "payment_pending" } });
+        return;
+      }
+    }
+
+    if (token.status !== "paid") {
+      // Already redeemed or expired/deleted.
       this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
       return;
     }
@@ -648,7 +667,7 @@ export class RoomDO implements DurableObject {
     // token's redeemed_at timestamp does not sit in D1 for up to 30 days
     // until the daily sweep. Closing this linkability window is the same
     // privacy goal as v1's separate-transaction design.
-    void deleteToken(this.env.DB, tokenHash);
+    await deleteToken(this.env.DB, tokenHash);
 
     // Extend the room's TTL and reschedule its self-destruct alarm.
     // Floor to the hour (v1 `round_to_hour/1`) so the exact redemption
@@ -670,8 +689,9 @@ export class RoomDO implements DurableObject {
 
     // Telemetry: blob2 = steg-number country, blob3 = CF-IPCountry.
     // cfCountry survives hibernation via WsAttachment.cfCountry.
-    const iso = evt.data.country_iso ?? "";
-    const cfCountry = (ws.deserializeAttachment() as WsAttachment | null)?.cfCountry ?? "";
+    const att = ws.deserializeAttachment() as WsAttachment | null;
+    const iso = evt.data.country_iso ?? att?.stegCountry ?? "";
+    const cfCountry = att?.cfCountry ?? "";
     writeEvent(this.env.ANALYTICS, "room_paid", iso, cfCountry);
 
     const ttlIso = new Date(newTtlMs).toISOString();
