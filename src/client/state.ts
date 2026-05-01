@@ -175,6 +175,7 @@ export type State = BaseState &
         kind: "deriving";
         phone: string;
         pin: string;
+        countryIso: string;
         /** 0–100; updated by the worker. */
         progress: number;
       }
@@ -185,6 +186,7 @@ export type State = BaseState &
         kind: "new_channel";
         phone: string;
         pin: string;
+        countryIso: string;
         roomHash: string;
         accessHash: string;
         senderHash: string;
@@ -203,11 +205,12 @@ export type State = BaseState &
       }
     /** Opening the WebSocket and joining. Brief — under a second
      *  typically. */
-    | { kind: "connecting"; phone: string }
+    | { kind: "connecting"; phone: string; countryIso: string }
     /** The chat surface. */
     | {
         kind: "chat";
         phone: string;
+        countryIso: string;
         senderHash: string;
         /** N=1: at most one. */
         current: PlainMessage | null;
@@ -234,6 +237,7 @@ export type State = BaseState &
     | {
         kind: "locked";
         phone: string;
+        countryIso: string;
         reason: "unauthorized" | "locked";
         attemptsRemaining?: number;
         /** Error copy for a failed unlock attempt, e.g. "Wrong PIN". */
@@ -261,6 +265,8 @@ const STORAGE_KEYS = [
   "stelegano_access_hash",
   "stelegano_extension_secret",
   "stelegano_handoff_phone",
+  "stelegano_handoff_pin",
+  "stelegano_handoff_country",
   "stelegano_handoff_tier",
 ] as const;
 
@@ -304,6 +310,14 @@ function readHandoffPin(): string {
     return sessionStorage.getItem("stelegano_handoff_pin") ?? "";
   } catch {
     return "";
+  }
+}
+
+function readHandoffCountry(): string {
+  try {
+    return sessionStorage.getItem("stelegano_handoff_country") ?? "US";
+  } catch {
+    return "US";
   }
 }
 
@@ -370,10 +384,11 @@ export class ChatState {
   constructor() {
     const handoffPhone = readHandoffPhone();
     const handoffPin = readHandoffPin();
+    const handoffCountry = readHandoffCountry();
 
     // If we have both, we skip the entry form entirely on return.
     if (handoffPhone && handoffPin) {
-      this.state = this.initialEntry(handoffPhone, true, true);
+      this.state = this.initialEntry(handoffPhone, handoffCountry, true, true);
       // Fill the PIN so submit() can pick it up.
       this.state.pin = handoffPin;
       this.state.confirmPin = handoffPin;
@@ -382,12 +397,13 @@ export class ChatState {
       // Defer submission to the next tick so the state machine is ready.
       setTimeout(() => this.submit(), 0);
     } else {
-      this.state = this.initialEntry(handoffPhone, !!handoffPhone, !!handoffPhone);
+      this.state = this.initialEntry(handoffPhone, handoffCountry, !!handoffPhone, !!handoffPhone);
     }
   }
 
   private initialEntry(
     phone = "",
+    countryIso = "US",
     phoneLocked = false,
     phoneVisible = false,
   ): Extract<State, { kind: "entry" }> {
@@ -396,7 +412,7 @@ export class ChatState {
       phone: phone || readHandoffPhone(),
       pin: "",
       confirmPin: "",
-      countryIso: "US",
+      countryIso: countryIso || readHandoffCountry(),
       phoneLocked,
       phoneVisible,
       acceptedTerms: false,
@@ -488,10 +504,26 @@ export class ChatState {
     }
 
     // Normalise based on current country if not already international
-    const countryIso = s.kind === "entry" ? s.countryIso : "US";
-    const fullPhone = phone.startsWith("+")
-      ? phone
-      : `${COUNTRY_DATA.find((c) => c.iso === countryIso)?.dialCode}${phone}`;
+    const countryIso = s.countryIso;
+    let fullPhone = phone;
+
+    if (!phone.startsWith("+")) {
+      // Try prepending the dial code vs prepending just '+' (in case it already has the dial code)
+      const dialCode = COUNTRY_DATA.find((c) => c.iso === countryIso)?.dialCode ?? "";
+      const dialPhone = `${dialCode}${phone}`;
+      const plusPhone = `+${phone}`;
+
+      const p1 = parsePhoneNumberFromString(dialPhone);
+      const p2 = parsePhoneNumberFromString(plusPhone);
+
+      if (p2?.isValid()) {
+        fullPhone = p2.number;
+      } else if (p1?.isValid()) {
+        fullPhone = p1.number;
+      } else {
+        fullPhone = dialPhone;
+      }
+    }
     const parsed = parsePhoneNumberFromString(fullPhone);
 
     if (!parsed?.isValid()) {
@@ -519,7 +551,7 @@ export class ChatState {
     };
 
     // Phase 2: PBKDF2 (slow). Visualise progress.
-    this.setState({ kind: "deriving", phone: normalisedPhone, pin, progress: 0 });
+    this.setState({ kind: "deriving", phone: normalisedPhone, pin, countryIso, progress: 0 });
 
     const onProgress: ProgressCallback = (percent) => {
       // Only update if we haven't been thrown off this state by a
@@ -537,7 +569,7 @@ export class ChatState {
     } catch {
       // Crypto failure — usually means the browser blocks Web Crypto
       // (very old browsers). Drop back to entry.
-      this.setState(this.initialEntry(phone, false));
+      this.setState(this.initialEntry(phone, countryIso, false));
       return;
     }
 
@@ -550,12 +582,13 @@ export class ChatState {
     const exists = await probeRoomExists(roomHash);
     const handoffTier = readHandoffTier();
     if (exists || handoffTier === "free" || !this.config.monetizationEnabled) {
-      await this.connectAndJoin(normalisedPhone, roomHash, accessHash, senderHash);
+      await this.connectAndJoin(normalisedPhone, countryIso, roomHash, accessHash, senderHash);
     } else {
       this.setState({
         kind: "new_channel",
         phone: normalisedPhone,
         pin,
+        countryIso,
         roomHash,
         accessHash,
         senderHash,
@@ -593,8 +626,8 @@ export class ChatState {
 
   async continueFree(): Promise<void> {
     if (this.state.kind !== "new_channel") return;
-    const { phone, roomHash, accessHash, senderHash } = this.state;
-    await this.connectAndJoin(phone, roomHash, accessHash, senderHash);
+    const { phone, countryIso, roomHash, accessHash, senderHash } = this.state;
+    await this.connectAndJoin(phone, countryIso, roomHash, accessHash, senderHash);
   }
 
   // -------------------------------------------------------------------------
@@ -633,6 +666,9 @@ export class ChatState {
     try {
       sessionStorage.setItem("stelegano_extension_secret", secret);
       sessionStorage.setItem("stelegano_handoff_phone", phone);
+      // Persist the country ISO so validation passes on return.
+      sessionStorage.setItem("stelegano_handoff_country", s.countryIso);
+
       // Persist the PIN so we can auto-submit on return.
       if ("pin" in s) {
         sessionStorage.setItem("stelegano_handoff_pin", s.pin);
@@ -824,6 +860,7 @@ export class ChatState {
     this.setState({
       kind: "locked",
       phone,
+      countryIso: this.state.countryIso,
       reason: "unauthorized",
       attemptsRemaining: undefined,
       lockError: null,
@@ -1051,11 +1088,12 @@ export class ChatState {
 
   private async connectAndJoin(
     phone: string,
+    countryIso: string,
     roomHash: string,
     accessHash: string,
     senderHash: string,
   ): Promise<void> {
-    this.setState({ kind: "connecting", phone });
+    this.setState({ kind: "connecting", phone, countryIso });
 
     // Tear down any previous client (locked → reauthenticate path).
     this.client?.close();
@@ -1076,14 +1114,12 @@ export class ChatState {
       // Couldn't open WS — drop to entry. (Phase 5d UI may show an
       // error toast.)
       this.client = null;
-      this.setState(this.initialEntry(phone, false));
+      // We don't have countryIso here easily, pull from handoff or fallback
+      this.setState(this.initialEntry(phone, countryIso, false));
       return;
     }
 
-    // phone is the normalised (digits-only) form; +prefix restores E.164.
-    // submit() already validated the number is international, so country
-    // will always be a non-empty string on this path.
-    const countryIso = parsePhoneNumberFromString(`+${phone}`)?.country ?? "";
+    // phone is the normalised (digits-only) form.
 
     // Read the extension secret before joining so we can pass it in the
     // join payload. For a new paid room the server creates it as paid
@@ -1117,6 +1153,7 @@ export class ChatState {
         this.setState({
           kind: "locked",
           phone,
+          countryIso,
           reason: e.reason,
           attemptsRemaining: e.attempts_remaining,
           lockError: e.reason === "locked" ? "LOCKOUT ACTIVE · 30 MIN" : "INVALID PIN",
@@ -1128,7 +1165,7 @@ export class ChatState {
       // an error banner so the user sees what happened.
       this.client?.close();
       this.client = null;
-      const entry = this.initialEntry(phone, false);
+      const entry = this.initialEntry(phone, countryIso, false);
       entry.error =
         e.reason === "not_found"
           ? "No active channel for that number."
@@ -1158,6 +1195,7 @@ export class ChatState {
     this.setState({
       kind: "chat",
       phone,
+      countryIso,
       senderHash,
       current,
       counterpartyTyping: false,
@@ -1295,7 +1333,7 @@ export class ChatState {
     // Unclean close — drop to entry. User can retry.
     if (this.state.kind === "chat" || this.state.kind === "connecting") {
       this.client = null;
-      const entry = this.initialEntry(this.cachedHashes?.phone ?? "", false);
+      const entry = this.initialEntry(this.cachedHashes?.phone ?? "", readHandoffCountry(), false);
       entry.error = "Connection lost. Reconnect to continue.";
       this.setState(entry);
     }
