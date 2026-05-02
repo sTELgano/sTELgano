@@ -379,6 +379,8 @@ export class ChatState {
     accessHash: string;
     senderHash: string;
   } | null = null;
+  /** Caches the PIN internally to survive payment redirects (extending a channel). */
+  private cachedPin: string | null = null;
   private config: Config = DEFAULT_CONFIG;
 
   constructor() {
@@ -404,11 +406,18 @@ export class ChatState {
     phoneLocked = false,
     phoneVisible = true,
   ): Extract<State, { kind: "entry" }> {
+    const p = phone || readHandoffPhone();
+    const c = (countryIso || readHandoffCountry()) as CountryCode;
+
+    // Proactively validate pre-filled numbers so the UI button is active on mount.
+    const parsed = parsePhoneNumberFromString(p, c);
+    const phoneValid = parsed ? parsed.isValid() : false;
+
     return {
       kind: "entry",
-      phone: phone || readHandoffPhone(),
+      phone: p,
       pin: "",
-      countryIso: countryIso || readHandoffCountry(),
+      countryIso: c,
       phoneLocked,
       phoneVisible,
       onboardingStep: null,
@@ -417,7 +426,7 @@ export class ChatState {
       generating: false,
       showCountries: false,
       searchQuery: "",
-      phoneValid: false,
+      phoneValid,
     };
   }
 
@@ -561,8 +570,10 @@ export class ChatState {
     const exists = await probeRoomExists(roomHash);
     const handoffTier = readHandoffTier();
     if (exists || handoffTier === "free" || !this.config.monetizationEnabled) {
+      this.cachedPin = pin;
       await this.connectAndJoin(normalisedPhone, countryIso, roomHash, accessHash, senderHash);
     } else {
+      this.cachedPin = pin;
       this.setState({
         kind: "new_channel",
         phone: normalisedPhone,
@@ -678,8 +689,9 @@ export class ChatState {
       sessionStorage.setItem("stelegano_handoff_country", s.countryIso);
 
       // Persist the PIN so we can auto-submit on return.
-      if ("pin" in s) {
-        sessionStorage.setItem("stelegano_handoff_pin", s.pin);
+      const pinToStash = s.kind === "new_channel" ? s.pin : this.cachedPin;
+      if (pinToStash) {
+        sessionStorage.setItem("stelegano_handoff_pin", pinToStash);
       }
       // v1 also stashed handoff_tier=free so the return path
       // auto-creates the room as free (the extension upgrades it
@@ -851,6 +863,7 @@ export class ChatState {
     this.client = null;
     this.key = null;
     this.cachedHashes = null;
+    this.cachedPin = null;
     clearSession();
     this.setState(this.initialEntry());
   }
@@ -1346,6 +1359,7 @@ export class ChatState {
     this.client = null;
     this.key = null;
     this.cachedHashes = null;
+    this.cachedPin = null;
     clearSession();
     this.setState({ kind: "expired" });
   }
