@@ -579,8 +579,8 @@ function renderAdminHtml(d: {
 
       <!-- Metric cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-        ${adminMetricCard("Active Chats", d.activeRooms, "Live count, pushed by DO", "radio", true)}
-        ${adminMetricCard("New Chats Today", d.aeReady ? d.newToday : "—", "Last 24h", "plus_circle")}
+        ${adminMetricCard("Active Channels", d.activeRooms, "Live count, pushed by DO", "radio", true)}
+        ${adminMetricCard("New Channels Today", d.aeReady ? d.newToday : "—", "Last 24h", "plus_circle")}
         ${adminMetricCard("Messages Today", d.aeReady ? d.messagesThisDay : "—", "Encrypted, current UTC day", "message_circle")}
         ${adminMetricCard("Total (30d)", d.aeReady ? d.sum90 : "—", "New rooms, past 30 days", "calendar")}
       </div>

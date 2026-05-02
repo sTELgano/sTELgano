@@ -132,18 +132,8 @@ state.onStateChange((s) => {
       }
 
       // Update Submit Button State
-      const canSubmit =
-        s.phoneValid &&
-        s.pin.length >= 4 &&
-        s.pin === s.confirmPin &&
-        s.acceptedTerms &&
-        s.confirmedSaved;
-      const prevCanSubmit =
-        ps.phoneValid &&
-        ps.pin.length >= 4 &&
-        ps.pin === ps.confirmPin &&
-        ps.acceptedTerms &&
-        ps.confirmedSaved;
+      const canSubmit = s.phoneValid && s.pin.length >= 4;
+      const prevCanSubmit = ps.phoneValid && ps.pin.length >= 4;
       if (canSubmit !== prevCanSubmit) {
         const btn = root.querySelector("button[type='submit']") as HTMLButtonElement;
         if (btn) btn.disabled = !canSubmit;
@@ -181,10 +171,13 @@ state.onStateChange((s) => {
           if (input.value !== s.phone) {
             const start = input.selectionStart;
             const end = input.selectionEnd;
+            const oldVal = input.value;
             input.value = s.phone;
             if (start !== null && end !== null) {
               try {
-                input.setSelectionRange(start, end);
+                const newStart = getAdjustedCursor(oldVal, s.phone, start);
+                const newEnd = getAdjustedCursor(oldVal, s.phone, end);
+                input.setSelectionRange(newStart, newEnd);
               } catch (_e) {}
             }
           }
@@ -203,26 +196,76 @@ state.onStateChange((s) => {
         const input = root.querySelector<HTMLInputElement>("input[name='s_key']");
         if (input && input.value !== s.pin) input.value = s.pin;
       }
-      if (s.confirmPin !== ps.confirmPin) {
-        const input = root.querySelector<HTMLInputElement>("input[name='s_key_confirm']");
-        if (input && input.value !== s.confirmPin) input.value = s.confirmPin;
+      // Update phone visibility (eye toggle)
+      if (s.phoneVisible !== ps.phoneVisible) {
+        const input = document.getElementById("phone-input") as HTMLInputElement;
+        if (input) {
+          input.type = s.phoneVisible ? "text" : "password";
+        }
+        const eyeBtn = root.querySelector("button[data-action='toggle-phone-visibility']");
+        if (eyeBtn) {
+          eyeBtn.innerHTML = icon(s.phoneVisible ? "eye_off" : "eye", "size-5");
+        }
       }
-      if (s.acceptedTerms !== ps.acceptedTerms) {
-        const input = root.querySelector<HTMLInputElement>("input[name='accept_terms']");
-        if (input) input.checked = s.acceptedTerms;
-      }
-      if (s.confirmedSaved !== ps.confirmedSaved) {
-        const input = root.querySelector<HTMLInputElement>("input[name='confirm_saved']");
-        if (input) input.checked = s.confirmedSaved;
+
+      // Update generation state (spinning icon)
+      if (s.generating !== ps.generating) {
+        const genBtn = root.querySelector(
+          "button[data-action='generate-new']",
+        ) as HTMLButtonElement | null;
+        if (genBtn) {
+          genBtn.disabled = s.generating;
+          genBtn.innerHTML = icon("refresh_cw", `size-5 ${s.generating ? "animate-spin" : ""}`);
+          genBtn.classList.toggle("opacity-20", s.generating);
+        }
       }
 
       const entriesMatch =
-        s.phoneLocked === ps.phoneLocked &&
-        s.phoneVisible === ps.phoneVisible &&
-        s.generating === ps.generating &&
-        s.onboardingStep === ps.onboardingStep;
+        s.phoneLocked === ps.phoneLocked && s.onboardingStep === ps.onboardingStep;
 
       if (entriesMatch) {
+        prevState = JSON.parse(JSON.stringify(s)) as State;
+        return;
+      }
+    }
+
+    // NEW_CHANNEL: surgical update
+    if (s.kind === "new_channel") {
+      const ps = prevState as Extract<State, { kind: "new_channel" }>;
+
+      // Update Confirm PIN field
+      if (s.confirmPin !== ps.confirmPin) {
+        const input = root.querySelector<HTMLInputElement>("input[name='nc_key_confirm']");
+        if (input && input.value !== s.confirmPin) input.value = s.confirmPin;
+      }
+
+      // Update checkboxes
+      if (s.acceptedTerms !== ps.acceptedTerms) {
+        const cb = root.querySelector<HTMLInputElement>("input[name='nc_accept_terms']");
+        if (cb) cb.checked = s.acceptedTerms;
+      }
+      if (s.confirmedSaved !== ps.confirmedSaved) {
+        const cb = root.querySelector<HTMLInputElement>("input[name='nc_confirm_saved']");
+        if (cb) cb.checked = s.confirmedSaved;
+      }
+
+      // Update submit button disabled status
+      const canSubmit =
+        s.confirmPin.length >= 4 && s.pin === s.confirmPin && s.acceptedTerms && s.confirmedSaved;
+      const prevCanSubmit =
+        ps.confirmPin.length >= 4 &&
+        ps.pin === ps.confirmPin &&
+        ps.acceptedTerms &&
+        ps.confirmedSaved;
+      if (canSubmit !== prevCanSubmit) {
+        const btn = root.querySelector(
+          "button[data-action='continue-free']",
+        ) as HTMLButtonElement | null;
+        if (btn) btn.disabled = !canSubmit;
+      }
+
+      // Only re-render if major UI structural states changed
+      if (s.paymentError === ps.paymentError && s.paymentLoading === ps.paymentLoading) {
         prevState = JSON.parse(JSON.stringify(s)) as State;
         return;
       }
@@ -312,12 +355,14 @@ state.onStateChange((s) => {
   const activeName = active instanceof HTMLInputElement ? active.name : null;
   let activeStart: number | null = null;
   let activeEnd: number | null = null;
+  let oldActiveValue: string | null = null;
 
   if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
     try {
       if (typeof active.selectionStart === "number") {
         activeStart = active.selectionStart;
         activeEnd = active.selectionEnd;
+        oldActiveValue = active.value;
       }
     } catch (_e) {}
   }
@@ -357,10 +402,17 @@ state.onStateChange((s) => {
     if (
       (elToFocus instanceof HTMLInputElement || elToFocus instanceof HTMLTextAreaElement) &&
       activeStart !== null &&
-      activeEnd !== null
+      activeEnd !== null &&
+      oldActiveValue !== null
     ) {
+      let sStart = activeStart;
+      let sEnd = activeEnd;
+      if (elToFocus.value !== oldActiveValue && elToFocus.id === "phone-input") {
+        sStart = getAdjustedCursor(oldActiveValue, elToFocus.value, activeStart);
+        sEnd = getAdjustedCursor(oldActiveValue, elToFocus.value, activeEnd);
+      }
       try {
-        elToFocus.setSelectionRange(activeStart, activeEnd);
+        elToFocus.setSelectionRange(sStart, sEnd);
       } catch (_e) {}
     }
 
@@ -369,14 +421,19 @@ state.onStateChange((s) => {
     if (
       (elToFocus instanceof HTMLInputElement || elToFocus instanceof HTMLTextAreaElement) &&
       activeStart !== null &&
-      activeEnd !== null
+      activeEnd !== null &&
+      oldActiveValue !== null
     ) {
-      const s = activeStart;
-      const e = activeEnd;
+      let sStart = activeStart;
+      let sEnd = activeEnd;
+      if (elToFocus.value !== oldActiveValue && elToFocus.id === "phone-input") {
+        sStart = getAdjustedCursor(oldActiveValue, elToFocus.value, activeStart);
+        sEnd = getAdjustedCursor(oldActiveValue, elToFocus.value, activeEnd);
+      }
       requestAnimationFrame(() => {
         if (document.activeElement === elToFocus) {
           try {
-            elToFocus.setSelectionRange(s, e);
+            elToFocus.setSelectionRange(sStart, sEnd);
           } catch (_err) {}
         }
       });
@@ -448,7 +505,34 @@ root.addEventListener("click", (e) => {
       state.closeOverlay();
       break;
     case "generate-new":
+      console.log("[UI] Generate new number");
       void state.generateNewNumber();
+      break;
+    case "copy-phone": {
+      const input = document.getElementById("phone-input") as HTMLInputElement;
+      if (input) {
+        void navigator.clipboard.writeText(input.value);
+        target.innerHTML = icon("check", "size-5 text-primary");
+        setTimeout(() => {
+          target.innerHTML = icon("copy", "size-5");
+        }, 2000);
+      }
+      break;
+    }
+    case "copy-phone-nc": {
+      const s = state.getState();
+      if (s.kind === "new_channel") {
+        void navigator.clipboard.writeText(s.phone);
+        target.innerHTML = icon("check", "size-6 text-primary");
+        setTimeout(() => {
+          target.innerHTML = icon("copy", "size-6");
+        }, 2000);
+      }
+      break;
+    }
+    case "clear-session":
+      console.log("[UI] Clear session");
+      state.clearSession();
       break;
     case "toggle-countries":
       console.log("[UI] Toggle countries picker");
@@ -531,9 +615,6 @@ root.addEventListener("click", (e) => {
     case "expire-room":
       void state.expireRoom();
       break;
-    case "clear-session":
-      state.clearSession();
-      break;
     case "back-to-entry":
       state.logout();
       break;
@@ -556,12 +637,12 @@ root.addEventListener(
       state.setPhone(target.value);
     } else if (target instanceof HTMLInputElement && target.name === "s_key") {
       state.setPin(target.value);
-    } else if (target instanceof HTMLInputElement && target.name === "s_key_confirm") {
-      state.setConfirmPin(target.value);
-    } else if (target instanceof HTMLInputElement && target.name === "accept_terms") {
-      state.setAcceptedTerms(target.checked);
-    } else if (target instanceof HTMLInputElement && target.name === "confirm_saved") {
-      state.setConfirmedSaved(target.checked);
+    } else if (target instanceof HTMLInputElement && target.name === "nc_key_confirm") {
+      state.setNewChannelConfirmPin(target.value);
+    } else if (target instanceof HTMLInputElement && target.name === "nc_accept_terms") {
+      state.setNewChannelAcceptedTerms(target.checked);
+    } else if (target instanceof HTMLInputElement && target.name === "nc_confirm_saved") {
+      state.setNewChannelConfirmedSaved(target.checked);
     } else if (target instanceof HTMLInputElement && target.id === "country-search-trigger") {
       state.setSearchQuery(target.value);
     }
@@ -649,6 +730,20 @@ function focusFirstField() {
     const first = root?.querySelector<HTMLElement>("[data-autofocus]");
     first?.focus();
   });
+}
+
+function getAdjustedCursor(oldVal: string, newVal: string, cursor: number): number {
+  let charsBefore = 0;
+  for (let i = 0; i < cursor; i++) {
+    if (/\d|\+/.test(oldVal.charAt(i))) charsBefore++;
+  }
+  let newCursor = 0;
+  let seen = 0;
+  while (newCursor < newVal.length && seen < charsBefore) {
+    if (/\d|\+/.test(newVal.charAt(newCursor))) seen++;
+    newCursor++;
+  }
+  return newCursor;
 }
 
 function escapeHtml(s: string): string {
@@ -753,7 +848,7 @@ function renderOverlay(s: State): string {
             data-action="close-overlay"
             class="btn-secondary py-3 px-8 text-sm uppercase tracking-widest font-black"
           >
-            Back to Chat
+            Back to Channel
           </button>
         </div>
       </div>
@@ -805,7 +900,7 @@ function renderCountryPicker(s: Extract<State, { kind: "entry" }>): string {
   if (!s.showCountries) return "";
 
   return `
-    <div class="absolute top-full left-0 mt-2 w-full bg-slate-900/90 backdrop-blur-3xl border border-white/10 rounded-lg shadow-2xl z-[100] overflow-hidden animate-in zoom-in-95 duration-200">
+    <div class="absolute top-full left-0 w-full bg-slate-900/90 backdrop-blur-3xl border border-white/10 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
       <!-- Country List -->
       <div id="country-list-container" class="max-h-64 overflow-y-auto custom-scrollbar p-1">
         ${renderCountryListItems(s)}
@@ -847,7 +942,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
               ${icon("ban", "size-3")} Private Instance
             </div>
             <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tighter text-white font-display leading-[0.9]">
-              Open <span class="text-gradient">Chat.</span>
+              Open <span class="text-gradient">Channel.</span>
             </h1>
             <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed">
               Derive a one-time identity and join your private channel.
@@ -874,23 +969,24 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                 
                 <div class="flex flex-col gap-3">
                   <!-- Searchable Country Selector -->
-                  <div class="relative w-full group" id="country-picker-container">
+                  <div class="relative w-full group" id="country-picker-container" style="z-index: 50;">
                     <div id="country-picker-flag" class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-lg">
                       ${currentCountry.flag}
                     </div>
                     <input
                       type="text"
                       id="country-search-trigger"
-                      class="glass-input w-full !pl-12 !pr-10 font-bold bg-slate-950/40 !text-sm transition-all focus:bg-slate-900/60 !h-full"
+                      class="glass-input w-full !pl-12 !pr-10 font-bold bg-slate-950/40 !text-sm transition-all focus:bg-slate-900/60 !h-full ${phoneLockedOpacity}"
                       value="${s.showCountries ? s.searchQuery : currentCountry.name}"
                       placeholder="Select Region..."
                       autocomplete="off"
+                      ${phoneReadonly}
                     />
                     <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-primary transition-colors">
                       ${icon("chevron_down", "size-4")}
                     </div>
 
-                    <div id="country-dropdown-wrapper">
+                    <div id="country-dropdown-wrapper" class="absolute w-full mt-2 z-[100]">
                       ${renderCountryPicker(s)}
                     </div>
                   </div>
@@ -901,14 +997,35 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                         id="phone-input"
                         name="s_num"
                         type="${phoneType}"
-                        class="glass-input w-full !pr-24 font-mono !text-lg font-bold bg-slate-950/40 ${phoneLockedOpacity} !h-full ${s.phoneValid ? "border-primary/50 ring-1 ring-primary/20" : ""}"
+                        class="glass-input w-full !pr-32 font-mono !text-lg font-bold bg-slate-950/40 ${phoneLockedOpacity} !h-full ${s.phoneValid ? "border-primary/50 ring-1 ring-primary/20" : ""}"
                         value="${escapeHtml(s.phone)}"
                         ${phoneReadonly}
                         placeholder="Enter number..."
                         inputmode="tel"
                         ${phoneAutofocus}
                       >
-                    <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-20">
+                      ${
+                        s.phoneLocked
+                          ? `
+                      <button
+                        type="button"
+                        data-action="clear-session"
+                        class="p-2 rounded-xl text-red-500 hover:text-red-400 focus:outline-none transition-all hover:bg-red-500/10"
+                        title="Cancel Handoff and Start Over"
+                      >
+                        ${icon("x", "size-5")}
+                      </button>
+                      <button
+                        type="button"
+                        data-action="copy-phone"
+                        class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
+                        title="Copy number"
+                      >
+                        ${icon("copy", "size-5")}
+                      </button>
+                      `
+                          : `
                       <button
                         type="button"
                         data-action="generate-new"
@@ -918,6 +1035,16 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                       >
                         ${icon("refresh_cw", `size-5 ${s.generating ? "animate-spin" : ""}`)}
                       </button>
+                      <button
+                        type="button"
+                        data-action="copy-phone"
+                        class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
+                        title="Copy number"
+                      >
+                        ${icon("copy", "size-5")}
+                      </button>
+                      `
+                      }
                       <button
                         type="button"
                         data-action="toggle-phone-visibility"
@@ -930,68 +1057,33 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                 </div>
               </div>
 
-              <!-- Double-PIN Cluster -->
-              <div class="space-y-6">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div class="space-y-3">
-                    <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
-                      Private PIN
-                    </label>
-                    <input
-                      name="s_key"
-                      type="password"
-                      inputmode="numeric"
-                      pattern="[0-9]*"
-                      placeholder="Set 4-6 digits"
-                      autocomplete="new-password"
-                      class="glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
-                      value="${escapeHtml(s.pin)}"
-                      ${pinAutofocus}
-                    >
-                  </div>
-                  <div class="space-y-3">
-                    <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
-                      Confirm PIN
-                    </label>
-                    <input
-                      name="s_key_confirm"
-                      type="password"
-                      inputmode="numeric"
-                      pattern="[0-9]*"
-                      placeholder="Repeat PIN"
-                      autocomplete="new-password"
-                      class="glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
-                      value="${escapeHtml(s.confirmPin)}"
-                    >
-                  </div>
-                </div>
+              <!-- PIN Input -->
+              <div class="space-y-3">
+                <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
+                  Private PIN
+                </label>
+                <input
+                  name="s_key"
+                  type="password"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Enter 4-6 digits"
+                  autocomplete="current-password"
+                  class="glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
+                  value="${escapeHtml(s.pin)}"
+                  ${pinAutofocus}
+                >
                 <p class="text-[10px] text-slate-500 text-center font-medium leading-relaxed px-2 italic">
                   PIN is never saved on servers. If forgotten, identity is lost.
                 </p>
               </div>
 
-              <!-- Final Checkbox Confirmation -->
-              <div class="space-y-4 pt-4 border-t border-white/5">
-                <label class="flex items-start gap-3 cursor-pointer group">
-                  <input type="checkbox" name="accept_terms" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.acceptedTerms ? "checked" : ""}>
-                  <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
-                    I accept the <a data-action="open-terms" class="cursor-pointer text-primary hover:underline">Terms of Service</a> and Privacy Protocol.
-                  </span>
-                </label>
-                <label class="flex items-start gap-3 cursor-pointer group text-left">
-                  <input type="checkbox" name="confirm_saved" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.confirmedSaved ? "checked" : ""}>
-                  <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
-                    I confirm that I have <span class="text-white font-bold underline decoration-primary/40">saved my number</span>. Access cannot be recovered later.
-                  </span>
-                </label>
-              </div>
-
               <button
                 type="submit"
                 class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
-                ${!(s.phoneValid && s.pin.length >= 4 && s.pin === s.confirmPin && s.acceptedTerms && s.confirmedSaved) ? "disabled" : ""}
+                ${!(s.phoneValid && s.pin.length >= 4) ? "disabled" : ""}
               >
-                Open Private Space
+                Open Secure Channel
                 ${icon("zap", "size-6 group-hover:scale-125 transition-transform")}
               </button>
             </form>
@@ -1078,7 +1170,7 @@ function renderDeriving(s: Extract<State, { kind: "deriving" }>, animate = true)
 
         <div class="space-y-6">
           <h3 class="text-4xl font-extrabold text-white font-display tracking-tight uppercase">
-            Securing <span class="text-gradient">Chat.</span>
+            Securing <span class="text-gradient">Channel.</span>
           </h3>
           <p class="text-slate-500 font-medium leading-relaxed">
             Your browser is securing your private connection.
@@ -1098,17 +1190,12 @@ function renderDeriving(s: Extract<State, { kind: "deriving" }>, animate = true)
 // ----------------------------- :new_channel -----------------------------
 
 function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
-  const paidDisabled = s.paymentLoading ? "disabled" : "";
-  const paidClass = s.paymentLoading ? "opacity-50 cursor-not-allowed" : "";
-  const paidLabel = s.paymentLoading ? "Opening checkout…" : "Dedicated Tier";
-  const priceDisplay = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: s.currency,
-  }).format(s.priceCents / 100);
+  const canSubmit =
+    s.confirmPin.length >= 4 && s.pin === s.confirmPin && s.acceptedTerms && s.confirmedSaved;
 
   const errorBanner = s.paymentError
     ? `
-      <div class="p-4 rounded-2xl bg-danger/5 border border-danger/20 flex gap-3 items-start animate-in max-w-sm mx-auto">
+      <div class="p-4 rounded-2xl bg-danger/5 border border-danger/20 flex gap-3 items-start animate-in mb-6">
         ${icon("alert_circle", "size-5 text-danger shrink-0 mt-0.5")}
         <p class="text-sm font-medium text-danger">${escapeHtml(s.paymentError)}</p>
       </div>`
@@ -1123,67 +1210,94 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
         </a>
       </div>
 
-      <div class="flex-1 overflow-y-auto px-6 py-12 sm:py-20 animate-in">
-        <div class="w-full max-w-lg mx-auto space-y-10">
-        <div class="text-center space-y-4">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(0,255,163,0.1)]">
-            ${icon("sparkles", "size-3")} New Channel Detected
+      <div class="flex-1 overflow-y-auto px-6 py-8 sm:py-16 animate-in">
+        <div class="w-full max-w-xl mx-auto space-y-10 sm:space-y-12">
+          <div class="text-center space-y-4">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(0,255,163,0.1)] mb-4">
+              ${icon("sparkles", "size-3")} New Channel Detected
+            </div>
+            <h2 class="text-4xl sm:text-6xl font-extrabold text-white font-display tracking-tight leading-[0.9]">
+              This is a <span class="text-gradient">new channel.</span>
+            </h2>
+            <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed max-w-sm mx-auto">
+              Please finalize setup to initialize your connection.
+            </p>
           </div>
-          <h2 class="text-3xl sm:text-4xl font-extrabold text-white font-display tracking-tight">
-            This is a new channel.
-          </h2>
-          <p class="text-slate-400 font-medium leading-relaxed max-w-sm mx-auto">
-            Choose how long you want to keep this number active.
-          </p>
-        </div>
 
-        ${errorBanner}
+          <div class="glass-card-premium p-6 sm:p-10">
+            ${errorBanner}
 
-        <div id="new-channel-options" class="space-y-4 max-w-sm mx-auto">
-          <!-- Free tier -->
-          <button
-            data-action="continue-free"
-            class="w-full p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 text-left transition-all group flex items-center justify-between"
-          >
-            <div class="flex items-center gap-4">
-              <div class="size-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform">
-                ${icon("clock", "size-5 text-slate-300 group-hover:text-white transition-colors")}
+            <!-- PIN Confirmation + Checkboxes -->
+            <div class="space-y-8 sm:space-y-10">
+              <div class="space-y-4">
+                <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
+                  Confirm PIN
+                </label>
+                <input
+                  name="nc_key_confirm"
+                  type="password"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Repeat PIN to confirm"
+                  autocomplete="new-password"
+                  class="glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
+                  value="${escapeHtml(s.confirmPin)}"
+                  data-autofocus
+                >
               </div>
-              <div>
-                <h3 class="text-white font-bold text-sm">Temporary (Free)</h3>
-                <p class="text-slate-400 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
-                  Expires in ${s.freeTtlDays} days
+
+              <!-- Display Generated Number Prominently -->
+              <div class="p-6 rounded-2xl bg-slate-950/60 border border-white/5 space-y-3 text-center mb-4">
+                <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                  Your Secure Number
+                </label>
+                <div class="flex items-center justify-center gap-4">
+                  <div class="text-3xl sm:text-4xl font-mono font-black text-white tracking-tight">
+                    ${escapeHtml(s.phone)}
+                  </div>
+                  <button
+                    type="button"
+                    data-action="copy-phone-nc"
+                    class="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/5"
+                    title="Copy number"
+                  >
+                    ${icon("copy", "size-6")}
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-4 pt-4 border-t border-white/5">
+                <label class="flex items-start gap-3 cursor-pointer group">
+                  <input type="checkbox" name="nc_accept_terms" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.acceptedTerms ? "checked" : ""}>
+                  <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
+                    I accept the <a data-action="open-terms" class="cursor-pointer text-primary hover:underline">Terms of Service</a> and Privacy Protocol.
+                  </span>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer group text-left">
+                  <input type="checkbox" name="nc_confirm_saved" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.confirmedSaved ? "checked" : ""}>
+                  <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
+                    I confirm that I have <span class="text-white font-bold underline decoration-primary/40">saved my number</span>. Access cannot be recovered later.
+                  </span>
+                </label>
+              </div>
+
+              <div class="space-y-4">
+                <button
+                  type="button"
+                  data-action="continue-free"
+                  class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+                  ${!canSubmit ? "disabled" : ""}
+                >
+                  Initialize Secure Channel
+                  ${icon("arrow_right", "size-6 group-hover:translate-x-1 transition-transform")}
+                </button>
+                <p class="text-center text-slate-500 text-[10px] uppercase tracking-widest font-bold">
+                  Channel defaults to ${s.freeTtlDays} days limit
                 </p>
               </div>
             </div>
-            ${icon("arrow_right", "size-4 text-slate-500 group-hover:translate-x-1 group-hover:text-white transition-all")}
-          </button>
-
-          <!-- Paid tier -->
-          <button
-            type="button"
-            data-action="initiate-payment"
-            ${paidDisabled}
-            class="w-full p-5 rounded-2xl bg-primary/10 border border-primary/20 hover:border-primary/40 hover:bg-primary/20 text-left transition-all group flex items-center justify-between shadow-[0_0_20px_rgba(0,255,163,0.1)] ${paidClass}"
-          >
-            <div class="flex items-center gap-4">
-              <div class="size-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 group-hover:scale-110 transition-transform">
-                ${icon("shield_check", "size-5 text-primary")}
-              </div>
-              <div>
-                <h3 class="text-primary font-bold text-sm">${escapeHtml(paidLabel)}</h3>
-                <p class="text-primary/80 text-[10px] uppercase tracking-widest mt-0.5 font-bold">
-                  1 Year &mdash; ${escapeHtml(priceDisplay)}
-                </p>
-              </div>
-            </div>
-            ${icon("arrow_right", "size-4 text-primary group-hover:translate-x-1 transition-transform")}
-          </button>
+          </div>
         </div>
-
-        <p class="text-center text-slate-500 text-[10px] uppercase tracking-widest font-bold">
-          You can upgrade to dedicated anytime.
-        </p>
       </div>
     </div>
   `;
@@ -1214,30 +1328,41 @@ function renderConnecting(): string {
 
 // -------------------------------- :chat ---------------------------------
 
-function renderTtlWarning(ttlExpiresAt: string | null, monetizationEnabled: boolean): string {
+function renderTtlWarning(
+  ttlExpiresAt: string | null,
+  monetizationEnabled: boolean,
+  paymentLoading: boolean,
+): string {
   if (!ttlExpiresAt) return "";
   const remainingMs = new Date(ttlExpiresAt).getTime() - Date.now();
   if (remainingMs <= 0) return "";
   const remainingHours = remainingMs / 3_600_000;
-  if (remainingHours > 48) return "";
+  const days = Math.ceil(remainingHours / 24);
 
-  const isDanger = remainingHours <= 12;
+  const isDanger = remainingHours <= 48;
   const colorClass = isDanger
     ? "bg-danger/10 border-b border-danger/20 text-danger"
-    : "bg-amber-500/10 border-b border-amber-500/20 text-amber-400";
+    : "bg-slate-900 border-b border-white/5 text-slate-400";
 
-  const hrs = Math.floor(remainingHours);
-  const mins = Math.floor((remainingMs % 3_600_000) / 60_000);
-  const countdown = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+  const iconColor = isDanger ? "text-danger" : "text-primary";
+
+  const btnText = paymentLoading ? "Redirecting..." : `Extend (+1 Year)`;
+  const btnClass = paymentLoading
+    ? "opacity-50 cursor-not-allowed"
+    : "hover:text-white hover:bg-white/10 hover:border-white/30";
 
   const extendBtn = monetizationEnabled
-    ? `<button data-action="extend-room" class="ml-3 text-[10px] font-bold uppercase tracking-widest underline hover:no-underline">Extend</button>`
+    ? `<button data-action="extend-room" class="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-[10px] font-bold uppercase tracking-widest transition-all ${btnClass}" ${paymentLoading ? "disabled" : ""}>
+         ${btnText}
+       </button>`
     : "";
 
   return `
-    <div class="px-4 sm:px-6 py-2 flex items-center gap-3 text-xs font-bold ${colorClass}">
-      ${icon("alert_triangle", "size-4 shrink-0")}
-      <span>Channel expires in ${countdown}</span>
+    <div class="px-4 sm:px-6 py-3 flex items-center justify-between text-xs font-bold ${colorClass}">
+      <div class="flex items-center gap-3">
+        ${icon("clock", `size-5 shrink-0 ${iconColor}`)}
+        <span>${isDanger ? "Warning: " : ""}Channel expires in ${days} day${days === 1 ? "" : "s"}</span>
+      </div>
       ${extendBtn}
     </div>
   `;
@@ -1265,7 +1390,7 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
           </a>
           <div class="hidden sm:block h-6 w-px bg-white/20"></div>
           <span class="hidden lg:inline text-[9px] font-bold uppercase tracking-[0.3em] text-primary">
-            WORKSPACE SECURED
+            CHANNEL SECURED
           </span>
         </div>
 
@@ -1288,7 +1413,7 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
           <div class="w-px h-6 bg-white/20 mx-0.5 sm:mx-1"></div>
           <button
             data-action="leave-chat"
-            title="Exit Chat"
+            title="Exit Channel"
             class="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all flex items-center justify-center border border-white/5 shadow-lg"
           >
             ${icon("power", "size-5 sm:size-6 text-danger")}
@@ -1304,8 +1429,8 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
         ></div>
       </div>
 
-      <!-- TTL expiry warning (amber < 48h, danger < 12h) -->
-      ${renderTtlWarning(s.ttlExpiresAt, serverConfig.monetizationEnabled)}
+      <!-- TTL expiry warning -->
+      ${renderTtlWarning(s.ttlExpiresAt, serverConfig.monetizationEnabled, s.paymentLoading)}
 
       <!-- Payment error banner (extend button errors) -->
       ${
@@ -1614,7 +1739,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
             type="submit"
             class="btn-primary w-full py-5 text-xl shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
           >
-            Reconnect Chat
+            Reconnect Channel
           </button>
         </form>
 
@@ -1658,10 +1783,10 @@ function renderExpired(): string {
           ${icon("trash_2", "size-10 text-danger")}
         </div>
 
-        <h3 class="text-3xl font-extrabold text-white font-display mb-4">Chat Ended</h3>
+        <h3 class="text-3xl font-extrabold text-white font-display mb-4">Channel Closed</h3>
 
         <p class="text-slate-400 font-medium leading-relaxed mb-10">
-          The chat session has been permanently closed.
+          The secure channel has been permanently closed.
           All messages have been erased and cannot be recovered.
         </p>
 
@@ -1669,7 +1794,7 @@ function renderExpired(): string {
           data-action="back-to-entry"
           class="btn-primary w-full py-4 text-lg"
         >
-          Start New Chat
+          Open Secure Channel
         </button>
       </div>
     </div>

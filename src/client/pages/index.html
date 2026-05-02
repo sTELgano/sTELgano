@@ -20,17 +20,17 @@
       </p>
 
       <p class="text-xl sm:text-2xl md:text-3xl text-slate-300 font-medium tracking-tight leading-tight">
-        The messaging app hidden in<br>
+        The secure channel platform hidden in<br>
         <span class="text-white italic underline decoration-primary decoration-4 underline-offset-8">your contacts.</span>
       </p>
 
       <p class="text-slate-500 text-sm sm:text-lg leading-relaxed max-w-lg">
-        No accounts. No chat history. No metadata. Your browser encrypts everything locally with AES-256-GCM before it ever touches a server. The server only sees ciphertext.
+        No accounts. No message history. No metadata. Your browser encrypts everything locally with AES-256-GCM before it ever touches a server. The server only sees ciphertext.
       </p>
 
       <div class="flex flex-col sm:flex-row gap-4 pt-4">
         <a href="/chat" class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto">
-          Open Chat
+          Open Channel
           <svg class="size-6 group-hover:rotate-12 transition-transform" aria-hidden="true"><use href="/icons.svg#sparkles"/></svg>
         </a>
         <a href="/spec" class="btn-secondary px-10 py-4 text-xl w-full sm:w-auto group">
@@ -195,7 +195,7 @@
         </thead>
         <tbody class="divide-y divide-white/5 text-sm">
           <tr class="hover:bg-white/5 transition-colors">
-            <td class="p-6 font-medium text-white">Appears as Chat App</td>
+            <td class="p-6 font-medium text-white">Appears as Messaging App</td>
             <td class="p-6 text-primary"><svg class="size-5 inline" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg> Hidden</td>
             <td class="p-6 text-slate-500"><svg class="size-5 inline" aria-hidden="true"><use href="/icons.svg#x_circle"/></svg> Yes</td>
             <td class="p-6 text-slate-500"><svg class="size-5 inline" aria-hidden="true"><use href="/icons.svg#x_circle"/></svg> Yes</td>
@@ -211,7 +211,7 @@
             <td class="p-6 text-slate-500"><svg class="size-5 inline" aria-hidden="true"><use href="/icons.svg#x_circle"/></svg> Phone</td>
           </tr>
           <tr class="hover:bg-white/5 transition-colors">
-            <td class="p-6 font-medium text-white">Chat History Retained</td>
+            <td class="p-6 font-medium text-white">Message History Retained</td>
             <td class="p-6 text-primary"><svg class="size-5 inline" aria-hidden="true"><use href="/icons.svg#trash_2"/></svg> N=1 (Wiped)</td>
             <td class="p-6 text-slate-500"><svg class="size-5 inline" aria-hidden="true"><use href="/icons.svg#x_circle"/></svg> Local</td>
             <td class="p-6 text-slate-500"><svg class="size-5 inline" aria-hidden="true"><use href="/icons.svg#x_circle"/></svg> Local/Cloud</td>
@@ -281,7 +281,7 @@
             <div class="size-12 rounded-2xl bg-primary/10 flex shrink-0 items-center justify-center text-primary font-black text-xl shadow-inner ring-1 ring-primary/20">3</div>
             <div>
               <h4 class="text-lg font-bold text-white mb-2 font-display">Open the Channel</h4>
-              <p class="text-slate-400 leading-relaxed font-medium text-sm">Enter the steg number and your PIN. Your browser derives the encryption key, connects to the room, and you're chatting with end-to-end encryption.</p>
+              <p class="text-slate-400 leading-relaxed font-medium text-sm">Enter the steg number and your PIN. Your browser derives the encryption key, connects to the room, and you're connected with end-to-end encryption.</p>
             </div>
           </div>
         </div>
@@ -315,7 +315,7 @@
             <svg class="size-5 text-primary" aria-hidden="true"><use href="/icons.svg#trash_2"/></svg>
           </div>
           <div>
-            <h4 class="text-white font-bold font-display mb-1">No Chat History</h4>
+            <h4 class="text-white font-bold font-display mb-1">No Message History</h4>
             <p class="text-slate-500 text-sm leading-relaxed">Because old messages are actively destroyed to make room for new ones, there is no scrollback. No logs. No history to recover.</p>
           </div>
         </li>
@@ -423,7 +423,7 @@
           <svg class="size-6 text-primary" aria-hidden="true"><use href="/icons.svg#heart"/></svg>
         </div>
         <h4 class="text-lg font-bold text-white font-display">Personal Privacy</h4>
-        <p class="text-sm text-slate-400 leading-relaxed font-medium">Communicate with a trusted person without leaving any trace on your device. No app to delete. No chat history to clear.</p>
+        <p class="text-sm text-slate-400 leading-relaxed font-medium">Communicate with a trusted person without leaving any trace on your device. No app to delete. No message history to clear.</p>
       </div>
       <div class="glass-card p-8 space-y-4 group hover:border-primary/30 transition-all duration-500">
         <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform">
@@ -465,7 +465,7 @@
       </div>
       <div class="glass-card p-8">
         <h4 class="text-lg font-bold text-white mb-3">What happens to my messages?</h4>
-        <p class="text-slate-400 text-sm leading-relaxed">sTELgano strictly enforces an N=1 invariant. This means only one message can exist per room at any given time. The moment a reply is sent, the previous message is atomically wiped from the database. There is no chat history to delete, because history is never retained.</p>
+        <p class="text-slate-400 text-sm leading-relaxed">sTELgano strictly enforces an N=1 invariant. This means only one message can exist per room at any given time. The moment a reply is sent, the previous message is atomically wiped from the database. There is no message history to delete, because history is never retained.</p>
       </div>
       <div class="glass-card p-8">
         <h4 class="text-lg font-bold text-white mb-3">Can the server read my messages?</h4>
@@ -546,10 +546,10 @@
 <section class="px-6 py-40 text-center relative overflow-hidden">
   <div class="orb orb-1 opacity-20 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-75! h-75! sm:w-150! sm:h-150!"></div>
   <div class="relative z-10 animate-in">
-    <h3 class="text-3xl sm:text-5xl md:text-6xl font-extrabold text-white font-display mb-6 tracking-tighter">Ready to chat <span class="text-gradient">privately?</span></h3>
+    <h3 class="text-3xl sm:text-5xl md:text-6xl font-extrabold text-white font-display mb-6 tracking-tighter">Ready to connect <span class="text-gradient">privately?</span></h3>
     <p class="text-slate-400 text-lg mb-10 max-w-lg mx-auto">Generate a steg number, share it with someone you trust, and open a channel that only the two of you can access.</p>
     <div class="flex flex-col md:flex-row gap-4 justify-center px-4">
-      <a href="/chat" class="btn-primary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl">Open Chat</a>
+      <a href="/chat" class="btn-primary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl">Open Secure Channel</a>
       <a href="/blog" class="btn-secondary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl">Read the Blog</a>
     </div>
     <p class="text-xs text-slate-500 font-medium mt-6 flex items-center justify-center gap-2">

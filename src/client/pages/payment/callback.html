@@ -8,7 +8,7 @@
   Paystack webhook (Phase 7); the user just needs to return to
   /chat for the redeem flow.
 
-  When the user clicks "Open Chat", they land back on /chat which
+  When the user clicks "Open Secure Channel", they land back on /chat which
   reads `stelegano_handoff_phone` from sessionStorage (set by the
   payment initiator before the Paystack redirect) and pre-fills
   the phone field. The redeem then fires automatically when they
@@ -37,7 +37,7 @@
     <ol class="space-y-3 text-slate-400 text-sm font-medium">
       <li class="flex items-start gap-3">
         <span class="text-primary font-bold">1.</span>
-        <span>Open your chat session</span>
+        <span>Open your channel session</span>
       </li>
       <li class="flex items-start gap-3">
         <span class="text-primary font-bold">2.</span>
@@ -69,7 +69,7 @@
     href="/chat"
     class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group"
   >
-    Open Chat
+    Open Secure Channel
     <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
   </a>
 </div>
