@@ -80,7 +80,7 @@
         <div class="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent"></div>
       </div>
       <div class="glass-card p-6 sm:p-10 space-y-6">
-        <p class="text-slate-300 leading-relaxed font-medium">A naïve WebSocket implementation on serverless infrastructure is expensive: the DO must stay fully active&mdash;executing JavaScript, holding in-memory state&mdash;for the entire duration of every open connection. For a privacy messaging app where users may keep a tab open for hours between messages, that&rsquo;s a lot of idle compute.</p>
+        <p class="text-slate-300 leading-relaxed font-medium">A naïve WebSocket implementation on serverless infrastructure is expensive: the DO must stay fully active&mdash;executing JavaScript, holding in-memory state&mdash;for the entire duration of every open connection. For a privacy secure channel platform where users may keep a tab open for hours between messages, that&rsquo;s a lot of idle compute.</p>
         <p class="text-slate-400 leading-relaxed font-medium">Cloudflare&rsquo;s <span class="text-white font-semibold">Hibernatable WebSockets API</span> solves this. When no messages are in flight, the DO can hibernate: the JavaScript context is evicted, but the WebSocket connections are maintained by the Cloudflare runtime. When a message arrives, the DO is woken up, its state is restored from durable storage, and the event is processed. From the client&rsquo;s perspective, the connection never dropped.</p>
         <p class="text-slate-400 leading-relaxed font-medium">The result: a room with two connected users who haven&rsquo;t sent a message in an hour costs essentially nothing. The idle cost scales with active rooms, not connected rooms.</p>
       </div>
@@ -143,7 +143,7 @@
     <div class="text-center space-y-6">
       <p class="text-slate-500 text-sm font-medium">Open a channel and see the N=1 invariant in action.</p>
       <a href="/chat" class="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2 group">
-        Start a Private Chat
+        Open Secure Channel
         <svg class="size-5 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
       </a>
     </div>

@@ -23,10 +23,10 @@
 
 import {
   AsYouType,
+  type CountryCode,
   getCountries,
   getCountryCallingCode,
   parsePhoneNumberFromString,
-  type CountryCode,
 } from "libphonenumber-js";
 import { type CountryNames, generatePhoneNumber } from "phone-number-generator-js";
 import type { JoinReply, MessagePayload } from "../protocol";
@@ -140,8 +140,6 @@ export type State = BaseState &
         phone: string;
         /** Typed PIN. masked in UI. */
         pin: string;
-        /** Confirmation PIN. */
-        confirmPin: string;
         /** ISO country code for the dropdown e.g. "US". */
         countryIso: string;
         /** True when the phone field was set by a previous session
@@ -149,10 +147,6 @@ export type State = BaseState &
         phoneLocked: boolean;
         /** Eye-toggle state for the phone field. */
         phoneVisible: boolean;
-        /** Whether the terms have been accepted. */
-        acceptedTerms: boolean;
-        /** Whether the user has confirmed they've saved their identity. */
-        confirmedSaved: boolean;
         /** Current onboarding step (0-2), or null if skipped/finished. */
         onboardingStep: number | null;
         /** Error banner copy (e.g. "Wrong PIN") — null means no
@@ -190,6 +184,12 @@ export type State = BaseState &
         roomHash: string;
         accessHash: string;
         senderHash: string;
+        /** Confirmation PIN — only required for new channel creation. */
+        confirmPin: string;
+        /** Whether the terms have been accepted. */
+        acceptedTerms: boolean;
+        /** Whether the user has confirmed they've saved their identity. */
+        confirmedSaved: boolean;
         /** True while the paid-tier button is in flight (token
          *  generation + POST /api/payment/initiate + redirect). */
         paymentLoading: boolean;
@@ -379,6 +379,8 @@ export class ChatState {
     accessHash: string;
     senderHash: string;
   } | null = null;
+  /** Caches the PIN internally to survive payment redirects (extending a channel). */
+  private cachedPin: string | null = null;
   private config: Config = DEFAULT_CONFIG;
 
   constructor() {
@@ -391,13 +393,10 @@ export class ChatState {
       this.state = this.initialEntry(handoffPhone, handoffCountry, true, true);
       // Fill the PIN so submit() can pick it up.
       this.state.pin = handoffPin;
-      this.state.confirmPin = handoffPin;
-      this.state.acceptedTerms = true;
-      this.state.confirmedSaved = true;
       // Defer submission to the next tick so the state machine is ready.
       setTimeout(() => this.submit(), 0);
     } else {
-      this.state = this.initialEntry(handoffPhone, handoffCountry, !!handoffPhone, !!handoffPhone);
+      this.state = this.initialEntry(handoffPhone, handoffCountry, !!handoffPhone, true);
     }
   }
 
@@ -405,25 +404,29 @@ export class ChatState {
     phone = "",
     countryIso = "US",
     phoneLocked = false,
-    phoneVisible = false,
+    phoneVisible = true,
   ): Extract<State, { kind: "entry" }> {
+    const p = phone || readHandoffPhone();
+    const c = (countryIso || readHandoffCountry()) as CountryCode;
+
+    // Proactively validate pre-filled numbers so the UI button is active on mount.
+    const parsed = parsePhoneNumberFromString(p, c);
+    const phoneValid = parsed ? parsed.isValid() : false;
+
     return {
       kind: "entry",
-      phone: phone || readHandoffPhone(),
+      phone: p,
       pin: "",
-      confirmPin: "",
-      countryIso: countryIso || readHandoffCountry(),
+      countryIso: c,
       phoneLocked,
       phoneVisible,
-      acceptedTerms: false,
-      confirmedSaved: false,
       onboardingStep: null,
       error: null,
       attemptsRemaining: null,
       generating: false,
       showCountries: false,
       searchQuery: "",
-      phoneValid: false,
+      phoneValid,
     };
   }
 
@@ -475,9 +478,6 @@ export class ChatState {
 
     const phone = phoneOverride ?? (s.kind === "entry" ? s.phone : s.phone);
     const pin = pinOverride ?? (s.kind === "entry" ? s.pin : "");
-    const confirmPin = s.kind === "entry" ? s.confirmPin : pin;
-    const acceptedTerms = s.kind === "entry" ? s.acceptedTerms : true;
-    const confirmedSaved = s.kind === "entry" ? s.confirmedSaved : true;
 
     // Validation
     if (!phone) {
@@ -488,18 +488,6 @@ export class ChatState {
     if (!pin) {
       if (s.kind === "entry") this.setState({ ...s, error: "PIN required" });
       else this.setState({ ...s, lockError: "PIN required" });
-      return;
-    }
-
-    if (pin !== confirmPin) {
-      if (s.kind === "entry") this.setState({ ...s, error: "PINs do not match" });
-      else this.setState({ ...s, lockError: "PINs do not match" });
-      return;
-    }
-
-    if (!acceptedTerms || !confirmedSaved) {
-      if (s.kind === "entry")
-        this.setState({ ...s, error: "Please accept terms and confirm you saved your number" });
       return;
     }
 
@@ -582,8 +570,10 @@ export class ChatState {
     const exists = await probeRoomExists(roomHash);
     const handoffTier = readHandoffTier();
     if (exists || handoffTier === "free" || !this.config.monetizationEnabled) {
+      this.cachedPin = pin;
       await this.connectAndJoin(normalisedPhone, countryIso, roomHash, accessHash, senderHash);
     } else {
+      this.cachedPin = pin;
       this.setState({
         kind: "new_channel",
         phone: normalisedPhone,
@@ -592,6 +582,9 @@ export class ChatState {
         roomHash,
         accessHash,
         senderHash,
+        confirmPin: "",
+        acceptedTerms: false,
+        confirmedSaved: false,
         paymentLoading: false,
         paymentError: null,
         freeTtlDays: this.config.freeTtlDays,
@@ -625,8 +618,20 @@ export class ChatState {
   // -------------------------------------------------------------------------
 
   async continueFree(): Promise<void> {
-    if (this.state.kind !== "new_channel") return;
-    const { phone, countryIso, roomHash, accessHash, senderHash } = this.state;
+    const s = this.state;
+    if (s.kind !== "new_channel") return;
+    if (s.pin !== s.confirmPin) {
+      this.setState({ ...s, paymentError: "PINs do not match" });
+      return;
+    }
+    if (!s.acceptedTerms || !s.confirmedSaved) {
+      this.setState({
+        ...s,
+        paymentError: "Please accept terms and confirm you saved your number",
+      });
+      return;
+    }
+    const { phone, countryIso, roomHash, accessHash, senderHash } = s;
     await this.connectAndJoin(phone, countryIso, roomHash, accessHash, senderHash);
   }
 
@@ -650,6 +655,20 @@ export class ChatState {
     if (s.kind !== "new_channel" && s.kind !== "chat") return;
     if (s.paymentLoading) return;
 
+    if (s.kind === "new_channel") {
+      if (s.pin !== s.confirmPin) {
+        this.setState({ ...s, paymentError: "PINs do not match" });
+        return;
+      }
+      if (!s.acceptedTerms || !s.confirmedSaved) {
+        this.setState({
+          ...s,
+          paymentError: "Please accept terms and confirm you saved your number",
+        });
+        return;
+      }
+    }
+
     const phone = s.phone;
     if (s.kind === "new_channel") {
       this.setState({ ...s, paymentLoading: true, paymentError: null });
@@ -670,8 +689,9 @@ export class ChatState {
       sessionStorage.setItem("stelegano_handoff_country", s.countryIso);
 
       // Persist the PIN so we can auto-submit on return.
-      if ("pin" in s) {
-        sessionStorage.setItem("stelegano_handoff_pin", s.pin);
+      const pinToStash = s.kind === "new_channel" ? s.pin : this.cachedPin;
+      if (pinToStash) {
+        sessionStorage.setItem("stelegano_handoff_pin", pinToStash);
       }
       // v1 also stashed handoff_tier=free so the return path
       // auto-creates the room as free (the extension upgrades it
@@ -843,6 +863,7 @@ export class ChatState {
     this.client = null;
     this.key = null;
     this.cachedHashes = null;
+    this.cachedPin = null;
     clearSession();
     this.setState(this.initialEntry());
   }
@@ -922,9 +943,8 @@ export class ChatState {
 
     const isValid = parsed ? parsed.isValid() : false;
     let error = s.error;
-    if (digits.length > 5 && !isValid) {
-      error = "Invalid phone number";
-    } else if (isValid && error === "Invalid phone number") {
+    // Only clear "invalid" error when it becomes valid. Don't aggressively show it while typing.
+    if (isValid && error?.toLowerCase().includes("invalid")) {
       error = null;
     }
 
@@ -935,6 +955,7 @@ export class ChatState {
     const s = this.state;
     if (s.kind !== "entry" || s.phoneLocked) return;
     this.setState({ ...s, countryIso: iso, showCountries: false, searchQuery: "", error: null });
+    void this.generateNewNumber();
   }
 
   toggleCountries(): void {
@@ -968,15 +989,35 @@ export class ChatState {
     this.setState({ ...s, generating: true });
 
     try {
-      // Since we use phone-number-generator-js, we need to map the ISO back to
-      // the country name string it expects. A simple mapping or using the label.
-      // For now, we'll use a representative set or the existing COUNTRY_LIST.
       const countryName = COUNTRY_LIST.find((c) => c.iso === s.countryIso)?.name ?? "United States";
+      console.log(`[State] Generating number for: ${countryName} (${s.countryIso})`);
 
       // v1 has a 600ms cosmetic delay for "calculating" feel.
       await new Promise((r) => setTimeout(r, 600));
 
-      const num = await generatePhoneNumber({ countryName: countryName as CountryNames });
+      let num = "";
+      try {
+        num = await generatePhoneNumber({ countryName: countryName as CountryNames });
+      } catch (err) {
+        console.warn(
+          `[State] Generation failed for ${countryName}, trying dial-code fallback...`,
+          err,
+        );
+        // Fallback: find another country with the same dial code (e.g. AX -> Finland)
+        const dialCode = COUNTRY_DATA.find((c) => c.iso === s.countryIso)?.dialCode;
+        const alternative = COUNTRY_DATA.find(
+          (c) => c.dialCode === dialCode && c.iso !== s.countryIso,
+        );
+        if (alternative) {
+          console.log(`[State] Using fallback country: ${alternative.name}`);
+          num = await generatePhoneNumber({ countryName: alternative.name as CountryNames });
+        } else {
+          // Final fallback to US to ensure we never stay "unresponsive"
+          num = await generatePhoneNumber({ countryName: "United States" as CountryNames });
+        }
+      }
+
+      console.log("[State] Generated:", num);
 
       const formatter = num.startsWith("+")
         ? new AsYouType()
@@ -985,9 +1026,20 @@ export class ChatState {
       const parsed = parsePhoneNumberFromString(formatted, s.countryIso as CountryCode);
       const isValid = parsed ? parsed.isValid() : false;
 
-      this.setState({ ...s, phone: formatted, generating: false, phoneValid: isValid });
-    } catch {
-      this.setState({ ...s, generating: false });
+      if (this.state.kind === "entry") {
+        this.setState({
+          ...this.state,
+          phone: formatted,
+          generating: false,
+          phoneValid: isValid,
+          phoneVisible: true,
+        });
+      }
+    } catch (err) {
+      console.error("[State] Generation failed:", err);
+      if (this.state.kind === "entry") {
+        this.setState({ ...this.state, generating: false });
+      }
     }
   }
 
@@ -996,40 +1048,30 @@ export class ChatState {
     if (s.kind !== "entry") return;
 
     let error = s.error;
-    if (pin && s.confirmPin && pin !== s.confirmPin) {
-      error = "PINs do not match";
-    } else if (pin && pin.length < 4) {
+    if (pin && pin.length < 4) {
       error = "PIN must be at least 4 digits";
-    } else if (error === "PINs do not match" || error === "PIN must be at least 4 digits") {
+    } else if (error === "PIN must be at least 4 digits") {
       error = null;
     }
 
     this.setState({ ...s, pin, error });
   }
 
-  setConfirmPin(confirmPin: string): void {
+  setNewChannelConfirmPin(confirmPin: string): void {
     const s = this.state;
-    if (s.kind !== "entry") return;
-
-    let error = s.error;
-    if (s.pin && confirmPin && s.pin !== confirmPin) {
-      error = "PINs do not match";
-    } else if (error === "PINs do not match") {
-      error = null;
-    }
-
-    this.setState({ ...s, confirmPin, error });
+    if (s.kind !== "new_channel") return;
+    this.setState({ ...s, confirmPin });
   }
 
-  setAcceptedTerms(acceptedTerms: boolean): void {
+  setNewChannelAcceptedTerms(acceptedTerms: boolean): void {
     const s = this.state;
-    if (s.kind !== "entry") return;
+    if (s.kind !== "new_channel") return;
     this.setState({ ...s, acceptedTerms });
   }
 
-  setConfirmedSaved(confirmedSaved: boolean): void {
+  setNewChannelConfirmedSaved(confirmedSaved: boolean): void {
     const s = this.state;
-    if (s.kind !== "entry") return;
+    if (s.kind !== "new_channel") return;
     this.setState({ ...s, confirmedSaved });
   }
 
@@ -1317,6 +1359,7 @@ export class ChatState {
     this.client = null;
     this.key = null;
     this.cachedHashes = null;
+    this.cachedPin = null;
     clearSession();
     this.setState({ kind: "expired" });
   }

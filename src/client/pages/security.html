@@ -34,7 +34,7 @@
       <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
         <p>Your messages are <span class="text-white">encrypted on your device</span> before they ever leave your browser. The server never sees your phone number, your PIN, or the content of your messages. It only receives opaque hashes and ciphertext that are meaningless without your credentials.</p>
         <p>There are <span class="text-white">no accounts to create</span>, no email addresses to provide, and no profile data to fill in. You share a number with someone, each of you picks a PIN, and that is the entire setup. We built sTELgano on a zero-knowledge architecture: we cannot read your messages, we cannot identify you, and we cannot recover your data. That is not a limitation &mdash; it is the design.</p>
-        <p>No metadata is collected. No chat history is retained. No message logs exist on the server. When a reply is sent, the previous message is <span class="text-white">atomically deleted</span>. At most one message exists in any room at any time.</p>
+        <p>No metadata is collected. No message history is retained. No message logs exist on the server. When a reply is sent, the previous message is <span class="text-white">atomically deleted</span>. At most one message exists in any room at any time.</p>
       </div>
     </div>
   </div>
@@ -151,7 +151,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
           <li class="flex items-start gap-4 group/li"><svg class="size-5 text-primary shrink-0 group-hover/li:scale-125 transition-transform" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">ISP and network operator packet inspection</span></li>
           <li class="flex items-start gap-4 group/li"><svg class="size-5 text-primary shrink-0 group-hover/li:scale-125 transition-transform" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">Server-side database breaches</span></li>
           <li class="flex items-start gap-4 group/li"><svg class="size-5 text-primary shrink-0 group-hover/li:scale-125 transition-transform" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">Browser history and cache forensics</span></li>
-          <li class="flex items-start gap-4 group/li"><svg class="size-5 text-primary shrink-0 group-hover/li:scale-125 transition-transform" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">Device seizure &mdash; no app to find, no chat history to recover</span></li>
+          <li class="flex items-start gap-4 group/li"><svg class="size-5 text-primary shrink-0 group-hover/li:scale-125 transition-transform" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">Device seizure &mdash; no app to find, no message history to recover</span></li>
           <li class="flex items-start gap-4 group/li"><svg class="size-5 text-primary shrink-0 group-hover/li:scale-125 transition-transform" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg><span class="text-sm text-slate-300 font-medium leading-tight group-hover/li:text-white transition-colors">Intimate-access attackers (partner, family member with device access)</span></li>
         </ul>
       </div>
@@ -246,7 +246,7 @@ sender_hash = SHA-256(phone + ":" + access_hash + ":" + room_hash + ":" + SENDER
           <blockquote class="border-l-2 border-primary/40 pl-8 py-4">
             <p class="text-xl text-white font-display font-bold italic leading-relaxed">&ldquo;A suspicious person unlocks your phone and opens sTELgano. What do they see?&rdquo;</p>
           </blockquote>
-          <p class="text-lg text-slate-300 font-medium leading-relaxed max-w-3xl">The answer: <span class="text-white">a blank entry screen with two fields. Nothing else.</span> No message previews, no contact list, no notification badges, no chat history. There is nothing to find because nothing is stored.</p>
+          <p class="text-lg text-slate-300 font-medium leading-relaxed max-w-3xl">The answer: <span class="text-white">a blank entry screen with two fields. Nothing else.</span> No message previews, no contact list, no notification badges, no message history. There is nothing to find because nothing is stored.</p>
         </div>
       </div>
     </div>
