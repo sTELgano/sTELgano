@@ -31,7 +31,7 @@
     "d1:migrate:remote": "wrangler d1 migrations apply stelgano --remote"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.13",
+    "@biomejs/biome": "^2.4.14",
     "@cloudflare/vitest-pool-workers": "^0.5.36",
     "@tailwindcss/cli": "^4.0.0",
     "esbuild": "^0.28.0",
