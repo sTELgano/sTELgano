@@ -52,11 +52,6 @@ database_name = "stelgano"
 database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
 migrations_dir = "migrations"
 
-# In-memory KV for tests — miniflare creates this automatically.
-[[kv_namespaces]]
-binding = "RATE_CACHE"
-id = "test-rate-cache"
-
 [vars]
 HOST = "localhost"
 PAYMENT_CURRENCY = "USD"

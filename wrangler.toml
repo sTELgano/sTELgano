@@ -89,18 +89,8 @@ database_name = "stelgano"
 database_id = "8dc2edd6-cde2-49cb-a1bb-fffb33c6e274"
 migrations_dir = "migrations"
 
-# KV namespace for exchange rate caching. Written daily by the
-# "0 3 * * *" cron via refreshRate() and read by initialize() in
-# src/lib/paystack.ts when PAYSTACK_SETTLEMENT_CURRENCY ≠ PAYMENT_CURRENCY.
-# Create with: wrangler kv:namespace create RATE_CACHE
-[[kv_namespaces]]
-binding = "RATE_CACHE"
-id = "7eb3e58ecdba426e9dc583b8aff0e042"
-
 # Cron Trigger (single daily run at 03:00 UTC):
-#   Runs both maintenance tasks sequentially — token cleanup first, then
-#   FX rate refresh. Consolidated from two triggers to one to stay within
-#   the CF free-plan limit of 5 cron triggers per account.
+#   Sweeps expired extension_tokens from D1.
 [triggers]
 crons = ["0 3 * * *"]
 
@@ -130,11 +120,6 @@ head_sampling_rate = 1
 #   wrangler secret put PAYSTACK_CALLBACK_URL
 #   wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN
 #   wrangler secret put CF_AE_API_TOKEN
-#
-# Optional FX conversion secrets (only needed when PAYSTACK_SETTLEMENT_CURRENCY
-# differs from PAYMENT_CURRENCY):
-#   wrangler secret put PAYSTACK_SETTLEMENT_CURRENCY   # e.g. "KES"
-#   wrangler secret put PAYMENT_FX_FALLBACK_RATE       # e.g. "130.5"
 [vars]
 HOST = "stelgano.com"
 PAYMENT_CURRENCY = "USD"
@@ -153,7 +138,6 @@ CF_AE_DATASET = "stelgano_events"
 #
 # Resources already provisioned:
 #   D1:  wrangler d1 create stelgano-staging  → f7a9b60a-0fea-43fd-94d2-66fa76ec2287
-#   KV:  wrangler kv:namespace create RATE_CACHE_STAGING → 59542bfc5ca040e180b5a52fcd436b4f
 #
 # Secrets (set once per env, not in this file):
 #   wrangler secret put ADMIN_PASSWORD --env staging
@@ -163,10 +147,6 @@ CF_AE_DATASET = "stelgano_events"
 #   wrangler secret put PAYSTACK_CALLBACK_URL --env staging
 #   wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN --env staging
 #   wrangler secret put CF_AE_API_TOKEN --env staging
-#
-# Optional FX conversion secrets (only if PAYSTACK_SETTLEMENT_CURRENCY is needed):
-#   wrangler secret put PAYSTACK_SETTLEMENT_CURRENCY --env staging
-#   wrangler secret put PAYMENT_FX_FALLBACK_RATE --env staging
 #
 # After secrets are set, push to staging — CI deploys automatically.
 # ---------------------------------------------------------------------------
@@ -210,10 +190,6 @@ binding = "DB"
 database_name = "stelgano-staging"
 database_id = "f7a9b60a-0fea-43fd-94d2-66fa76ec2287"
 migrations_dir = "migrations"
-
-[[env.staging.kv_namespaces]]
-binding = "RATE_CACHE"
-id = "59542bfc5ca040e180b5a52fcd436b4f"
 
 [env.staging.vars]
 HOST = "staging.stelgano.com"

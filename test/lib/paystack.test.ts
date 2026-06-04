@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // Unit tests for src/lib/paystack.ts — pure-function helpers and the
-// FX conversion path of initialize().
+// amount/currency handling of initialize().
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,16 +13,6 @@ import { hmacSha512Hex, initialize, timingSafeHexEqual } from "../../src/lib/pay
 // ---------------------------------------------------------------------------
 
 const VALID_TOKEN = "a".repeat(64);
-
-function makeKV(rate: number | null): KVNamespace {
-  return {
-    get: vi.fn(() => Promise.resolve(rate !== null ? String(rate) : null)),
-    put: vi.fn(() => Promise.resolve()),
-    delete: vi.fn(),
-    list: vi.fn(),
-    getWithMetadata: vi.fn(),
-  } as unknown as KVNamespace;
-}
 
 function baseEnv(overrides: Partial<Env> = {}): Env {
   return {
@@ -105,11 +95,11 @@ describe("timingSafeHexEqual", () => {
 });
 
 // ---------------------------------------------------------------------------
-// initialize() — FX conversion
+// initialize() — amount + currency
 // ---------------------------------------------------------------------------
 
-describe("initialize() FX conversion", () => {
-  it("passes amount unchanged when settlement equals display currency", async () => {
+describe("initialize() amount + currency", () => {
+  it("submits the amount unchanged in PAYMENT_CURRENCY", async () => {
     let captured: unknown;
     vi.stubGlobal(
       "fetch",
@@ -123,108 +113,8 @@ describe("initialize() FX conversion", () => {
     );
 
     await initialize(VALID_TOKEN, 200, baseEnv());
-    expect((captured as { amount: number }).amount).toBe(200);
-  });
-
-  it("converts amount using cached rate + 5% default buffer", async () => {
-    // 200 USD × 130.0 KES/USD × 1.05 = 27,300 (rounded)
-    let captured: unknown;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((url: string, opts: RequestInit) => {
-        if (String(url).includes("paystack")) {
-          captured = JSON.parse(opts.body as string);
-          return Promise.resolve(new Response(JSON.stringify({ status: false }), { status: 200 }));
-        }
-        return Promise.resolve(new Response("{}", { status: 200 }));
-      }),
-    );
-
-    const env = baseEnv({
-      PAYSTACK_SETTLEMENT_CURRENCY: "KES",
-      RATE_CACHE: makeKV(130.0),
-    });
-    await initialize(VALID_TOKEN, 200, env);
-    expect((captured as { amount: number }).amount).toBe(Math.round(200 * 130.0 * 1.05));
-  });
-
-  it("respects PAYSTACK_FX_BUFFER_PCT when set", async () => {
-    // 200 USD × 130.0 × 1.10 (10% buffer) = 28,600
-    let captured: unknown;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((url: string, opts: RequestInit) => {
-        if (String(url).includes("paystack")) {
-          captured = JSON.parse(opts.body as string);
-          return Promise.resolve(new Response(JSON.stringify({ status: false }), { status: 200 }));
-        }
-        return Promise.resolve(new Response("{}", { status: 200 }));
-      }),
-    );
-
-    const env = baseEnv({
-      PAYSTACK_SETTLEMENT_CURRENCY: "KES",
-      PAYSTACK_FX_BUFFER_PCT: "10",
-      RATE_CACHE: makeKV(130.0),
-    });
-    await initialize(VALID_TOKEN, 200, env);
-    expect((captured as { amount: number }).amount).toBe(Math.round(200 * 130.0 * 1.1));
-  });
-
-  it("uses PAYMENT_FX_FALLBACK_RATE when KV is empty", async () => {
-    let captured: unknown;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((url: string, opts: RequestInit) => {
-        if (String(url).includes("paystack")) {
-          captured = JSON.parse(opts.body as string);
-          return Promise.resolve(new Response(JSON.stringify({ status: false }), { status: 200 }));
-        }
-        return Promise.resolve(new Response("{}", { status: 200 }));
-      }),
-    );
-
-    const env = baseEnv({
-      PAYSTACK_SETTLEMENT_CURRENCY: "KES",
-      PAYMENT_FX_FALLBACK_RATE: "125.0",
-      RATE_CACHE: makeKV(null),
-    });
-    await initialize(VALID_TOKEN, 200, env);
-    expect((captured as { amount: number }).amount).toBe(Math.round(200 * 125.0 * 1.05));
-  });
-
-  it("returns fx_conversion_not_wired when no rate is available", async () => {
-    vi.stubGlobal("fetch", vi.fn());
-
-    const env = baseEnv({
-      PAYSTACK_SETTLEMENT_CURRENCY: "KES",
-      RATE_CACHE: makeKV(null),
-      PAYMENT_FX_FALLBACK_RATE: undefined,
-    });
-    const result = await initialize(VALID_TOKEN, 200, env);
-    expect(result).toEqual({ ok: false, reason: "fx_conversion_not_wired" });
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
-  });
-
-  it("sends the settlement currency to Paystack, not the display currency", async () => {
-    let captured: unknown;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((url: string, opts: RequestInit) => {
-        if (String(url).includes("paystack")) {
-          captured = JSON.parse(opts.body as string);
-          return Promise.resolve(new Response(JSON.stringify({ status: false }), { status: 200 }));
-        }
-        return Promise.resolve(new Response("{}", { status: 200 }));
-      }),
-    );
-
-    const env = baseEnv({
-      PAYMENT_CURRENCY: "USD",
-      PAYSTACK_SETTLEMENT_CURRENCY: "KES",
-      RATE_CACHE: makeKV(130.0),
-    });
-    await initialize(VALID_TOKEN, 200, env);
-    expect((captured as { currency: string }).currency).toBe("KES");
+    const body = captured as { amount: number; currency: string };
+    expect(body.amount).toBe(200);
+    expect(body.currency).toBe("USD");
   });
 });

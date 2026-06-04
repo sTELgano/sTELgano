@@ -83,15 +83,12 @@
           <svg class="size-7 text-primary" aria-hidden="true"><use href="/icons.svg#database"/></svg>
         </div>
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
-          <p>After cloning and running <span class="font-mono text-xs text-primary">npm install</span>, create the two stateful resources Wrangler needs IDs for:</p>
+          <p>After cloning and running <span class="font-mono text-xs text-primary">npm install</span>, create the stateful resource Wrangler needs an ID for:</p>
         </div>
         <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto leading-relaxed"><code># D1 database — stores extension tokens and live counters
-wrangler d1 create stelgano
-
-# KV namespace — FX rate cache for currency conversion
-wrangler kv:namespace create RATE_CACHE</code></pre>
+wrangler d1 create stelgano</code></pre>
         <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
-          <p>Paste the returned IDs into <span class="font-mono text-xs text-primary">wrangler.toml</span> under <span class="font-mono text-xs text-primary">[[d1_databases]]</span> and <span class="font-mono text-xs text-primary">[[kv_namespaces]]</span>. The Durable Object and rate-limiter bindings are already declared and require no provisioning steps.</p>
+          <p>Paste the returned ID into <span class="font-mono text-xs text-primary">wrangler.toml</span> under <span class="font-mono text-xs text-primary">[[d1_databases]]</span>. The Durable Object and rate-limiter bindings are already declared and require no provisioning steps.</p>
         </div>
       </div>
     </section>
@@ -225,7 +222,7 @@ wrangler deploy</code></pre>
           <ul class="space-y-2">
             <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Messages are hard-deleted immediately when a reply arrives (N=1 invariant)</span></li>
             <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>TTL expiry fires exactly at the scheduled timestamp via DO alarms</span></li>
-            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>The FX rate cache (if monetization is enabled) is refreshed daily at 06:00 UTC via a Cron Trigger</span></li>
+            <li class="flex items-start gap-2"><svg class="size-4 text-primary shrink-0 mt-0.5" aria-hidden="true"><use href="/icons.svg#chevron_right"/></svg><span>Expired extension tokens are swept daily at 03:00 UTC via a Cron Trigger</span></li>
           </ul>
         </div>
       </div>
