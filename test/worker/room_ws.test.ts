@@ -237,6 +237,45 @@ describe("RoomDO — join", () => {
     ws.close();
   });
 
+  it("stacks repeated extensions instead of resetting the expiry", async () => {
+    // Regression: a user who pre-extends an active channel pays for
+    // ADDITIONAL time. The second redemption must add another
+    // PAID_TTL_DAYS on top of the first, not reset the clock to now.
+    const room = hex64("room-extend-stack");
+    const ws = await openSocket(room);
+    send(ws, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("sender-stack"), access_hash: hex64("access-stack") },
+    });
+    await waitRef(ws, "1");
+
+    async function redeem(secret: string, ref: string): Promise<number> {
+      const tokenHash = await sha256hex(secret);
+      await createPending(env.DB, {
+        tokenHash,
+        amountCents: 200,
+        currency: "USD",
+        expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      });
+      await markPaid(env.DB, tokenHash);
+      send(ws, { event: "redeem_extension", ref, data: { extension_secret: secret } });
+      const reply = await waitRef(ws, ref);
+      const ok = (reply as { ok: { ttl_expires_at: string } }).ok;
+      return new Date(ok.ttl_expires_at).getTime();
+    }
+
+    const ttl1 = await redeem("b".repeat(64), "2");
+    const ttl2 = await redeem("c".repeat(64), "3");
+
+    // The second extension must push the expiry out by another full year.
+    // (Buggy reset-to-now behaviour would leave ttl2 ≈ ttl1.)
+    expect(ttl2 - ttl1).toBeGreaterThan(364 * 86_400_000);
+    expect(ttl2 - ttl1).toBeLessThan(366 * 86_400_000);
+
+    ws.close();
+  });
+
   it("returns unauthorized + attempts_remaining on wrong access_hash", async () => {
     const room = hex64("room-wrong-access");
     // Seat both access slots with two different hashes.
