@@ -40,7 +40,7 @@ Routes all requests through a single `fetch()` handler. Responsibilities:
 - Rate-limits `/admin` (20/IP/min) and WebSocket upgrades (30/IP/min) via native CF rate limiter bindings
 - Serves the admin dashboard and all JSON API routes (`/api/payment/initiate`, `/api/room/:hash/exists`, `/api/webhooks/paystack`)
 - Upgrades WebSocket connections and forwards them to the correct `RoomDO` instance via `stub.fetch()`, injecting `X-Client-IP` for per-IP rate limiting inside the DO
-- Runs the daily Cron Trigger (`0 3 * * *`): sweeps expired extension tokens from D1, then refreshes the FX rate in KV
+- Runs the daily Cron Trigger (`0 3 * * *`): sweeps expired extension tokens from D1
 
 ### Durable Object: `src/room.ts` — `RoomDO`
 
@@ -150,7 +150,7 @@ Fully optional (disabled by default). When enabled, steg numbers have a free TTL
 
 **Paystack placeholder email:** `anonymous+<token_hash[0..7]>@<PAYSTACK_RECEIPT_EMAIL_DOMAIN>`. Domain must be operator-controlled (no MX record — receipts bounce).
 
-**FX conversion:** If `PAYSTACK_SETTLEMENT_CURRENCY` ≠ `PAYMENT_CURRENCY`, `src/lib/paystack.ts` reads the cached rate from `RATE_CACHE` KV (written by the daily cron via `src/lib/fx_rate.ts`), applies `PAYSTACK_FX_BUFFER_PCT` (default 5%), and submits the converted amount. Falls back to `PAYMENT_FX_FALLBACK_RATE` if KV is empty.
+**Currency:** Charges are submitted to Paystack in `PAYMENT_CURRENCY` (default `USD`). Any conversion to the operator's payout currency is handled by Paystack at settlement — the Worker performs no FX.
 
 ### Security
 
@@ -223,9 +223,6 @@ Non-sensitive vars in `wrangler.toml [vars]`; secrets set via `wrangler secret p
 | `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key (not read server-side; hosted checkout only) |
 | `PAYSTACK_CALLBACK_URL` | If monetization | Post-payment redirect URL |
 | `PAYSTACK_RECEIPT_EMAIL_DOMAIN` | If monetization | Operator-controlled domain for anonymous placeholder emails |
-| `PAYSTACK_SETTLEMENT_CURRENCY` | No | ISO 4217 code when Paystack settlement currency differs from `PAYMENT_CURRENCY` |
-| `PAYSTACK_FX_BUFFER_PCT` | No | Percent buffer on FX-converted amounts (default: `5`) |
-| `PAYMENT_FX_FALLBACK_RATE` | No | Fallback FX rate (quote per base unit) if KV is empty |
 
 Salts (`ROOM_SALT`, `ACCESS_SALT`, `SENDER_SALT`, `ENC_SALT`) are public constants in `src/client/crypto/anon.ts`; rotating them is a breaking change.
 

@@ -670,10 +670,15 @@ export class RoomDO implements DurableObject {
     await deleteToken(this.env.DB, tokenHash);
 
     // Extend the room's TTL and reschedule its self-destruct alarm.
+    // Stack the extension on top of any remaining time rather than resetting
+    // the clock to now: a user who pre-extends an active channel paid for
+    // additional time, so PAID_TTL_DAYS is added to whichever is later — the
+    // current expiry or now (the latter wins only if the room already lapsed).
     // Floor to the hour (v1 `round_to_hour/1`) so the exact redemption
     // moment is not encoded in ttl_expires_at. A server operator with
     // D1 + DO access cannot pinpoint redemption time from the expiry.
-    const newTtlRaw = Date.now() + PAID_TTL_DAYS * 86_400_000;
+    const base = Math.max(Date.now(), this.room.ttlExpiresAtMs);
+    const newTtlRaw = base + PAID_TTL_DAYS * 86_400_000;
     const newTtlMs = Math.floor(newTtlRaw / 3_600_000) * 3_600_000;
 
     // v1 slept 0–5000ms (jitter_sleep) between the token mark-redeemed

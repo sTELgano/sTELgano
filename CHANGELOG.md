@@ -29,6 +29,7 @@ breaking protocol change increments the major version and requires a migration.
 
 - `src/lib/country_metrics.ts`, `src/lib/daily_metrics.ts` — replaced by `src/lib/analytics.ts`.
 - `test/worker/country_metrics.test.ts`, `test/worker/daily_metrics.test.ts` — tests for deleted modules.
+- `src/lib/fx_rate.ts` and its test — multi-currency FX conversion dropped. Charges submit in `PAYMENT_CURRENCY`; Paystack handles any settlement-currency conversion at payout. Also removed the `RATE_CACHE` KV binding, the daily FX cron refresh, the `fx_conversion_not_wired` error path, and the `PAYSTACK_SETTLEMENT_CURRENCY` / `PAYSTACK_FX_BUFFER_PCT` / `PAYMENT_FX_FALLBACK_RATE` env vars.
 
 ---
 

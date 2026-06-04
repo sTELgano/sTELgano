@@ -42,7 +42,6 @@ import {
   findByTokenHash,
   markPaid,
 } from "./src/lib/extension_tokens";
-import { refreshRate } from "./src/lib/fx_rate";
 import { getActiveRooms } from "./src/lib/live_counters";
 import {
   hmacSha512Hex,
@@ -78,20 +77,10 @@ export default {
   },
 
   // Cron handler — fires daily at 03:00 UTC via [triggers] in wrangler.toml.
-  // Runs both maintenance tasks sequentially:
-  //   1. Token cleanup — sweeps extension_tokens past their expires_at.
-  //   2. FX rate refresh — fetches live rate into RATE_CACHE KV (25h TTL).
-  //      Only runs when PAYSTACK_SETTLEMENT_CURRENCY is set and differs
-  //      from PAYMENT_CURRENCY; no-ops otherwise.
+  // Sweeps extension_tokens past their expires_at.
   async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     const cutoff = new Date().toISOString();
     await deleteExpired(env.DB, cutoff);
-
-    const base = (env.PAYMENT_CURRENCY || "USD").toLowerCase();
-    const quote = env.PAYSTACK_SETTLEMENT_CURRENCY?.toLowerCase();
-    if (quote && quote !== base && env.RATE_CACHE) {
-      await refreshRate(env.RATE_CACHE, base, quote);
-    }
   },
 } satisfies ExportedHandler<Env>;
 
@@ -894,11 +883,9 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
   const errorCode =
     initResult.reason === "missing_config"
       ? "paystack_not_configured"
-      : initResult.reason === "fx_conversion_not_wired"
-        ? "paystack_not_configured"
-        : initResult.reason === "provider_unavailable"
-          ? "provider_unavailable"
-          : "provider_error";
+      : initResult.reason === "provider_unavailable"
+        ? "provider_unavailable"
+        : "provider_error";
   const status = initResult.reason === "missing_config" ? 501 : 502;
   return jsonResponse({ error: errorCode, detail: initResult.reason }, status);
 }

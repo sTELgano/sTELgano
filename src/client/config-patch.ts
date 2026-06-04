@@ -27,10 +27,17 @@ async function patchConfig(): Promise<void> {
     return;
   }
 
-  const price = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: config.currency,
-  }).format(config.price_cents / 100);
+  const money = (cents: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: config.currency,
+    }).format(cents / 100);
+
+  const price = money(config.price_cents);
+  // Monthly-equivalent anchor for the annual price (the "/year" copy assumes
+  // a 12-month term). Derived from price_cents so it never contradicts the
+  // headline price if PRICE_CENTS changes.
+  const priceMonthly = money(config.price_cents / 12);
 
   for (const el of document.querySelectorAll<HTMLElement>("[data-config]")) {
     switch (el.dataset.config) {
@@ -47,6 +54,9 @@ async function patchConfig(): Promise<void> {
         break;
       case "price":
         el.textContent = price;
+        break;
+      case "price-monthly":
+        el.textContent = `≈ ${priceMonthly}/month, billed annually`;
         break;
     }
   }

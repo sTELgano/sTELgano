@@ -538,7 +538,9 @@ These have no semantic change but get rewritten in TypeScript:
 - `extension_tokens` table → D1 schema, same shape, **same privacy
   guarantee** (no `room_id` column).
 - `Stelgano.Monetization.Providers.Paystack` adapter → TS port, same
-  initialize/verify-webhook protocol, same FX-rate caching logic.
+  initialize/verify-webhook protocol. (v1's FX-rate caching was ported
+  then later removed — charges submit in `PAYMENT_CURRENCY` and Paystack
+  handles settlement-currency conversion.)
 - `AdminAuth` plug → Worker middleware doing HTTP Basic Auth.
 - `SecurityHeaders` plug + `CspNonce` plug → Worker middleware. The
   per-request CSP nonce strategy is preserved.
@@ -747,10 +749,11 @@ Things that don't need a decision today but should not be forgotten:
 - **Static asset hosting: Workers Assets vs R2.** Workers Assets is
   simpler; R2 is more flexible if assets grow large. Start with Workers
   Assets.
-- **Multi-currency settlement story.** The Paystack adapter's FX-rate
-  caching logic ports over. If we add a second payment provider (Stripe,
-  Flutterwave) the settlement-currency handling is per-adapter, same as
-  today.
+- **Multi-currency settlement story.** v2 charges in `PAYMENT_CURRENCY`
+  and lets Paystack convert to the operator's payout currency at
+  settlement; the Worker does no FX. (v1's in-app FX-rate caching was
+  ported then removed.) If we add a second payment provider (Stripe,
+  Flutterwave), settlement-currency handling stays per-adapter.
 - **Admin dashboard parity.** v1's `AdminDashboardLive` needs a v2
   equivalent. Plan: Worker route + server-rendered HTML + D1 query. No
   LiveView replacement needed since admin doesn't need real-time.
@@ -794,15 +797,12 @@ a commit that compiles and runs (even if incomplete):
 6. **Generator drawer + payment flow + admin dashboard.** ✅ _done
    2026-04-24 (0ef27f3, a99597b, 0d3362a)._ Port the remaining
    LiveView surfaces.
-7. **Paystack adapter port.** ✅ _done 2026-04-24 (4dfc2ac → 7ad2ade);
-   FX-rate caching completed post-2026-04-24._ `initialize`, webhook
-   verification (HMAC-SHA512). `src/lib/fx_rate.ts` implements
-   `getRate()` / `refreshRate()` backed by the Fawazahmed0 currency
-   API; `RATE_CACHE` KV caches the rate with a 25 h TTL; the `0 6 * *
-   *` Cron Trigger refreshes it daily. `initialize()` reads the live
-   rate, applies `PAYSTACK_FX_BUFFER_PCT` (default 5 %), and returns
-   `fx_conversion_not_wired` only when neither KV nor
-   `PAYMENT_FX_FALLBACK_RATE` yields a rate.
+7. **Paystack adapter port.** ✅ _done 2026-04-24 (4dfc2ac → 7ad2ade)._
+   `initialize`, webhook verification (HMAC-SHA512). `initialize()`
+   submits the charge in `PAYMENT_CURRENCY`. _FX-rate caching was added
+   post-2026-04-24 (`src/lib/fx_rate.ts`, `RATE_CACHE` KV, daily cron,
+   `PAYSTACK_FX_BUFFER_PCT`) then removed — Paystack now handles any
+   settlement-currency conversion at payout, so the Worker does no FX._
 8. **CSP, security headers, rate limiting.** ✅ _done 2026-04-24
    (1efe406); rate limiting shipped in application layer
    post-2026-04-24._ Header injection in `_worker.ts`'s fetch handler
@@ -817,7 +817,7 @@ a commit that compiles and runs (even if incomplete):
    RoomClient wire-frame coverage, and paid-tier atomic join._
    Two-project vitest workspace (`name: "unit"` / `name: "workers"`):
    pure-function tests (crypto, paystack helpers, analytics queries,
-   FX rate, RoomClient frames) run in Node; Worker/DO runtime tests
+   RoomClient frames) run in Node; Worker/DO runtime tests
    run under workerd via `@cloudflare/vitest-pool-workers`. **125
    tests** green covering healthz + security headers, admin Basic Auth,
    /api/room/:hash/exists, /api/payment/initiate gates,
