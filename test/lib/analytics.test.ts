@@ -8,9 +8,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  FUNNEL_STEPS,
+  isFunnelStep,
   queryCFCountryMetrics,
   queryCountryMetrics,
   queryDiasporaMetrics,
+  queryFunnelMetrics,
+  sumFunnels,
 } from "../../src/lib/analytics";
 
 function makeResponse(rows: unknown[]): Response {
@@ -176,5 +180,110 @@ describe("queryDiasporaMetrics", () => {
 
     const result = await queryDiasporaMetrics("acct", "token", "test_ds");
     expect(result).toEqual([]);
+  });
+});
+
+describe("isFunnelStep", () => {
+  it("accepts every declared step and rejects anything else", () => {
+    for (const s of FUNNEL_STEPS) expect(isFunnelStep(s)).toBe(true);
+    expect(isFunnelStep("room_free")).toBe(false);
+    expect(isFunnelStep("")).toBe(false);
+    expect(isFunnelStep(undefined)).toBe(false);
+    expect(isFunnelStep(42)).toBe(false);
+  });
+
+  it("keeps landing first and extend_completed last (funnel order)", () => {
+    expect(FUNNEL_STEPS[0]).toBe("landing");
+    expect(FUNNEL_STEPS[FUNNEL_STEPS.length - 1]).toBe("extend_completed");
+  });
+});
+
+describe("queryFunnelMetrics", () => {
+  it("groups counts per campaign with every step key present", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        makeResponse([
+          { blob2: "landing", blob4: "summer", cnt: 100 },
+          { blob2: "chat_view", blob4: "summer", cnt: 60 },
+          { blob2: "channel_opened", blob4: "summer", cnt: 25 },
+          { blob2: "landing", blob4: "direct", cnt: 40 },
+        ]),
+      ),
+    );
+
+    const result = await queryFunnelMetrics("acct", "token", "test_ds");
+    // sorted by landing desc → summer (100) before direct (40)
+    expect(result).toHaveLength(2);
+    expect(result[0]!.campaign).toBe("summer");
+    expect(result[0]!.steps.landing).toBe(100);
+    expect(result[0]!.steps.chat_view).toBe(60);
+    expect(result[0]!.steps.channel_opened).toBe(25);
+    // unseen steps default to 0
+    expect(result[0]!.steps.extend_completed).toBe(0);
+    expect(result[1]!.campaign).toBe("direct");
+    expect(result[1]!.steps.landing).toBe(40);
+  });
+
+  it("buckets empty/absent campaign as 'direct' and ignores unknown steps", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        makeResponse([
+          { blob2: "landing", blob4: "", cnt: 5 },
+          { blob2: "landing", cnt: 3 },
+          { blob2: "not_a_step", blob4: "summer", cnt: 99 },
+        ]),
+      ),
+    );
+
+    const result = await queryFunnelMetrics("acct", "token", "test_ds");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.campaign).toBe("direct");
+    expect(result[0]!.steps.landing).toBe(8); // 5 + 3
+  });
+
+  it("returns [] on network error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
+    expect(await queryFunnelMetrics("acct", "token", "test_ds")).toEqual([]);
+  });
+});
+
+describe("sumFunnels", () => {
+  it("sums each step across every campaign into one platform funnel", () => {
+    const total = sumFunnels([
+      {
+        campaign: "summer",
+        steps: {
+          landing: 100,
+          chat_view: 60,
+          steg_generated: 40,
+          channel_opened: 25,
+          extend_started: 8,
+          extend_completed: 5,
+        },
+      },
+      {
+        campaign: "direct",
+        steps: {
+          landing: 40,
+          chat_view: 20,
+          steg_generated: 10,
+          channel_opened: 6,
+          extend_started: 2,
+          extend_completed: 1,
+        },
+      },
+    ]);
+    expect(total.landing).toBe(140);
+    expect(total.chat_view).toBe(80);
+    expect(total.channel_opened).toBe(31);
+    expect(total.extend_completed).toBe(6);
+  });
+
+  it("returns an all-zero funnel for no input", () => {
+    const total = sumFunnels([]);
+    expect(total.landing).toBe(0);
+    expect(total.extend_completed).toBe(0);
   });
 });

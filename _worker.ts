@@ -25,16 +25,31 @@
 import { INLINE_SCRIPT_HASHES } from "./src/csp_hashes";
 import type { Env } from "./src/env";
 import {
+  type CampaignFunnel,
   type CFCountryRow,
   type CountryRow,
   checkAeAccess,
   type DailyRow,
   type DiasporaRow,
+  FUNNEL_STEPS,
+  isFunnelStep,
   queryCFCountryMetrics,
   queryCountryMetrics,
   queryDailyMetrics,
   queryDiasporaMetrics,
+  queryFunnelMetrics,
+  sumFunnels,
+  writeFunnelEvent,
 } from "./src/lib/analytics";
+import {
+  archiveCampaign,
+  type Campaign,
+  createCampaign,
+  getCampaignBySlug,
+  listCampaigns,
+  normaliseDestination,
+  SLUG_RE,
+} from "./src/lib/campaigns";
 import {
   createPending,
   deleteExpired,
@@ -145,6 +160,36 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
     // as blob3 (complement to the client-derived steg-number country).
     withIp.set("X-CF-Country", (request.cf?.country ?? "") as string);
     return stub.fetch(new Request(request, { headers: withIp }));
+  }
+
+  // GET /c/:slug — campaign tracking link. Records a `landing` funnel
+  // event attributed to the campaign, then 302-redirects to the
+  // campaign's destination with ?c=<slug> so the homepage bootstrap can
+  // persist the attribution for the rest of the funnel. Unknown or
+  // archived slugs redirect to "/" with no event (no existence leak).
+  const trackMatch = url.pathname.match(/^\/c\/([^/]+)$/);
+  if (trackMatch && request.method === "GET") {
+    return handleCampaignLink(trackMatch[1] ?? "", request, env);
+  }
+
+  // POST /api/funnel — lightweight, unauthenticated funnel beacon fired
+  // by the client (navigator.sendBeacon) at each conversion step. Body
+  // is { step, campaign }. The server adds CF-IPCountry and writes one
+  // Analytics Engine data point. No stored state, no user data.
+  if (url.pathname === "/api/funnel" && request.method === "POST") {
+    return handleFunnelBeacon(request, env);
+  }
+
+  // POST /api/admin/campaigns — create a campaign (Basic-Auth gated).
+  // Plain HTML form submission from the admin dashboard; redirects back.
+  if (url.pathname === "/api/admin/campaigns" && request.method === "POST") {
+    return handleCampaignCreate(request, env);
+  }
+
+  // POST /api/admin/campaigns/:id/archive — soft-delete a campaign.
+  const archiveMatch = url.pathname.match(/^\/api\/admin\/campaigns\/([^/]+)\/archive$/);
+  if (archiveMatch && request.method === "POST") {
+    return handleCampaignArchive(archiveMatch[1] ?? "", request, env);
   }
 
   // GET /api/room/:roomHash/exists — probe whether a room has
@@ -369,12 +414,14 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   let cfCountry: CFCountryRow[] = [];
   let daily: DailyRow[] = [];
   let diaspora: DiasporaRow[] = [];
+  let funnels: CampaignFunnel[] = [];
+  let campaigns: Campaign[] = [];
   let activeRooms = 0;
   let aeError: string | null = null;
   const aeReady = Boolean(env.CF_ACCOUNT_ID && env.CF_AE_API_TOKEN);
   const aeDataset = env.CF_AE_DATASET;
   try {
-    [country, cfCountry, daily, diaspora, activeRooms] = await Promise.all([
+    [country, cfCountry, daily, diaspora, funnels, campaigns, activeRooms] = await Promise.all([
       aeReady
         ? queryCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
         : Promise.resolve([] as CountryRow[]),
@@ -387,6 +434,10 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
       aeReady
         ? queryDiasporaMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
         : Promise.resolve([] as DiasporaRow[]),
+      aeReady
+        ? queryFunnelMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
+        : Promise.resolve([] as CampaignFunnel[]),
+      listCampaigns(env.DB).catch(() => [] as Campaign[]),
       getActiveRooms(env.DB),
     ]);
   } catch {
@@ -411,6 +462,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 
   const html = renderAdminHtml({
     updated: `${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`,
+    origin: new URL(request.url).origin,
     aeReady,
     aeError,
     newToday,
@@ -421,6 +473,8 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
     country,
     cfCountry,
     diaspora,
+    campaigns,
+    funnels,
   });
 
   return new Response(html, {
@@ -434,6 +488,7 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
 
 function renderAdminHtml(d: {
   updated: string;
+  origin: string;
   aeReady: boolean;
   aeError: string | null;
   newToday: number;
@@ -444,6 +499,8 @@ function renderAdminHtml(d: {
   country: CountryRow[];
   cfCountry: CFCountryRow[];
   diaspora: DiasporaRow[];
+  campaigns: Campaign[];
+  funnels: CampaignFunnel[];
 }): string {
   const dailyRows = d.daily.length
     ? d.daily
@@ -511,6 +568,14 @@ function renderAdminHtml(d: {
   const iconSvg = (name: string, cls = "size-4") =>
     `<svg class="${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
 
+  const campaignsSection = renderCampaignsSection(
+    d.campaigns,
+    d.funnels,
+    d.origin,
+    d.aeReady,
+    iconSvg,
+  );
+
   return `<!DOCTYPE html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <html lang="en" data-theme="dark">
@@ -573,6 +638,9 @@ function renderAdminHtml(d: {
         ${adminMetricCard("Messages Today", d.aeReady ? d.messagesThisDay : "—", "Encrypted, current UTC day", "message_circle")}
         ${adminMetricCard("Total (30d)", d.aeReady ? d.sum90 : "—", "New rooms, past 30 days", "calendar")}
       </div>
+
+      <!-- Campaigns + conversion funnel -->
+      ${campaignsSection}
 
       <!-- Per-day breakdown -->
       <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
@@ -739,6 +807,243 @@ function adminMetricCard(
 }
 
 // ---------------------------------------------------------------------------
+// Campaigns + conversion-funnel rendering
+// ---------------------------------------------------------------------------
+
+const FUNNEL_LABELS: Record<string, string> = {
+  landing: "Landing",
+  chat_view: "Visited /chat",
+  steg_generated: "Generated #",
+  channel_opened: "Opened channel",
+  extend_started: "Started extend",
+  extend_completed: "Extended",
+};
+
+function emptyFunnel(): Record<string, number> {
+  const z: Record<string, number> = {};
+  for (const s of FUNNEL_STEPS) z[s] = 0;
+  return z;
+}
+
+/** One-line headline for a funnel: top-of-funnel size + the two rates
+ *  that matter most — activation (reached an open channel) and paid
+ *  (extended a number), both relative to landings. */
+function funnelSummary(steps: Record<string, number>): string {
+  const landing = steps.landing ?? 0;
+  const pct = (n: number) => (landing > 0 ? Math.round((n / landing) * 100) : 0);
+  return `${landing} landings · activation ${pct(steps.channel_opened ?? 0)}% · paid ${pct(steps.extend_completed ?? 0)}%`;
+}
+
+/** Renders the whole Campaigns dashboard block: the platform-wide
+ *  overall funnel, a create form, and one funnel card per campaign
+ *  (plus a Direct/organic bucket and read-only archived buckets). */
+function renderCampaignsSection(
+  campaigns: Campaign[],
+  funnels: CampaignFunnel[],
+  origin: string,
+  aeReady: boolean,
+  iconSvg: (name: string, cls?: string) => string,
+): string {
+  const byCampaign = new Map<string, Record<string, number>>();
+  for (const f of funnels) byCampaign.set(f.campaign, f.steps);
+
+  // Platform-wide funnel: every campaign + direct summed into one. The
+  // link-independent view of overall conversion health.
+  const overall = sumFunnels(funnels);
+  const overallCard = renderFunnelCard({
+    title: "Overall platform funnel",
+    subtitle: funnelSummary(overall),
+    steps: overall,
+    highlight: true,
+  });
+
+  const cards: string[] = [];
+
+  // Direct / organic bucket — everyone with no campaign attribution.
+  cards.push(
+    renderFunnelCard({
+      title: "Direct / organic",
+      subtitle: "Visitors with no campaign link",
+      steps: byCampaign.get("direct") ?? emptyFunnel(),
+    }),
+  );
+
+  // One card per active campaign (from D1).
+  const known = new Set<string>(["direct"]);
+  for (const c of campaigns) {
+    known.add(c.slug);
+    cards.push(
+      renderFunnelCard({
+        title: c.title,
+        subtitle: c.description || `→ ${c.destination}`,
+        link: `${origin}/c/${c.slug}`,
+        archiveId: c.id,
+        steps: byCampaign.get(c.slug) ?? emptyFunnel(),
+      }),
+    );
+  }
+
+  // Orphan buckets — funnel data for slugs no longer in the active list
+  // (archived/deleted campaigns). Read-only, so historical numbers
+  // aren't silently dropped.
+  for (const f of funnels) {
+    if (known.has(f.campaign)) continue;
+    if (!SLUG_RE.test(f.campaign)) continue; // defence-in-depth: ignore malformed slugs
+    cards.push(
+      renderFunnelCard({
+        title: f.campaign,
+        subtitle: "Archived or deleted campaign",
+        steps: f.steps,
+      }),
+    );
+  }
+
+  const aeNote = aeReady
+    ? ""
+    : `<p class="text-xs text-amber-400/80 font-medium">Analytics Engine is not configured — funnel counts read 0. Campaigns can still be created and their tracking links shared.</p>`;
+
+  return `
+      <div class="glass-card p-6 sm:p-10 space-y-8 mx-4 sm:mx-0">
+        <div class="flex items-center gap-3 text-slate-300">
+          ${iconSvg("bar_chart_3", "size-5 text-primary")}
+          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Conversion Funnel</h4>
+        </div>
+        <p class="text-xs text-slate-500 font-medium leading-relaxed">
+          Every session flows through the funnel — Landing → /chat → number generated → channel opened → extend started → extended. The step with the steepest drop-off is flagged <span class="text-amber-400 font-bold uppercase">friction</span>. Counts are per-session over the last 30 days; aggregate only, no user data. <span class="text-slate-400">Activation</span> = reached an open channel; <span class="text-slate-400">paid</span> = extended a number (both relative to landings).
+        </p>
+        ${aeNote}
+
+        <!-- Platform-wide funnel (link-independent) -->
+        ${overallCard}
+
+        <!-- Create a campaign -->
+        <div class="flex items-center gap-3 text-slate-300 pt-2">
+          ${iconSvg("sparkles", "size-4 text-primary")}
+          <h5 class="text-[10px] font-black uppercase tracking-[0.4em]">Campaign tracking links</h5>
+        </div>
+        <p class="text-xs text-slate-500 font-medium leading-relaxed">
+          Create a campaign to get a shareable tracking link (<span class="font-mono text-slate-400">${escapeAttr(origin)}/c/&lt;slug&gt;</span>) and attribute its visitors to their own funnel below.
+        </p>
+        <form method="post" action="/api/admin/campaigns" class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <div class="space-y-2 sm:col-span-2">
+            <label class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500" for="c-title">Campaign title</label>
+            <input id="c-title" name="title" required maxlength="120" placeholder="e.g. Instagram launch push" class="glass-input w-full" />
+          </div>
+          <div class="space-y-2 sm:col-span-2">
+            <label class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500" for="c-desc">Description</label>
+            <input id="c-desc" name="description" maxlength="500" placeholder="Optional — for your own reference" class="glass-input w-full" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500" for="c-dest">Destination path</label>
+            <input id="c-dest" name="destination" value="/" maxlength="256" placeholder="/" class="glass-input w-full font-mono" />
+          </div>
+          <div class="flex items-end">
+            <button type="submit" class="btn-primary py-4 px-10 text-sm w-full sm:w-auto flex items-center justify-center gap-2">
+              ${iconSvg("sparkles", "size-5")} Create campaign
+            </button>
+          </div>
+        </form>
+
+        <div class="flex items-center gap-3 text-slate-300 pt-2">
+          ${iconSvg("list", "size-4 text-primary")}
+          <h5 class="text-[10px] font-black uppercase tracking-[0.4em]">Funnel by source</h5>
+        </div>
+        <div class="space-y-6">
+          ${cards.join("")}
+        </div>
+      </div>`;
+}
+
+/** Renders one campaign's funnel as a horizontal row of step cells with
+ *  step-to-step conversion arrows; flags the steepest drop as friction. */
+function renderFunnelCard(opts: {
+  title: string;
+  subtitle: string;
+  steps: Record<string, number>;
+  link?: string;
+  archiveId?: string;
+  highlight?: boolean;
+}): string {
+  const counts = FUNNEL_STEPS.map((s) => opts.steps[s] ?? 0);
+  const top = counts[0] ?? 0;
+
+  // Steepest consecutive percentage drop = the friction point.
+  let worstIdx = -1;
+  let worstDrop = 0;
+  for (let i = 1; i < counts.length; i++) {
+    const prev = counts[i - 1] ?? 0;
+    const cur = counts[i] ?? 0;
+    if (prev <= 0) continue;
+    const drop = (prev - cur) / prev;
+    if (drop > worstDrop) {
+      worstDrop = drop;
+      worstIdx = i;
+    }
+  }
+
+  const cells: string[] = [];
+  for (let i = 0; i < FUNNEL_STEPS.length; i++) {
+    const step = FUNNEL_STEPS[i] ?? "";
+    const count = counts[i] ?? 0;
+    const pctTop = top > 0 ? Math.round((count / top) * 100) : 0;
+    cells.push(`
+            <div class="shrink-0 w-28 text-center space-y-1">
+              <div class="text-2xl font-mono font-black text-white">${count}</div>
+              <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 leading-tight">${escapeAttr(FUNNEL_LABELS[step] ?? step)}</div>
+              <div class="text-[9px] font-mono text-slate-600">${pctTop}% of top</div>
+            </div>`);
+
+    if (i < FUNNEL_STEPS.length - 1) {
+      const prev = counts[i] ?? 0;
+      const next = counts[i + 1] ?? 0;
+      const conv = prev > 0 ? Math.round((next / prev) * 100) : 0;
+      const friction = i + 1 === worstIdx && worstDrop > 0;
+      const tone = friction ? "text-amber-400" : "text-slate-600";
+      cells.push(`
+            <div class="shrink-0 flex flex-col items-center justify-center px-1 ${tone}">
+              <span class="text-lg leading-none">→</span>
+              <span class="text-[9px] font-mono mt-0.5">${conv}%</span>
+              ${friction ? `<span class="text-[8px] font-black uppercase tracking-wider mt-0.5">friction</span>` : ""}
+            </div>`);
+    }
+  }
+
+  const linkRow = opts.link
+    ? `<div class="flex items-center gap-2 text-[11px] font-mono text-primary/80 break-all">
+         <svg class="size-3.5 shrink-0" aria-hidden="true"><use href="/icons.svg#arrow_up_right"/></svg>
+         <span>${escapeAttr(opts.link)}</span>
+       </div>`
+    : "";
+
+  const archiveBtn = opts.archiveId
+    ? `<form method="post" action="/api/admin/campaigns/${escapeAttr(opts.archiveId)}/archive">
+         <button type="submit" class="btn-ghost py-1.5 px-3 text-[10px] uppercase tracking-widest text-slate-500 hover:text-red-400" title="Archive campaign">Archive</button>
+       </form>`
+    : "";
+
+  const shell = opts.highlight
+    ? "rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:p-6 space-y-4"
+    : "rounded-2xl border border-white/5 bg-slate-950/40 p-5 sm:p-6 space-y-4";
+
+  return `
+        <div class="${shell}">
+          <div class="flex items-start justify-between gap-4">
+            <div class="space-y-1 min-w-0">
+              <div class="text-sm font-bold ${opts.highlight ? "text-primary" : "text-white"} truncate">${escapeAttr(opts.title)}</div>
+              <div class="text-[11px] text-slate-500 truncate">${escapeAttr(opts.subtitle)}</div>
+              ${linkRow}
+            </div>
+            ${archiveBtn}
+          </div>
+          <div class="overflow-x-auto">
+            <div class="flex items-stretch gap-1 min-w-max py-1">
+              ${cells.join("")}
+            </div>
+          </div>
+        </div>`;
+}
+
+// ---------------------------------------------------------------------------
 // Paystack webhook
 // ---------------------------------------------------------------------------
 //
@@ -888,4 +1193,89 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
         : "provider_error";
   const status = initResult.reason === "missing_config" ? 501 : 502;
   return jsonResponse({ error: errorCode, detail: initResult.reason }, status);
+}
+
+// ---------------------------------------------------------------------------
+// Campaign conversion-funnel tracking
+// ---------------------------------------------------------------------------
+
+function redirect(location: string, status = 302): Response {
+  return new Response(null, {
+    status,
+    headers: { location, "cache-control": "no-store" },
+  });
+}
+
+/** GET /c/:slug — records a landing event and redirects into the funnel. */
+async function handleCampaignLink(slug: string, request: Request, env: Env): Promise<Response> {
+  // Bad slug or unknown/archived campaign → silent redirect home; we
+  // never reveal which slugs exist, and never count a phantom landing.
+  if (!SLUG_RE.test(slug)) return redirect("/");
+  const campaign = await getCampaignBySlug(env.DB, slug).catch(() => null);
+  if (!campaign) return redirect("/");
+
+  const cfCountry = (request.cf?.country ?? "") as string;
+  writeFunnelEvent(env.ANALYTICS, "landing", slug, cfCountry);
+
+  // Re-normalise on read as well as write — belt-and-braces against an
+  // unsafe destination ever reaching the Location header (open-redirect
+  // guard). Carry the slug forward so the layout bootstrap can persist
+  // it for the downstream funnel steps.
+  const destination = normaliseDestination(campaign.destination);
+  const sep = destination.includes("?") ? "&" : "?";
+  return redirect(`${destination}${sep}c=${slug}`);
+}
+
+/** POST /api/funnel — client beacon for a single funnel step. */
+async function handleFunnelBeacon(request: Request, env: Env): Promise<Response> {
+  // Tolerant parse: sendBeacon ships text/plain, fetch ships JSON.
+  let body: { step?: unknown; campaign?: unknown };
+  try {
+    body = JSON.parse(await request.text()) as { step?: unknown; campaign?: unknown };
+  } catch {
+    return new Response(null, { status: 400 });
+  }
+
+  if (!isFunnelStep(body.step)) {
+    return new Response(null, { status: 400 });
+  }
+  // campaign: a valid slug, or "direct"/empty for organic traffic.
+  const raw = typeof body.campaign === "string" ? body.campaign : "";
+  const campaign = raw && SLUG_RE.test(raw) ? raw : "direct";
+
+  const cfCountry = (request.cf?.country ?? "") as string;
+  writeFunnelEvent(env.ANALYTICS, body.step, campaign, cfCountry);
+  return new Response(null, { status: 204 });
+}
+
+/** POST /api/admin/campaigns — Basic-Auth create from the dashboard form. */
+async function handleCampaignCreate(request: Request, env: Env): Promise<Response> {
+  if (!checkBasicAuth(request, env)) return basicAuthChallenge();
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return redirect("/admin", 303);
+  }
+  const title = String(form.get("title") ?? "").trim();
+  if (!title) return redirect("/admin", 303);
+
+  try {
+    await createCampaign(env.DB, {
+      title,
+      description: String(form.get("description") ?? ""),
+      destination: String(form.get("destination") ?? "/"),
+    });
+  } catch {
+    // Swallow — the dashboard re-renders the current state on redirect.
+  }
+  return redirect("/admin", 303);
+}
+
+/** POST /api/admin/campaigns/:id/archive — Basic-Auth soft-delete. */
+async function handleCampaignArchive(id: string, request: Request, env: Env): Promise<Response> {
+  if (!checkBasicAuth(request, env)) return basicAuthChallenge();
+  await archiveCampaign(env.DB, id).catch(() => 0);
+  return redirect("/admin", 303);
 }

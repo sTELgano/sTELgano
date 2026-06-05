@@ -17,7 +17,17 @@
 // elixir/lib/stelgano_web/live/chat_live.ex so that nothing in the
 // shipped HTML drifts from what designers signed off on in v1.
 
+import { captureCampaign, fireFunnel } from "./funnel";
 import { ChatState, COUNTRY_DATA, type Config, type PlainMessage, type State } from "./state";
+
+// Conversion-funnel: persist any ?c attribution forwarded to /chat by a
+// campaign tracking link, count a platform landing for sessions that
+// entered directly here (deduped — homepage/static entries already
+// counted theirs), then record reaching the chat entry screen. All
+// one-per-session and carry no user data.
+captureCampaign();
+fireFunnel("landing");
+fireFunnel("chat_view");
 
 const root = document.getElementById("chat-root")!;
 

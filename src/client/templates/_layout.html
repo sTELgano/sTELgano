@@ -70,6 +70,33 @@
       window.addEventListener("popstate", maskHistory);
     })();
   </script>
+
+  <!-- Conversion-funnel entry. Runs on every static page so the
+       platform funnel counts a "landing" for any site entry, not just
+       the homepage. Captures ?c campaign attribution (set by the
+       /c/<slug> tracking link) and fires a one-per-session landing
+       beacon for organic visits; campaign visits are already counted
+       server-side by the /c/<slug> redirect. Carries no user data —
+       only { step, campaign }. -->
+  <script>
+    try {
+      var fu = new URL(window.location.href);
+      var fc = fu.searchParams.get("c");
+      if (fc && /^[a-z0-9-]{1,40}$/.test(fc)) {
+        sessionStorage.setItem("stelegano_campaign", fc);
+        sessionStorage.setItem("stelegano_funnel:landing", "1");
+        fu.searchParams.delete("c");
+        window.history.replaceState(null, "", fu.pathname + fu.search + fu.hash);
+      } else if (fu.pathname.indexOf("/payment") !== 0 && !sessionStorage.getItem("stelegano_funnel:landing")) {
+        // Skip /payment/* — a checkout return is mid-funnel, not a landing.
+        var fcamp = sessionStorage.getItem("stelegano_campaign") || "direct";
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon("/api/funnel", JSON.stringify({ step: "landing", campaign: fcamp }));
+        }
+        sessionStorage.setItem("stelegano_funnel:landing", "1");
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body class="antialiased">
   <div class="bg-grid-container">

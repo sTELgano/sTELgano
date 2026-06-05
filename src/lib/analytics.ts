@@ -37,6 +37,63 @@ export type EventType =
   | "room_expired_paid"
   | "message_sent";
 
+// ---------------------------------------------------------------------------
+// Conversion-funnel events (campaign attribution).
+//
+// Written as a separate blob1="funnel" event family so they never
+// collide with the room_* counters above. Shape:
+//   blob1 = "funnel"
+//   blob2 = FunnelStep   (the funnel stage)
+//   blob3 = CF-IPCountry (server-side IP geolocation), or ""
+//   blob4 = campaign slug, or "direct" for organic traffic
+//   doubles[0] = 1
+//
+// PRIVACY: a funnel data point carries no phone, room_hash,
+// access_hash, or device id — only the step, a 2-char country code,
+// and an operator-defined campaign slug. Each step fires at most once
+// per browser session (client-side guard), so counts approximate
+// unique sessions reaching each stage.
+// ---------------------------------------------------------------------------
+
+/** Ordered conversion-funnel stages, top to bottom. The order is the
+ *  funnel order — the admin dashboard renders drop-off between
+ *  consecutive entries. */
+export const FUNNEL_STEPS = [
+  "landing",
+  "chat_view",
+  "steg_generated",
+  "channel_opened",
+  "extend_started",
+  "extend_completed",
+] as const;
+
+export type FunnelStep = (typeof FUNNEL_STEPS)[number];
+
+export function isFunnelStep(v: unknown): v is FunnelStep {
+  return typeof v === "string" && (FUNNEL_STEPS as readonly string[]).includes(v);
+}
+
+/** Per-campaign funnel counts, one entry per `campaign` slug
+ *  (plus "direct"). `steps` holds the count reaching each FunnelStep. */
+export type CampaignFunnel = {
+  campaign: string;
+  steps: Record<FunnelStep, number>;
+};
+
+/** Fire-and-forget: write one funnel data point.
+ *  No-op when analytics is undefined (tests run without this binding). */
+export function writeFunnelEvent(
+  analytics: AnalyticsEngineDataset | undefined,
+  step: FunnelStep,
+  campaign = "direct",
+  cfCountry = "",
+): void {
+  analytics?.writeDataPoint({
+    blobs: ["funnel", step, cfCountry, campaign || "direct"],
+    doubles: [1],
+  });
+}
+
 export type CountryRow = {
   country_code: string;
   free_rooms: number;
@@ -228,6 +285,57 @@ export async function queryDiasporaMetrics(
       };
     })
     .sort((a, b) => b.free_rooms + b.paid_rooms - (a.free_rooms + a.paid_rooms));
+}
+
+/** Per-campaign funnel counts over the last 30 days. Returns one
+ *  CampaignFunnel per `campaign` slug seen in the data (including
+ *  "direct"); every FunnelStep key is present, defaulting to 0.
+ *  Returns [] gracefully when AE is unreachable. */
+export async function queryFunnelMetrics(
+  accountId: string,
+  apiToken: string,
+  dataset: string,
+): Promise<CampaignFunnel[]> {
+  const { data } = await sqlQuery(
+    accountId,
+    apiToken,
+    `SELECT blob2, blob4, count() AS cnt
+     FROM ${dataset}
+     WHERE timestamp >= toDateTime('${since30()}')
+       AND blob1 = 'funnel'
+     GROUP BY blob2, blob4
+     ORDER BY cnt DESC
+     LIMIT 10000`,
+  ).catch((): SqlResult => ({ data: [] }));
+
+  const zero = (): Record<FunnelStep, number> =>
+    Object.fromEntries(FUNNEL_STEPS.map((s) => [s, 0])) as Record<FunnelStep, number>;
+
+  const map = new Map<string, Record<FunnelStep, number>>();
+  for (const row of data) {
+    const step = row.blob2 as string;
+    if (!isFunnelStep(step)) continue;
+    const campaign = ((row.blob4 as string) || "direct").trim() || "direct";
+    const cnt = Number(row.cnt ?? 0);
+    const steps = map.get(campaign) ?? zero();
+    steps[step] += cnt;
+    map.set(campaign, steps);
+  }
+
+  return [...map.entries()]
+    .map(([campaign, steps]) => ({ campaign, steps }))
+    .sort((a, b) => b.steps.landing - a.steps.landing);
+}
+
+/** Collapses per-campaign funnels into one platform-wide funnel by
+ *  summing each step across every campaign (including "direct"). The
+ *  link-independent, whole-platform view. */
+export function sumFunnels(funnels: CampaignFunnel[]): Record<FunnelStep, number> {
+  const total = Object.fromEntries(FUNNEL_STEPS.map((s) => [s, 0])) as Record<FunnelStep, number>;
+  for (const f of funnels) {
+    for (const s of FUNNEL_STEPS) total[s] += f.steps[s] ?? 0;
+  }
+  return total;
 }
 
 /** Validates AE access with a minimal query.
