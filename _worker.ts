@@ -510,13 +510,14 @@ function renderAdminHtml(d: {
             <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.day)}</td>
             <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_new}</td>
             <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_new}</td>
+            <td class="py-3 pr-8 text-right font-mono text-emerald-300/70">${r.extensions ?? 0}</td>
             <td class="py-3 pr-8 text-right font-mono text-slate-400">${r.free_expired}</td>
             <td class="py-3 pr-8 text-right font-mono text-slate-400">${r.paid_expired}</td>
             <td class="py-3 text-right font-mono text-slate-300">${r.messages_sent ?? 0}</td>
           </tr>`,
         )
         .join("")
-    : `<tr><td colspan="6" class="py-4 text-sm text-slate-500 italic">No daily data yet.</td></tr>`;
+    : `<tr><td colspan="7" class="py-4 text-sm text-slate-500 italic">No daily data yet.</td></tr>`;
 
   const countryRows = d.country.length
     ? d.country
@@ -649,7 +650,7 @@ function renderAdminHtml(d: {
           <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Daily Breakdown · Last 30 Days</h4>
         </div>
         <p class="text-xs text-slate-500 font-medium leading-relaxed">
-          New free / new paid / expired free / expired paid counters per UTC day, across all countries. Expiries are not country-scoped because individual room records do not carry country metadata (by design).
+          New free / new paid / extensions / expired free / expired paid counters per UTC day, across all countries. <span class="text-emerald-300/70">New paid</span> counts a number's first upgrade to paid — repeat renewals of an already-paid number are counted under <span class="text-emerald-300/70">Extensions</span>, so one number extended several times is one paid room, not several. Expiries are not country-scoped because individual room records do not carry country metadata (by design).
         </p>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -658,6 +659,7 @@ function renderAdminHtml(d: {
                 <th class="py-3 pr-8">Day (UTC)</th>
                 <th class="py-3 pr-8 text-right">New free</th>
                 <th class="py-3 pr-8 text-right">New paid</th>
+                <th class="py-3 pr-8 text-right">Extensions</th>
                 <th class="py-3 pr-8 text-right">Expired free</th>
                 <th class="py-3 pr-8 text-right">Expired paid</th>
                 <th class="py-3 text-right">Messages</th>

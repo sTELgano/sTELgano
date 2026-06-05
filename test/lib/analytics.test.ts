@@ -12,6 +12,7 @@ import {
   isFunnelStep,
   queryCFCountryMetrics,
   queryCountryMetrics,
+  queryDailyMetrics,
   queryDiasporaMetrics,
   queryFunnelMetrics,
   sumFunnels,
@@ -180,6 +181,37 @@ describe("queryDiasporaMetrics", () => {
 
     const result = await queryDiasporaMetrics("acct", "token", "test_ds");
     expect(result).toEqual([]);
+  });
+});
+
+describe("queryDailyMetrics", () => {
+  it("counts renewals (room_extended) separately from new paid rooms", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        makeResponse([
+          { blob1: "room_free", day: "2026-06-04", cnt: 1 },
+          { blob1: "room_paid", day: "2026-06-04", cnt: 1 },
+          { blob1: "room_extended", day: "2026-06-04", cnt: 2 },
+          { blob1: "message_sent", day: "2026-06-04", cnt: 5 },
+        ]),
+      ),
+    );
+
+    const result = await queryDailyMetrics("acct", "token", 30, "test_ds");
+    expect(result).toHaveLength(1);
+    const row = result[0]!;
+    // One number created free, upgraded once (paid_new=1), extended twice
+    // more (extensions=2) — NOT three paid rooms.
+    expect(row.free_new).toBe(1);
+    expect(row.paid_new).toBe(1);
+    expect(row.extensions).toBe(2);
+    expect(row.messages_sent).toBe(5);
+  });
+
+  it("returns [] on network error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
+    expect(await queryDailyMetrics("acct", "token", 30, "test_ds")).toEqual([]);
   });
 });
 

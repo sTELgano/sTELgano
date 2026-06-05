@@ -32,6 +32,7 @@ const AE_SQL_BASE = "https://api.cloudflare.com/client/v4/accounts";
 export type EventType =
   | "room_free"
   | "room_paid"
+  | "room_extended"
   | "room_rejoin"
   | "room_expired_free"
   | "room_expired_paid"
@@ -117,6 +118,7 @@ export type DailyRow = {
   day: string;
   free_new: number;
   paid_new: number;
+  extensions: number;
   free_expired: number;
   paid_expired: number;
   messages_sent: number;
@@ -382,6 +384,7 @@ export async function queryDailyMetrics(
       day,
       free_new: 0,
       paid_new: 0,
+      extensions: 0,
       free_expired: 0,
       paid_expired: 0,
       messages_sent: 0,
@@ -392,6 +395,9 @@ export async function queryDailyMetrics(
         break;
       case "room_paid":
         r.paid_new += cnt;
+        break;
+      case "room_extended":
+        r.extensions += cnt;
         break;
       case "room_expired_free":
         r.free_expired += cnt;
