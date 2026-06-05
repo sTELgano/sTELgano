@@ -42,6 +42,7 @@ import {
   type ProgressCallback,
   toBase64,
 } from "./crypto/anon";
+import { fireFunnel } from "./funnel";
 import { RoomClient, type RoomClientError } from "./room_client";
 
 // Mapping of ISO codes to Flag Emojis
@@ -268,6 +269,7 @@ const STORAGE_KEYS = [
   "stelegano_handoff_pin",
   "stelegano_handoff_country",
   "stelegano_handoff_tier",
+  "stelegano_campaign",
 ] as const;
 
 function clearSession() {
@@ -751,6 +753,10 @@ export class ChatState {
     }
 
     if ("checkout_url" in parsed && parsed.checkout_url) {
+      // Funnel: the user is actually reaching the payment provider — the
+      // meaningful "extend started" signal (pairs with extend_completed,
+      // which fires on return from a successful checkout).
+      fireFunnel("extend_started");
       // Leaving the page — no further state transitions.
       location.href = parsed.checkout_url;
       return;
@@ -1034,6 +1040,8 @@ export class ChatState {
           phoneValid: isValid,
           phoneVisible: true,
         });
+        // Funnel: a steg number was successfully generated.
+        fireFunnel("steg_generated");
       }
     } catch (err) {
       console.error("[State] Generation failed:", err);
@@ -1247,6 +1255,14 @@ export class ChatState {
       paymentLoading: false,
       paymentError: null,
     });
+
+    // Funnel: the session reached an open channel. If we arrived back
+    // from a paid checkout (pendingSecret present), this is also the
+    // confirmed completion of the extend/buy flow.
+    fireFunnel("channel_opened");
+    if (pendingSecret) {
+      fireFunnel("extend_completed");
+    }
 
     // If we returned from a Paystack checkout, attempt to redeem the
     // extension secret. For new paid rooms the server already handled it

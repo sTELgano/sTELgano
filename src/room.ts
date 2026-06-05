@@ -687,6 +687,12 @@ export class RoomDO implements DurableObject {
     // D1 write (markRedeemed above) and the DO SQLite write (persist
     // below) land in different storage systems at different latencies,
     // giving natural de-alignment without an explicit sleep.
+    // Distinguish a first-time conversion (free → paid) from a renewal
+    // of an already-paid room. Only the former is a new paid room;
+    // counting every redeem as room_paid would inflate "new paid" /
+    // "paid rooms" — e.g. one number extended three times would read as
+    // three paid rooms instead of one.
+    const wasPaid = this.room.tier === "paid";
     this.room.tier = "paid";
     this.room.ttlExpiresAtMs = newTtlMs;
     await this.persist();
@@ -697,7 +703,7 @@ export class RoomDO implements DurableObject {
     const att = ws.deserializeAttachment() as WsAttachment | null;
     const iso = evt.data.country_iso ?? att?.stegCountry ?? "";
     const cfCountry = att?.cfCountry ?? "";
-    writeEvent(this.env.ANALYTICS, "room_paid", iso, cfCountry);
+    writeEvent(this.env.ANALYTICS, wasPaid ? "room_extended" : "room_paid", iso, cfCountry);
 
     const ttlIso = new Date(newTtlMs).toISOString();
     this.broadcastAll({
