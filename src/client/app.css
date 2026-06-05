@@ -360,6 +360,15 @@ body {
   box-shadow: 0 0 20px var(--danger-soft);
 }
 
+/* PIN fields render typed digits in spaced mono, but the placeholder text
+   ("Enter 4-6 digits", "Secret PIN", …) should read in the normal UI font —
+   wide-tracked mono makes placeholder copy look broken. */
+.pin-field::placeholder {
+  font-family: var(--font-sans);
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
 /* Premium Buttons */
 .btn-primary {
   background: linear-gradient(135deg, var(--color-primary), #00d98b);
