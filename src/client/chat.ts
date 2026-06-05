@@ -508,6 +508,18 @@ root.addEventListener("click", (e) => {
       console.log("[UI] Generate new number");
       void state.generateNewNumber();
       break;
+    case "use-custom-number": {
+      const s = state.getState();
+      state.setPhone("");
+      if (s.kind === "entry" && !s.phoneVisible) {
+        state.togglePhoneVisible();
+      }
+      requestAnimationFrame(() => {
+        const input = document.getElementById("phone-input") as HTMLInputElement | null;
+        input?.focus();
+      });
+      break;
+    }
     case "copy-phone": {
       const input = document.getElementById("phone-input") as HTMLInputElement;
       if (input) {
@@ -992,7 +1004,8 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                   </div>
 
                   <!-- Integrated Phone Input -->
-                  <div class="relative flex-1 group">
+                  <div class="space-y-2">
+                    <div class="relative flex-1 group">
                       <input
                         id="phone-input"
                         name="s_num"
@@ -1004,55 +1017,72 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                         inputmode="tel"
                         ${phoneAutofocus}
                       >
-                    <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-20">
-                      ${
-                        s.phoneLocked
-                          ? `
-                      <button
-                        type="button"
-                        data-action="clear-session"
-                        class="p-2 rounded-xl text-red-500 hover:text-red-400 focus:outline-none transition-all hover:bg-red-500/10"
-                        title="Cancel Handoff and Start Over"
-                      >
-                        ${icon("x", "size-5")}
-                      </button>
-                      <button
-                        type="button"
-                        data-action="copy-phone"
-                        class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
-                        title="Copy number"
-                      >
-                        ${icon("copy", "size-5")}
-                      </button>
-                      `
-                          : `
-                      <button
-                        type="button"
-                        data-action="generate-new"
-                        ${s.generating ? "disabled" : ""}
-                        class="p-2 rounded-xl text-slate-500 hover:text-primary transition-all ${s.generating ? "opacity-20" : ""}"
-                        title="Generate regional identity"
-                      >
-                        ${icon("refresh_cw", `size-5 ${s.generating ? "animate-spin" : ""}`)}
-                      </button>
-                      <button
-                        type="button"
-                        data-action="copy-phone"
-                        class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
-                        title="Copy number"
-                      >
-                        ${icon("copy", "size-5")}
-                      </button>
-                      `
-                      }
-                      <button
-                        type="button"
-                        data-action="toggle-phone-visibility"
-                        class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
-                      >
-                        ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5")}
-                      </button>
+                      <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-20">
+                        ${
+                          s.phoneLocked
+                            ? `
+                        <button
+                          type="button"
+                          data-action="clear-session"
+                          class="p-2 rounded-xl text-red-500 hover:text-red-400 focus:outline-none transition-all hover:bg-red-500/10"
+                          title="Cancel Handoff and Start Over"
+                        >
+                          ${icon("x", "size-5")}
+                        </button>
+                        <button
+                          type="button"
+                          data-action="copy-phone"
+                          class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
+                          title="Copy number"
+                        >
+                          ${icon("copy", "size-5")}
+                        </button>
+                        `
+                            : `
+                        <button
+                          type="button"
+                          data-action="generate-new"
+                          ${s.generating ? "disabled" : ""}
+                          class="p-2 rounded-xl text-slate-500 hover:text-primary transition-all ${s.generating ? "opacity-20" : ""}"
+                          title="Generate regional identity"
+                        >
+                          ${icon("refresh_cw", `size-5 ${s.generating ? "animate-spin" : ""}`)}
+                        </button>
+                        <button
+                          type="button"
+                          data-action="copy-phone"
+                          class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
+                          title="Copy number"
+                        >
+                          ${icon("copy", "size-5")}
+                        </button>
+                        `
+                        }
+                        <button
+                          type="button"
+                          data-action="toggle-phone-visibility"
+                          class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
+                        >
+                          ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5")}
+                        </button>
+                      </div>
                     </div>
+                    ${
+                      s.phoneLocked
+                        ? ""
+                        : `<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
+                            <p class="text-[11px] text-slate-500 font-medium leading-relaxed">
+                              Use the generated number or bring your own.
+                            </p>
+                            <button
+                              type="button"
+                              data-action="use-custom-number"
+                              class="self-start text-[10px] text-primary/70 hover:text-primary transition-colors font-bold uppercase tracking-widest"
+                            >
+                              Use your own number
+                            </button>
+                          </div>`
+                    }
                   </div>
                 </div>
               </div>
@@ -1069,7 +1099,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                   pattern="[0-9]*"
                   placeholder="Enter 4-6 digits"
                   autocomplete="current-password"
-                  class="glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
+                  class="pin-field glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
                   value="${escapeHtml(s.pin)}"
                   ${pinAutofocus}
                 >
@@ -1240,7 +1270,7 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
                   pattern="[0-9]*"
                   placeholder="Repeat PIN to confirm"
                   autocomplete="new-password"
-                  class="glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
+                  class="pin-field glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
                   value="${escapeHtml(s.confirmPin)}"
                   data-autofocus
                 >
@@ -1729,7 +1759,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
               autocapitalize="off"
               spellcheck="false"
               style="-webkit-text-security: disc;"
-              class="glass-input w-full text-center !text-4xl tracking-[0.6em] font-mono !py-6 bg-slate-950/40 border-white/10 focus:border-primary/40"
+              class="pin-field glass-input w-full text-center !text-4xl tracking-[0.6em] font-mono !py-6 bg-slate-950/40 border-white/10 focus:border-primary/40"
               data-autofocus
             >
             ${errorBlock}
