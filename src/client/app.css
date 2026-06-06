@@ -427,6 +427,85 @@ body {
   box-shadow: 0 10px 20px -10px rgba(0, 255, 163, 0.2);
 }
 
+/* WhatsApp click-to-chat floating button. A plain anchor (no JS) so it
+   carries no CSP cost. Rendered on every standard-layout (public) page
+   via _layout.html. Deliberately absent from /chat (_chat_layout.html,
+   no footer/widget) so the passcode test still holds, and from /admin. */
+.wa-fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1.25rem;
+  border-radius: 9999px;
+  background: #25d366;
+  color: #04140c;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  box-shadow: 0 8px 30px -6px rgba(37, 211, 102, 0.55);
+  transition:
+    transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    box-shadow 0.3s ease,
+    filter 0.3s ease;
+}
+
+.wa-fab:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 12px 36px -6px rgba(37, 211, 102, 0.7);
+  filter: brightness(1.05);
+}
+
+.wa-fab:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Keep the button clear of the iOS home indicator when viewport-fit=cover
+   is active. Base `bottom` above stays as the fallback for browsers
+   without env() support. */
+@supports (bottom: env(safe-area-inset-bottom)) {
+  .wa-fab {
+    bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  }
+}
+
+.wa-fab svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+/* Collapse to a 56px circle on small screens to stay out of the way
+   (matches the 56px touch-target convention). */
+@media (max-width: 640px) {
+  .wa-fab {
+    gap: 0;
+    width: 3.5rem;
+    height: 3.5rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .wa-fab .wa-fab-label {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wa-fab {
+    transition: none;
+  }
+
+  .wa-fab:hover {
+    transform: none;
+  }
+}
+
 /* Warning Card (Orange) */
 .warning-card {
   background: rgba(251, 191, 36, 0.08);
