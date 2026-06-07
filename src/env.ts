@@ -25,4 +25,9 @@ export interface Env extends Cloudflare.Env {
   PAYSTACK_PUBLIC_KEY: string; // set but not read server-side; hosted checkout only
   PAYSTACK_CALLBACK_URL: string;
   PAYSTACK_RECEIPT_EMAIL_DOMAIN: string;
+  // TEMPORARY — read token for the one-time AE → daily_metrics backfill
+  // (admin "Restore from Analytics Engine" button). Still set in CF secrets;
+  // remove this and src/lib/ae_migrate.ts once the backfill has been run.
+  // (CF_ACCOUNT_ID and CF_AE_DATASET come from wrangler.toml [vars].)
+  CF_AE_API_TOKEN?: string;
 }
