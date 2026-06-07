@@ -16,7 +16,13 @@
 // elixir/lib/stelgano_web/channels/anon_room_channel.ex.
 
 import type { Env } from "./env";
-import { type EventType, writeEvent } from "./lib/analytics";
+import {
+  enqueueMetric,
+  enqueueMetrics,
+  lifespanBucket,
+  type MetricKey,
+  ttfmBucket,
+} from "./lib/daily_metrics";
 import { deleteToken, findByTokenHash, markPaid, markRedeemed } from "./lib/extension_tokens";
 import { decrementActiveRooms, incrementActiveRooms } from "./lib/live_counters";
 import { verifyTransaction } from "./lib/paystack";
@@ -75,6 +81,14 @@ type RoomState = {
   tier: "free" | "paid";
   /** epoch ms — when the alarm fires, the room self-destructs. */
   ttlExpiresAtMs: number;
+  /** epoch ms — room creation time. Set once at init and NOT changed on
+   *  extension, so room_lifespan reflects the channel's true total life.
+   *  Used for lifespan and time-to-first-message analytics. */
+  createdAtMs: number;
+  /** Set true on the first message ever sent in the room; never reset by
+   *  edit/delete. Lets time_to_first_message fire exactly once and lets
+   *  room_expired_empty exclude rooms whose only message was later deleted. */
+  everMessaged: boolean;
   /** Up to 2 records, one per party. */
   accessRecords: AccessRecord[];
   /** N=1 invariant — at most one current message. */
@@ -134,6 +148,17 @@ export class RoomDO implements DurableObject {
     // gates incoming messages until this resolves.
     this.state.blockConcurrencyWhile(async () => {
       this.room = (await this.state.storage.get<RoomState>(STATE_KEY)) ?? null;
+      // Backfill fields added after some rooms were created so lifespan /
+      // time-to-first analytics never see undefined. createdAtMs is derived
+      // best-effort from the TTL (approximate for legacy rooms, since the
+      // TTL may have been extended); everMessaged is inferred from whether a
+      // message is currently present. Persisted once so it stays stable.
+      if (this.room && this.room.createdAtMs === undefined) {
+        const ttlDays = this.room.tier === "paid" ? PAID_TTL_DAYS : FREE_TTL_DAYS;
+        this.room.createdAtMs = this.room.ttlExpiresAtMs - ttlDays * 86_400_000;
+        this.room.everMessaged = this.room.currentMessage != null;
+        await this.persist();
+      }
     });
   }
 
@@ -281,13 +306,26 @@ export class RoomDO implements DurableObject {
       }
     }
 
-    const expiredType: EventType =
-      this.room.tier === "paid" ? "room_expired_paid" : "room_expired_free";
     void decrementActiveRooms(this.env.DB);
-    writeEvent(this.env.ANALYTICS, expiredType);
+    this.emitExpiry(this.room);
     await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
     this.room = null;
+  }
+
+  /** Enqueues the expiry metric family (global, no country — matching the
+   *  long-standing design where room records carry no country): the tiered
+   *  expiry counter, the total channel lifespan (with a bucket dim), and
+   *  room_expired_empty when the channel never carried a message. */
+  private emitExpiry(room: RoomState): void {
+    const expiredType: MetricKey = room.tier === "paid" ? "room_expired_paid" : "room_expired_free";
+    const lifespanHours = Math.max(0, (Date.now() - room.createdAtMs) / 3_600_000);
+    const items: Array<{ metric: MetricKey; value?: number; dim?: string }> = [
+      { metric: expiredType },
+      { metric: "room_lifespan", value: lifespanHours, dim: lifespanBucket(lifespanHours) },
+    ];
+    if (!room.everMessaged) items.push({ metric: "room_expired_empty" });
+    enqueueMetrics(this.env.METRICS_QUEUE, items);
   }
 
   // -------------------------------------------------------------------------
@@ -357,20 +395,19 @@ export class RoomDO implements DurableObject {
         roomId: crypto.randomUUID(),
         tier,
         ttlExpiresAtMs: ttlMs,
+        createdAtMs: Date.now(),
+        everMessaged: false,
         accessRecords: [{ accessHash, failedAttempts: 0, lockedUntilMs: null }],
         currentMessage: null,
       };
       await this.persist();
       await this.state.storage.setAlarm(ttlMs);
       void incrementActiveRooms(this.env.DB);
-      // Telemetry: blob2 = steg-number country (client-derived),
-      // blob3 = CF-IPCountry (server-side IP geolocation).
-      writeEvent(
-        this.env.ANALYTICS,
-        tier === "paid" ? "room_paid" : "room_free",
-        evt.data.country_iso ?? "",
+      // Telemetry: steg-number country (client-derived) + CF-IPCountry.
+      enqueueMetric(this.env.METRICS_QUEUE, tier === "paid" ? "room_paid" : "room_free", {
+        stegCountry: evt.data.country_iso ?? "",
         cfCountry,
-      );
+      });
 
       ws.serializeAttachment({
         joined: true,
@@ -409,10 +446,21 @@ export class RoomDO implements DurableObject {
         return;
       }
     }
+    // Snapshot the slot count so we can tell a genuine second-party join
+    // (1 → 2 records) apart from a returning party. NOTE: the protocol is
+    // zero-knowledge here — a wrong PIN while the 2nd slot is still open
+    // also registers as a join, so second_party_joined counts "distinct
+    // access credentials registered", the best the server can know.
+    const recordsBefore = this.room.accessRecords.length;
     const result = this.checkAccess(accessHash);
     if (result.kind === "ok") {
       await this.persist();
-      writeEvent(this.env.ANALYTICS, "room_rejoin", evt.data.country_iso ?? "", cfCountry);
+      const secondPartyJoined = recordsBefore === 1 && this.room.accessRecords.length === 2;
+      enqueueMetric(
+        this.env.METRICS_QUEUE,
+        secondPartyJoined ? "second_party_joined" : "room_rejoin",
+        { stegCountry: evt.data.country_iso ?? "", cfCountry },
+      );
       ws.serializeAttachment({
         joined: true,
         senderHash,
@@ -479,9 +527,26 @@ export class RoomDO implements DurableObject {
       readAtMs: null,
     };
 
+    // First message ever in this room → record time-to-first-message
+    // (seconds from creation), then latch everMessaged so it fires once.
+    const isFirstMessage = !this.room.everMessaged;
     this.room.currentMessage = message;
+    if (isFirstMessage) this.room.everMessaged = true;
     await this.persist();
-    writeEvent(this.env.ANALYTICS, "message_sent", att.stegCountry ?? "", att.cfCountry ?? "");
+
+    enqueueMetric(this.env.METRICS_QUEUE, "message_sent", {
+      stegCountry: att.stegCountry ?? "",
+      cfCountry: att.cfCountry ?? "",
+    });
+    if (isFirstMessage) {
+      const ttfmSeconds = Math.max(0, (message.insertedAtMs - this.room.createdAtMs) / 1000);
+      enqueueMetric(this.env.METRICS_QUEUE, "time_to_first_message", {
+        stegCountry: att.stegCountry ?? "",
+        cfCountry: att.cfCountry ?? "",
+        value: ttfmSeconds,
+        dim: ttfmBucket(ttfmSeconds),
+      });
+    }
 
     const payload = this.toPayload(message);
     this.broadcastAll({ event: "new_message", data: payload });
@@ -581,10 +646,8 @@ export class RoomDO implements DurableObject {
       }
     }
 
-    const expiredType: EventType =
-      this.room?.tier === "paid" ? "room_expired_paid" : "room_expired_free";
     void decrementActiveRooms(this.env.DB);
-    writeEvent(this.env.ANALYTICS, expiredType);
+    if (this.room) this.emitExpiry(this.room);
     await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
     this.room = null;
@@ -703,7 +766,10 @@ export class RoomDO implements DurableObject {
     const att = ws.deserializeAttachment() as WsAttachment | null;
     const iso = evt.data.country_iso ?? att?.stegCountry ?? "";
     const cfCountry = att?.cfCountry ?? "";
-    writeEvent(this.env.ANALYTICS, wasPaid ? "room_extended" : "room_paid", iso, cfCountry);
+    enqueueMetric(this.env.METRICS_QUEUE, wasPaid ? "room_extended" : "room_paid", {
+      stegCountry: iso,
+      cfCountry,
+    });
 
     const ttlIso = new Date(newTtlMs).toISOString();
     this.broadcastAll({
@@ -754,8 +820,11 @@ export class RoomDO implements DurableObject {
     }
 
     target.failedAttempts += 1;
+    // Security telemetry — global (no country), fire-and-forget.
+    enqueueMetric(this.env.METRICS_QUEUE, "access_failed");
     if (target.failedAttempts >= MAX_ACCESS_ATTEMPTS) {
       target.lockedUntilMs = now + LOCKOUT_MINUTES * 60_000;
+      enqueueMetric(this.env.METRICS_QUEUE, "access_lockout");
       return { kind: "locked" };
     }
 

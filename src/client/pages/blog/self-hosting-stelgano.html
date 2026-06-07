@@ -85,10 +85,15 @@
         <div class="space-y-6 text-slate-400 font-medium leading-relaxed text-base">
           <p>After cloning and running <span class="font-mono text-xs text-primary">npm install</span>, create the stateful resource Wrangler needs an ID for:</p>
         </div>
-        <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto leading-relaxed"><code># D1 database — stores extension tokens and live counters
-wrangler d1 create stelgano</code></pre>
+        <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto leading-relaxed"><code># D1 database — stores extension tokens, live counters, and daily_metrics
+wrangler d1 create stelgano
+
+# Metrics queue + dead-letter queue — the analytics write path. The
+# Worker binds these at deploy time, so they must exist first.
+wrangler queues create stelgano-metrics
+wrangler queues create stelgano-metrics-dlq</code></pre>
         <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
-          <p>Paste the returned ID into <span class="font-mono text-xs text-primary">wrangler.toml</span> under <span class="font-mono text-xs text-primary">[[d1_databases]]</span>. The Durable Object and rate-limiter bindings are already declared and require no provisioning steps.</p>
+          <p>Paste the returned D1 ID into <span class="font-mono text-xs text-primary">wrangler.toml</span> under <span class="font-mono text-xs text-primary">[[d1_databases]]</span>. The Durable Object, queue, and rate-limiter bindings are already declared and require no further provisioning. Analytics live entirely in D1 (the <span class="font-mono text-xs text-primary">daily_metrics</span> table) — there is no Analytics Engine to configure.</p>
         </div>
       </div>
     </section>
@@ -106,8 +111,7 @@ wrangler d1 create stelgano</code></pre>
           <p>Secrets are set once via Wrangler and never appear in your source code or <span class="font-mono text-xs text-primary">wrangler.toml</span>:</p>
         </div>
         <pre class="bg-black/40 border border-white/10 rounded-xl p-4 font-mono text-xs text-primary overflow-x-auto leading-relaxed"><code>wrangler secret put ADMIN_PASSWORD
-wrangler secret put ADMIN_USERNAME        # default: admin
-wrangler secret put CF_AE_API_TOKEN       # Cloudflare Analytics Engine read token</code></pre>
+wrangler secret put ADMIN_USERNAME        # default: admin</code></pre>
         <div class="space-y-4 text-slate-400 font-medium leading-relaxed text-base">
           <p>If you enable monetization, also set the Paystack credentials:</p>
         </div>
@@ -137,7 +141,6 @@ wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN</code></pre>
               </tr>
             </thead>
             <tbody class="text-slate-400">
-              <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">CF_ACCOUNT_ID</td><td class="py-3 px-4">Yes</td><td class="py-3 px-4">Cloudflare account ID — visible in the dashboard URL, needed by the admin analytics dashboard</td></tr>
               <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">MONETIZATION_ENABLED</td><td class="py-3 px-4">No</td><td class="py-3 px-4">Set to <span class="font-mono text-xs">true</span> to enable paid tiers (default: false)</td></tr>
               <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">FREE_TTL_DAYS</td><td class="py-3 px-4">No</td><td class="py-3 px-4">Free channel lifetime in days (default: 7)</td></tr>
               <tr class="border-b border-white/5"><td class="py-3 px-4 font-mono text-primary text-xs">PAID_TTL_DAYS</td><td class="py-3 px-4">No</td><td class="py-3 px-4">Paid channel lifetime in days (default: 365)</td></tr>

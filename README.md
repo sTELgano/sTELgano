@@ -59,8 +59,8 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 
 - **Worker** (`_worker.ts`) — routes all requests, applies security headers (CSP, HSTS), handles HTTP API and WebSocket upgrades. `run_worker_first = true` ensures even static assets pass through the security-header middleware.
 - **RoomDO** (Durable Object) — one instance per room, single-threaded. Enforces the N=1 invariant by construction. Uses hibernatable WebSockets to keep idle rooms cheap. SQLite-backed storage for per-room state.
-- **D1** — extension tokens, `live_counters` (active-room snapshot). No per-room country metadata — server-blindness invariant preserved.
-- **Analytics Engine** — event telemetry (`room_free`, `room_paid`, `room_expired_*`, `message_sent`). Fire-and-forget `writeDataPoint()` with no row locking. Country ISO code carried per event; never stored alongside a room hash. Admin dashboard queries aggregate counts via the CF GraphQL API.
+- **D1** — extension tokens, `live_counters` (active-room snapshot), and `daily_metrics` (the analytics store). No per-room country metadata — server-blindness invariant preserved.
+- **Metrics queue** — analytics telemetry (`room_free`, `room_paid`, `room_expired_*`, `message_sent`, engagement + security signals). Handlers fire-and-forget enqueue to `METRICS_QUEUE`; the Worker's `queue()` consumer coalesces each batch and applies one transactional `db.batch()` UPSERT into `daily_metrics`. Exact (no sampling), permanent (no retention cap), never stored alongside a room hash. The admin dashboard reads aggregate counts straight from D1.
 - **Static assets** (`public/`) — HTML pages, bundled JS, CSS, fonts. Uploaded to Cloudflare's asset store on deploy.
 
 **Real-time:** WebSocket connections upgrade to the room's Durable Object. The client sends `join`, `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, and `redeem_extension` events.
@@ -78,7 +78,7 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 - **Panic route** — `GET /x` instantly clears all session data, redirects to `/?p=1`
 - **Steg number generator** — integrated one-click generator drawer inside `/chat`; 19 curated countries, strict E.164 formatting with real-time country inference
 - **Admin dashboard** — aggregate metrics at `/admin` (HTTP Basic Auth)
-- **Privacy-preserving telemetry** — Cloudflare Analytics Engine events (country + daily breakdowns); no per-room country metadata, no third-party analytics, no row-locking UPSERT contention
+- **Privacy-preserving telemetry** — exact, permanent aggregate counts in D1 (country + daily breakdowns + engagement/security signals), fed by a queued consumer that keeps writes off the chat hot path; no per-room country metadata, no third-party analytics
 - **Blog** — technical articles at `/blog`
 - **Protocol spec** — sTELgano-std-1 specification at `/spec`
 - **Pure web app** — no PWA, no service worker, no installable icon (see the passcode test rationale in the blog)
