@@ -653,8 +653,11 @@ function renderAdminHtml(d: {
   campaigns: Campaign[];
   activeRooms: ActiveRooms;
 }): string {
+  // `shrink-0` is essential: without it an inline SVG inside a flex row
+  // shrinks toward zero width when space is tight (small screens), so the
+  // icon visually disappears and collides with adjacent text.
   const iconSvg = (name: string, cls = "size-4") =>
-    `<svg class="${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
+    `<svg class="${cls} shrink-0" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
 
   // --- Derived headline figures over the selected range ---
   const free = metricCount(d.totals, "room_free");
@@ -856,7 +859,7 @@ function renderAdminHtml(d: {
     <div class="noise-overlay"></div>
   </div>
 
-  <div class="flex min-h-dvh">
+  <div class="flex flex-col md:flex-row min-h-dvh">
     <!-- Sidebar -->
     <aside class="md:w-60 md:shrink-0 md:h-dvh md:sticky md:top-0 border-b md:border-b-0 md:border-r border-white/5 bg-slate-950/40 backdrop-blur-xl z-10">
       <div class="p-5 md:p-6 md:space-y-8">
@@ -1068,11 +1071,11 @@ function adminMetricCard(
   return `
     <div class="glass-card-premium p-6 sm:p-10 space-y-8 group hover:border-primary/50 transition-all duration-500 mx-4 sm:mx-0">
       <div class="flex items-center justify-between">
-        <div class="size-12 sm:size-14 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all">
+        <div class="size-12 sm:size-14 shrink-0 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all">
           <svg class="size-6 sm:size-7 text-primary/40 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#${icon}"/></svg>
         </div>
-        <div class="flex flex-col items-end gap-1">
-          <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-600">${escapeAttr(note)}</span>
+        <div class="flex flex-col items-end gap-1 min-w-0 pl-3">
+          <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-600 text-right">${escapeAttr(note)}</span>
           ${activeDot}
         </div>
       </div>
