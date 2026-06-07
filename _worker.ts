@@ -685,6 +685,38 @@ function renderAdminHtml(d: {
     days,
   );
 
+  // --- Signups-by-day table (exact per-date counts; peak day flagged) ---
+  // The trend chart shows shape but not readable numbers; this answers
+  // "which UTC day had the most signups?" directly. Built from the same
+  // d.trend rows, most-recent first, days with zero signups omitted.
+  const signupByDay = new Map<string, { free: number; paid: number }>();
+  for (const r of d.trend) {
+    if (r.metric !== "room_free" && r.metric !== "room_paid") continue;
+    const e = signupByDay.get(r.day) ?? { free: 0, paid: 0 };
+    if (r.metric === "room_free") e.free += r.count;
+    else e.paid += r.count;
+    signupByDay.set(r.day, e);
+  }
+  const signupRows = [...signupByDay.entries()]
+    .map(([day, v]) => ({ day, free: v.free, paid: v.paid, total: v.free + v.paid }))
+    .filter((r) => r.total > 0)
+    .sort((a, b) => (a.day < b.day ? 1 : -1));
+  const peakTotal = Math.max(0, ...signupRows.map((r) => r.total));
+  const signupsByDayTable =
+    signupRows.length === 0
+      ? `<tr><td colspan="4" class="py-6 text-sm text-slate-500 italic">No signups in this range. Widen the date range to see older history.</td></tr>`
+      : signupRows
+          .map((r) => {
+            const peak = peakTotal > 0 && r.total === peakTotal;
+            return `<tr class="border-b border-white/5 ${peak ? "bg-primary/10" : ""}">
+              <td class="py-2.5 pr-8 font-mono ${peak ? "text-primary font-bold" : "text-white"}">${escapeAttr(r.day)}${peak ? ' <span class="text-[10px] uppercase tracking-widest">peak</span>' : ""}</td>
+              <td class="py-2.5 pr-8 text-right font-mono text-slate-300">${r.free}</td>
+              <td class="py-2.5 pr-8 text-right font-mono text-slate-300">${r.paid}</td>
+              <td class="py-2.5 text-right font-mono ${peak ? "text-primary font-bold" : "text-white"}">${r.total}</td>
+            </tr>`;
+          })
+          .join("");
+
   // --- Engagement distributions ---
   const ttfmAvg = avgDurationFromSeconds(
     metricSum(d.totals, "time_to_first_message"),
@@ -920,6 +952,13 @@ function renderAdminHtml(d: {
           <div class="glass-card p-6 sm:p-10 space-y-6">
             ${sectionHeader("bar_chart_3", "Daily Trend", "New free / new paid channels and messages per UTC day across the selected range. Exact counts — no sampling.")}
             ${trendChart}
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("calendar", "Signups by Day", "Exact new-channel counts per UTC day, most recent first. Peak day highlighted. Widen the date range (e.g. ?days=90) to include older history.")}
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead>
+              <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                <th class="py-3 pr-8">Date (UTC)</th><th class="py-3 pr-8 text-right">Free</th><th class="py-3 pr-8 text-right">Paid</th><th class="py-3 text-right">Total</th>
+              </tr></thead><tbody>${signupsByDayTable}</tbody></table></div>
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="glass-card p-6 sm:p-10 space-y-6">
