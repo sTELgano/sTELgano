@@ -32,7 +32,6 @@ function baseEnv(overrides: Partial<Env> = {}): Env {
     PRICE_CENTS: "200",
     FREE_TTL_DAYS: "7",
     PAID_TTL_DAYS: "365",
-    CF_ACCOUNT_ID: "",
     ADMIN_USERNAME: "admin",
     ADMIN_PASSWORD: "secret",
     PAYSTACK_PUBLIC_KEY: "",

@@ -17,7 +17,10 @@
 #   - CLOUDFLARE_ACCOUNT_ID  (from the CF dashboard URL)
 # Worker secrets set via `wrangler secret put` (staging + prod separately):
 #   ADMIN_PASSWORD, PAYSTACK_SECRET_KEY, PAYSTACK_PUBLIC_KEY,
-#   PAYSTACK_CALLBACK_URL, PAYSTACK_RECEIPT_EMAIL_DOMAIN, CF_AE_API_TOKEN.
+#   PAYSTACK_CALLBACK_URL, PAYSTACK_RECEIPT_EMAIL_DOMAIN.
+# One-time provisioning (not done by this workflow): create the metrics
+# queues per env, e.g. `wrangler queues create stelgano-metrics` (+ -dlq,
+# + the -staging variants). A deploy fails if a bound queue is missing.
 
 name: Deploy
 

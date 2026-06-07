@@ -25,23 +25,6 @@
 import { INLINE_SCRIPT_HASHES } from "./src/csp_hashes";
 import type { Env } from "./src/env";
 import {
-  type CampaignFunnel,
-  type CFCountryRow,
-  type CountryRow,
-  checkAeAccess,
-  type DailyRow,
-  type DiasporaRow,
-  FUNNEL_STEPS,
-  isFunnelStep,
-  queryCFCountryMetrics,
-  queryCountryMetrics,
-  queryDailyMetrics,
-  queryDiasporaMetrics,
-  queryFunnelMetrics,
-  sumFunnels,
-  writeFunnelEvent,
-} from "./src/lib/analytics";
-import {
   archiveCampaign,
   type Campaign,
   createCampaign,
@@ -50,6 +33,44 @@ import {
   normaliseDestination,
   SLUG_RE,
 } from "./src/lib/campaigns";
+import { type Bucket, renderFunnelBars, renderHistogram, renderTrendChart } from "./src/lib/charts";
+import {
+  type BucketRow,
+  type CampaignFunnel,
+  CONVERSION_BUCKETS,
+  type CountryRow,
+  type DailyTrendRow,
+  type DateRange,
+  type DiasporaRow,
+  EXTENSION_BUCKETS,
+  enqueueMetric,
+  FUNNEL_STEPS,
+  flushMetricBatch,
+  HOURS_OF_DAY,
+  isFunnelStep,
+  LIFESPAN_BUCKETS,
+  type MetricKey,
+  type MetricMessage,
+  type MetricTotal,
+  type PriceRow,
+  pageRoute,
+  parseDateRange,
+  priceLabel,
+  queryCfCountryRange,
+  queryCountryRange,
+  queryDailyTrend,
+  queryDiasporaRange,
+  queryFunnelRange,
+  queryHistogram,
+  queryPricing,
+  queryRevenueByCountry,
+  queryTotals,
+  type RevenueCountryRow,
+  referrerCategory,
+  sumFunnels,
+  TTFM_BUCKETS,
+  utcDay,
+} from "./src/lib/daily_metrics";
 import {
   createPending,
   deleteExpired,
@@ -57,7 +78,7 @@ import {
   findByTokenHash,
   markPaid,
 } from "./src/lib/extension_tokens";
-import { getActiveRooms } from "./src/lib/live_counters";
+import { type ActiveRooms, getActiveRooms } from "./src/lib/live_counters";
 import {
   hmacSha512Hex,
   initialize as paystackInitialize,
@@ -78,28 +99,59 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     // WebSocket upgrade responses MUST NOT be mangled with extra
     // headers — Cloudflare's proxy rejects 101 responses that
     // carry non-upgrade headers. So we short-circuit the
     // security-header wrapper for the room WS path before routing.
     if (request.headers.get("upgrade") === "websocket") {
-      return dispatch(request, env, url);
+      return dispatch(request, env, url, ctx);
     }
-    const response = await dispatch(request, env, url);
+    // Acquisition telemetry for content-page navigations (aggregate only:
+    // a fixed route label + a coarse referrer category — never the URL,
+    // query string, IP, or UA). waitUntil keeps the send alive past the
+    // response; non-content paths skip.
+    if (request.method === "GET") {
+      const route = pageRoute(url.pathname);
+      if (route) {
+        enqueueMetric(env.METRICS_QUEUE, "page_view", { dim: route }, ctx);
+        const cat = referrerCategory(request.headers.get("referer"), env.HOST);
+        if (cat !== "internal") enqueueMetric(env.METRICS_QUEUE, "referrer", { dim: cat }, ctx);
+      }
+    }
+    const response = await dispatch(request, env, url, ctx);
     return applySecurityHeaders(response, url.pathname);
   },
 
   // Cron handler — fires daily at 03:00 UTC via [triggers] in wrangler.toml.
   // Sweeps extension_tokens past their expires_at.
-  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const cutoff = new Date().toISOString();
-    await deleteExpired(env.DB, cutoff);
+    const swept = await deleteExpired(env.DB, cutoff);
+    // Reliability: one data point per cron run; sum_value = tokens swept.
+    enqueueMetric(env.METRICS_QUEUE, "cron_sweep", { value: swept }, ctx);
   },
-} satisfies ExportedHandler<Env>;
 
-async function dispatch(request: Request, env: Env, url: URL): Promise<Response> {
+  // Metrics queue consumer — the ONLY writer to daily_metrics. Coalesces the
+  // whole batch by composite key and applies it in one transactional
+  // db.batch() UPSERT. Throwing here fails the batch so the runtime retries
+  // it (then routes to the DLQ after max_retries) — no metric is silently
+  // dropped on a transient D1 error.
+  async queue(batch: MessageBatch<MetricMessage>, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await flushMetricBatch(
+      env.DB,
+      batch.messages.map((m) => m.body),
+    );
+  },
+} satisfies ExportedHandler<Env, MetricMessage>;
+
+async function dispatch(
+  request: Request,
+  env: Env,
+  url: URL,
+  ctx: ExecutionContext,
+): Promise<Response> {
   // GET /healthz — used by deploy smoke tests, not by users.
   if (url.pathname === "/healthz") {
     return new Response("ok", { headers: { "content-type": "text/plain" } });
@@ -145,6 +197,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
     const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
     const wsRl = await env.RATE_LIMITER_WS.limit({ key: ip }).catch(() => ({ success: true }));
     if (!wsRl.success) {
+      enqueueMetric(env.METRICS_QUEUE, "ws_rate_limited", {}, ctx);
       return new Response("Too Many Requests", {
         status: 429,
         headers: { "retry-after": "60" },
@@ -169,7 +222,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   // archived slugs redirect to "/" with no event (no existence leak).
   const trackMatch = url.pathname.match(/^\/c\/([^/]+)$/);
   if (trackMatch && request.method === "GET") {
-    return handleCampaignLink(trackMatch[1] ?? "", request, env);
+    return handleCampaignLink(trackMatch[1] ?? "", request, env, ctx);
   }
 
   // POST /api/funnel — lightweight, unauthenticated funnel beacon fired
@@ -177,7 +230,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   // is { step, campaign }. The server adds CF-IPCountry and writes one
   // Analytics Engine data point. No stored state, no user data.
   if (url.pathname === "/api/funnel" && request.method === "POST") {
-    return handleFunnelBeacon(request, env);
+    return handleFunnelBeacon(request, env, ctx);
   }
 
   // POST /api/admin/campaigns — create a campaign (Basic-Auth gated).
@@ -218,7 +271,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   // (status=pending) and returns a Paystack checkout URL the
   // client redirects to. Returns 503 when monetization is off.
   if (url.pathname === "/api/payment/initiate" && request.method === "POST") {
-    return handlePaymentInitiate(request, env);
+    return handlePaymentInitiate(request, env, ctx);
   }
 
   // POST /api/webhooks/paystack — Paystack hits this after a
@@ -227,7 +280,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   // markPaid in D1. Returns 200 for all non-signature failures
   // so the response doesn't leak which references exist.
   if (url.pathname === "/api/webhooks/paystack" && request.method === "POST") {
-    return handlePaystackWebhook(request, env);
+    return handlePaystackWebhook(request, env, ctx);
   }
 
   // GET /api/config — exposes monetization/TTL settings to the
@@ -252,6 +305,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
       success: true,
     }));
     if (!adminRl.success) {
+      enqueueMetric(env.METRICS_QUEUE, "admin_rate_limited", {}, ctx);
       return new Response("Too Many Requests", {
         status: 429,
         headers: { "retry-after": "60", "content-type": "text/plain" },
@@ -407,74 +461,105 @@ function escapeAttr(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// Trend series shown on the overview chart, with display colours.
+const TREND_METRICS: Array<{ metric: MetricKey; label: string; color: string }> = [
+  { metric: "room_free", label: "New free", color: "#64748b" },
+  { metric: "room_paid", label: "New paid", color: "#10B981" },
+  { metric: "message_sent", label: "Messages", color: "#38bdf8" },
+];
+
 async function handleAdminDashboard(request: Request, env: Env): Promise<Response> {
   if (!checkBasicAuth(request, env)) return basicAuthChallenge();
 
+  const url = new URL(request.url);
+  const range = parseDateRange(url.searchParams, Date.now());
+  const { from, to } = range;
+
+  let totals: MetricTotal[] = [];
+  let trend: DailyTrendRow[] = [];
   let country: CountryRow[] = [];
-  let cfCountry: CFCountryRow[] = [];
-  let daily: DailyRow[] = [];
+  let cfCountry: CountryRow[] = [];
   let diaspora: DiasporaRow[] = [];
   let funnels: CampaignFunnel[] = [];
+  let lifespanHist: BucketRow[] = [];
+  let ttfmHist: BucketRow[] = [];
+  let extensionHist: BucketRow[] = [];
+  let conversionHist: BucketRow[] = [];
+  let activityHourHist: BucketRow[] = [];
+  let pageViews: BucketRow[] = [];
+  let referrers: BucketRow[] = [];
+  let pricing: PriceRow[] = [];
+  let revenueByCountry: RevenueCountryRow[] = [];
   let campaigns: Campaign[] = [];
-  let activeRooms = 0;
-  let aeError: string | null = null;
-  const aeReady = Boolean(env.CF_ACCOUNT_ID && env.CF_AE_API_TOKEN);
-  const aeDataset = env.CF_AE_DATASET;
+  let activeRooms: ActiveRooms = { total: 0, free: 0, paid: 0 };
   try {
-    [country, cfCountry, daily, diaspora, funnels, campaigns, activeRooms] = await Promise.all([
-      aeReady
-        ? queryCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
-        : Promise.resolve([] as CountryRow[]),
-      aeReady
-        ? queryCFCountryMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
-        : Promise.resolve([] as CFCountryRow[]),
-      aeReady
-        ? queryDailyMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, 30, aeDataset)
-        : Promise.resolve([] as DailyRow[]),
-      aeReady
-        ? queryDiasporaMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
-        : Promise.resolve([] as DiasporaRow[]),
-      aeReady
-        ? queryFunnelMetrics(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset)
-        : Promise.resolve([] as CampaignFunnel[]),
+    [
+      totals,
+      trend,
+      country,
+      cfCountry,
+      diaspora,
+      funnels,
+      lifespanHist,
+      ttfmHist,
+      extensionHist,
+      conversionHist,
+      activityHourHist,
+      pageViews,
+      referrers,
+      pricing,
+      revenueByCountry,
+      campaigns,
+      activeRooms,
+    ] = await Promise.all([
+      queryTotals(env.DB, from, to),
+      queryDailyTrend(
+        env.DB,
+        from,
+        to,
+        TREND_METRICS.map((t) => t.metric),
+      ),
+      queryCountryRange(env.DB, from, to),
+      queryCfCountryRange(env.DB, from, to),
+      queryDiasporaRange(env.DB, from, to),
+      queryFunnelRange(env.DB, from, to),
+      queryHistogram(env.DB, from, to, "room_lifespan"),
+      queryHistogram(env.DB, from, to, "time_to_first_message"),
+      queryHistogram(env.DB, from, to, "extension"),
+      queryHistogram(env.DB, from, to, "time_to_paid"),
+      queryHistogram(env.DB, from, to, "activity_hour"),
+      queryHistogram(env.DB, from, to, "page_view"),
+      queryHistogram(env.DB, from, to, "referrer"),
+      queryPricing(env.DB, from, to),
+      queryRevenueByCountry(env.DB, from, to),
       listCampaigns(env.DB).catch(() => [] as Campaign[]),
       getActiveRooms(env.DB),
     ]);
   } catch {
-    // AE unavailable — show an empty dashboard rather than 500.
+    // D1 unavailable — render an empty dashboard rather than 500.
   }
-
-  // Run a cheap validation query to surface token/permission errors distinctly
-  // from "no data yet". Only runs when aeReady and no data came back.
-  if (aeReady && daily.length === 0 && country.length === 0) {
-    aeError = await checkAeAccess(env.CF_ACCOUNT_ID!, env.CF_AE_API_TOKEN!, aeDataset).catch(
-      () => "AE check failed",
-    );
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  const todayRow = daily.find((d) => d.day === today);
-  const newToday = todayRow ? todayRow.free_new + todayRow.paid_new : 0;
-  const sum90 = daily.reduce((a, r) => a + r.free_new + r.paid_new, 0);
-  const messagesThisDay = todayRow?.messages_sent ?? 0;
-  // Per-day table shows last 30 days for readability.
-  const dailyTable = daily.slice(0, 30);
 
   const html = renderAdminHtml({
     updated: `${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`,
-    origin: new URL(request.url).origin,
-    aeReady,
-    aeError,
-    newToday,
-    sum90,
-    activeRooms,
-    messagesThisDay,
-    daily: dailyTable,
+    origin: url.origin,
+    range,
+    totals,
+    trend,
     country,
     cfCountry,
     diaspora,
-    campaigns,
     funnels,
+    lifespanHist,
+    ttfmHist,
+    extensionHist,
+    conversionHist,
+    activityHourHist,
+    pageViews,
+    referrers,
+    pricing,
+    revenueByCountry,
+    campaigns,
+    activeRooms,
   });
 
   return new Response(html, {
@@ -486,74 +571,228 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   });
 }
 
+/** Total count for a metric over the range (0 when absent). */
+function metricCount(totals: MetricTotal[], metric: MetricKey): number {
+  return totals.find((t) => t.metric === metric)?.count ?? 0;
+}
+/** Summed numeric payload for a distribution metric (0 when absent). */
+function metricSum(totals: MetricTotal[], metric: MetricKey): number {
+  return totals.find((t) => t.metric === metric)?.sumValue ?? 0;
+}
+
+/** Inclusive list of 'YYYY-MM-DD' UTC days across the range (already
+ *  clamped to <=366 days upstream). */
+function eachDay(from: string, to: string): string[] {
+  const days: string[] = [];
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  for (let t = start; t <= end; t += 86_400_000) days.push(utcDay(t));
+  return days;
+}
+
+/** Reorders a histogram into canonical bucket order, zero-filling gaps. */
+function orderedBuckets(hist: BucketRow[], order: readonly string[]): Bucket[] {
+  const m = new Map(hist.map((h) => [h.bucket, h.count]));
+  return order.map((label) => ({ label, count: m.get(label) ?? 0 }));
+}
+
+/** Human-readable average of summed seconds across `count` events. */
+function avgDurationFromSeconds(sumSeconds: number, count: number): string {
+  if (count <= 0) return "—";
+  const s = sumSeconds / count;
+  if (s < 60) return `${Math.round(s)}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86_400) return `${(s / 3600).toFixed(1)}h`;
+  return `${(s / 86_400).toFixed(1)}d`;
+}
+
+/** Human-readable average of summed hours across `count` events. */
+function avgDurationFromHours(sumHours: number, count: number): string {
+  if (count <= 0) return "—";
+  const h = sumHours / count;
+  if (h < 24) return `${h.toFixed(1)}h`;
+  return `${(h / 24).toFixed(1)}d`;
+}
+
+/** Integer percentage of n/total (0 when total is 0). */
+function pct(n: number, total: number): number {
+  return total > 0 ? Math.round((n / total) * 100) : 0;
+}
+
+/** Renders a price-point label ("USD_200") as "USD 2.00", and a revenue
+ *  amount in minor units as a major-unit decimal. */
+function formatPriceLabel(label: string): string {
+  const [cur, cents] = label.split("_");
+  const n = Number(cents);
+  if (!cur || !Number.isFinite(n)) return label;
+  return `${cur} ${(n / 100).toFixed(2)}`;
+}
+function formatMinor(minor: number): string {
+  return (minor / 100).toFixed(2);
+}
+
 function renderAdminHtml(d: {
   updated: string;
   origin: string;
-  aeReady: boolean;
-  aeError: string | null;
-  newToday: number;
-  sum90: number;
-  activeRooms: number;
-  messagesThisDay: number;
-  daily: DailyRow[];
+  range: DateRange;
+  totals: MetricTotal[];
+  trend: DailyTrendRow[];
   country: CountryRow[];
-  cfCountry: CFCountryRow[];
+  cfCountry: CountryRow[];
   diaspora: DiasporaRow[];
-  campaigns: Campaign[];
   funnels: CampaignFunnel[];
+  lifespanHist: BucketRow[];
+  ttfmHist: BucketRow[];
+  extensionHist: BucketRow[];
+  conversionHist: BucketRow[];
+  activityHourHist: BucketRow[];
+  pageViews: BucketRow[];
+  referrers: BucketRow[];
+  pricing: PriceRow[];
+  revenueByCountry: RevenueCountryRow[];
+  campaigns: Campaign[];
+  activeRooms: ActiveRooms;
 }): string {
-  const dailyRows = d.daily.length
-    ? d.daily
+  // `shrink-0` is essential: without it an inline SVG inside a flex row
+  // shrinks toward zero width when space is tight (small screens), so the
+  // icon visually disappears and collides with adjacent text.
+  const iconSvg = (name: string, cls = "size-4") =>
+    `<svg class="${cls} shrink-0" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
+
+  // --- Derived headline figures over the selected range ---
+  const free = metricCount(d.totals, "room_free");
+  const paid = metricCount(d.totals, "room_paid");
+  const created = free + paid;
+  const messages = metricCount(d.totals, "message_sent");
+  const secondParty = metricCount(d.totals, "second_party_joined");
+  const extended = metricCount(d.totals, "room_extended");
+  const expiredFree = metricCount(d.totals, "room_expired_free");
+  const expiredPaid = metricCount(d.totals, "room_expired_paid");
+  const expiredEmpty = metricCount(d.totals, "room_expired_empty");
+  const accessFailed = metricCount(d.totals, "access_failed");
+  const lockouts = metricCount(d.totals, "access_lockout");
+
+  // --- Trend chart series (zero-filled across every day in range) ---
+  const days = eachDay(d.range.from, d.range.to);
+  const trendLookup = new Map<string, number>();
+  for (const r of d.trend) trendLookup.set(`${r.metric}${r.day}`, r.count);
+  const trendChart = renderTrendChart(
+    TREND_METRICS.map((t) => ({
+      label: t.label,
+      color: t.color,
+      points: days.map((day) => trendLookup.get(`${t.metric}${day}`) ?? 0),
+    })),
+    days,
+  );
+
+  // --- Engagement distributions ---
+  const ttfmAvg = avgDurationFromSeconds(
+    metricSum(d.totals, "time_to_first_message"),
+    metricCount(d.totals, "time_to_first_message"),
+  );
+  const lifespanAvg = avgDurationFromHours(
+    metricSum(d.totals, "room_lifespan"),
+    metricCount(d.totals, "room_lifespan"),
+  );
+  const ttfmHistHtml = renderHistogram(orderedBuckets(d.ttfmHist, TTFM_BUCKETS));
+  const lifespanHistHtml = renderHistogram(orderedBuckets(d.lifespanHist, LIFESPAN_BUCKETS));
+  const expiredSolo = metricCount(d.totals, "room_expired_solo");
+
+  // --- Activity: hour-of-day histogram + weekday distribution (derived) ---
+  const activityHourHtml = renderHistogram(orderedBuckets(d.activityHourHist, HOURS_OF_DAY));
+  const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekdayCounts = new Map<string, number>();
+  for (const r of d.trend) {
+    const wd = WEEKDAYS[new Date(`${r.day}T00:00:00Z`).getUTCDay()] ?? "";
+    weekdayCounts.set(wd, (weekdayCounts.get(wd) ?? 0) + r.count);
+  }
+  const weekdayHtml = renderHistogram(
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((l) => ({
+      label: l,
+      count: weekdayCounts.get(l) ?? 0,
+    })),
+  );
+
+  // --- Acquisition ---
+  const pageViewsHtml = renderHistogram(
+    [...d.pageViews]
+      .sort((a, b) => b.count - a.count)
+      .map((r) => ({ label: r.bucket, count: r.count })),
+  );
+  const referrerHtml = renderHistogram(
+    [...d.referrers]
+      .sort((a, b) => b.count - a.count)
+      .map((r) => ({ label: r.bucket, count: r.count })),
+  );
+  const edited = metricCount(d.totals, "message_edited");
+  const deleted = metricCount(d.totals, "message_deleted");
+  const reads = metricCount(d.totals, "message_read");
+
+  // --- Monetization ---
+  const sales = metricCount(d.totals, "paid_sale");
+  const revenueMinor = metricSum(d.totals, "paid_sale");
+  const paymentsInitiated = metricCount(d.totals, "payment_initiated");
+  const paymentsPaid = metricCount(d.totals, "payment_paid");
+  const redeemFailed = metricCount(d.totals, "redeem_failed");
+  const extensionHistHtml = renderHistogram(orderedBuckets(d.extensionHist, EXTENSION_BUCKETS));
+  const conversionAvg = avgDurationFromHours(
+    metricSum(d.totals, "time_to_paid"),
+    metricCount(d.totals, "time_to_paid"),
+  );
+  const conversionHistHtml = renderHistogram(orderedBuckets(d.conversionHist, CONVERSION_BUCKETS));
+  const paymentFunnelHtml = renderFunnelBars([
+    { label: "Checkout initiated", count: paymentsInitiated },
+    { label: "Payment confirmed", count: paymentsPaid },
+    { label: "Redeemed (sale)", count: sales },
+  ]);
+  const pricingRows = d.pricing.length
+    ? d.pricing
         .map(
           (r) => `
           <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
-            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.day)}</td>
-            <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_new}</td>
-            <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_new}</td>
-            <td class="py-3 pr-8 text-right font-mono text-emerald-300/70">${r.extensions ?? 0}</td>
-            <td class="py-3 pr-8 text-right font-mono text-slate-400">${r.free_expired}</td>
-            <td class="py-3 pr-8 text-right font-mono text-slate-400">${r.paid_expired}</td>
-            <td class="py-3 text-right font-mono text-slate-300">${r.messages_sent ?? 0}</td>
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(formatPriceLabel(r.price))}</td>
+            <td class="py-3 pr-8 text-right font-mono text-primary">${r.units}</td>
+            <td class="py-3 text-right font-mono text-slate-300">${formatMinor(r.revenueMinor)}</td>
           </tr>`,
         )
         .join("")
-    : `<tr><td colspan="7" class="py-4 text-sm text-slate-500 italic">No daily data yet.</td></tr>`;
-
-  const countryRows = d.country.length
-    ? d.country
+    : `<tr><td colspan="3" class="py-4 text-sm text-slate-500 italic">No sales yet for this range.</td></tr>`;
+  const revenueCountryRows = d.revenueByCountry.length
+    ? d.revenueByCountry
         .map(
           (r) => `
+          <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.country_code)}</td>
+            <td class="py-3 pr-8 text-right font-mono text-primary">${r.units}</td>
+            <td class="py-3 text-right font-mono text-slate-300">${formatMinor(r.revenueMinor)}</td>
+          </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="3" class="py-4 text-sm text-slate-500 italic">No sales yet for this range.</td></tr>`;
+
+  // --- Geography tables ---
+  const countryTable = (rows: CountryRow[], emptyMsg: string) =>
+    rows.length
+      ? rows
+          .map(
+            (r) => `
           <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
             <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.country_code)}</td>
             <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_rooms}</td>
             <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_rooms}</td>
             <td class="py-3 text-right font-mono text-slate-400">${r.free_rooms + r.paid_rooms}</td>
           </tr>`,
-        )
-        .join("")
-    : `<tr><td colspan="4" class="py-4 text-sm text-slate-500 italic">No country data yet.</td></tr>`;
-
-  const cfCountryRows = d.cfCountry.length
-    ? d.cfCountry
-        .map(
-          (r) => `
-          <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
-            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.country_code)}</td>
-            <td class="py-3 pr-8 text-right font-mono text-slate-300">${r.free_rooms}</td>
-            <td class="py-3 pr-8 text-right font-mono text-primary">${r.paid_rooms}</td>
-            <td class="py-3 text-right font-mono text-slate-400">${r.free_rooms + r.paid_rooms}</td>
-          </tr>`,
-        )
-        .join("")
-    : `<tr><td colspan="4" class="py-4 text-sm text-slate-500 italic">No IP-country data yet.</td></tr>`;
+          )
+          .join("")
+      : `<tr><td colspan="4" class="py-4 text-sm text-slate-500 italic">${escapeAttr(emptyMsg)}</td></tr>`;
 
   const diasporaRows = d.diaspora.length
     ? d.diaspora
         .map((r) => {
-          const isDiaspora = r.steg_country !== r.cf_country;
-          const indicator = isDiaspora
-            ? `<span class="inline-block size-1.5 rounded-full bg-primary ml-1" title="diaspora"></span>`
-            : "";
+          const indicator =
+            r.steg_country !== r.cf_country
+              ? `<span class="inline-block size-1.5 rounded-full bg-primary ml-1" title="diaspora"></span>`
+              : "";
           return `
           <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
             <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.steg_country)}${indicator}</td>
@@ -564,27 +803,53 @@ function renderAdminHtml(d: {
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="5" class="py-4 text-sm text-slate-500 italic">No diaspora data yet.</td></tr>`;
+    : `<tr><td colspan="5" class="py-4 text-sm text-slate-500 italic">No diaspora data yet for this range.</td></tr>`;
 
-  const iconSvg = (name: string, cls = "size-4") =>
-    `<svg class="${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
+  const campaignsSection = renderCampaignsSection(d.campaigns, d.funnels, d.origin, iconSvg);
 
-  const campaignsSection = renderCampaignsSection(
-    d.campaigns,
-    d.funnels,
-    d.origin,
-    d.aeReady,
-    iconSvg,
-  );
+  // --- Sidebar + date range controls ---
+  const navItems: Array<[string, string, string]> = [
+    ["overview", "Overview", "bar_chart_3"],
+    ["geography", "Geography", "globe"],
+    ["engagement", "Engagement", "users"],
+    ["monetization", "Monetization", "sparkles"],
+    ["funnel", "Funnel & Campaigns", "list"],
+    ["security", "Security", "shield"],
+  ];
+  const sidebarNav = navItems
+    .map(
+      ([id, label, icon]) => `
+            <a href="#${id}" class="flex items-center gap-3 px-3 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap">
+              ${iconSvg(icon, "size-4 text-primary/70")}
+              <span class="text-[11px] font-black uppercase tracking-[0.2em]">${escapeAttr(label)}</span>
+            </a>`,
+    )
+    .join("");
+
+  const quickRanges = [7, 30, 90, 365]
+    .map((n) => {
+      const active = d.range.days === n;
+      const cls = active
+        ? "bg-primary/20 border-primary/40 text-primary"
+        : "border-white/10 text-slate-400 hover:text-white hover:border-white/20";
+      return `<a href="/admin?days=${n}" class="px-3 py-2 rounded-lg border text-[11px] font-mono ${cls} transition-colors">${n}d</a>`;
+    })
+    .join("");
+
+  const sectionHeader = (icon: string, title: string, blurb: string) => `
+        <div class="flex items-center gap-3 text-slate-300">
+          ${iconSvg(icon, "size-5 text-primary")}
+          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">${escapeAttr(title)}</h4>
+        </div>
+        <p class="text-xs text-slate-500 font-medium leading-relaxed">${blurb}</p>`;
 
   return `<!DOCTYPE html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" style="scroll-behavior:smooth">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta http-equiv="refresh" content="30">
   <title>Admin — sTELgano</title>
   <link rel="stylesheet" href="/assets/app.css">
 </head>
@@ -594,182 +859,200 @@ function renderAdminHtml(d: {
     <div class="noise-overlay"></div>
   </div>
 
-  <main class="min-h-dvh w-full overflow-y-auto">
-    <div class="max-w-4xl mx-auto space-y-12 py-12 animate-in lg:pb-40">
-      <!-- Header -->
-      <div class="flex flex-col md:flex-row items-center justify-between gap-8 pb-8 border-b border-white/5 px-4">
-        <div class="text-center md:text-left space-y-4">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.3em] mb-2">
-            ${iconSvg("terminal", "size-3")} System Status
+  <div class="flex flex-col md:flex-row min-h-dvh">
+    <!-- Sidebar -->
+    <aside class="md:w-60 md:shrink-0 md:h-dvh md:sticky md:top-0 border-b md:border-b-0 md:border-r border-white/5 bg-slate-950/40 backdrop-blur-xl z-10">
+      <div class="p-5 md:p-6 md:space-y-8">
+        <div class="flex items-center gap-2 mb-4 md:mb-0">
+          <span class="wordmark text-lg">sTELgano</span>
+          <span class="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[9px] font-black uppercase tracking-[0.2em]">Admin</span>
+        </div>
+        <nav class="flex md:flex-col gap-1 overflow-x-auto">${sidebarNav}</nav>
+        <div class="hidden md:block pt-6 border-t border-white/5 space-y-1">
+          <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">Range</p>
+          <p class="text-[11px] font-mono text-slate-400">${escapeAttr(d.range.label)}</p>
+          <p class="text-[10px] text-slate-600 pt-2">All times UTC · Updated ${escapeAttr(d.updated)}</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 min-w-0 overflow-y-auto">
+      <div class="max-w-5xl mx-auto px-4 sm:px-8 py-8 space-y-10 animate-in pb-24">
+        <!-- Header + date range -->
+        <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-6 border-b border-white/5">
+          <div class="space-y-2">
+            <h1 class="text-3xl sm:text-5xl font-extrabold text-white font-display tracking-tighter uppercase leading-none">
+              Admin <span class="text-gradient">Dashboard.</span>
+            </h1>
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+              Aggregate stats only · No private data · ${escapeAttr(d.range.label)}
+            </p>
           </div>
-          <h1 class="text-4xl sm:text-6xl font-extrabold text-white font-display tracking-tighter uppercase leading-[0.9] sm:leading-none">
-            Admin <span class="text-gradient">Dashboard.</span>
-          </h1>
-          <p class="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest sm:tracking-[0.5em] leading-relaxed">
-            Total Stats Only · No Private Data ·
-            <span class="text-primary italic">Updated ${escapeAttr(d.updated)}</span>
-          </p>
+          <form method="get" action="/admin" class="flex flex-wrap items-end gap-3">
+            <div class="space-y-1">
+              <label for="from" class="block text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">From</label>
+              <input type="date" id="from" name="from" value="${escapeAttr(d.range.from)}" class="glass-input py-2 px-3 text-sm" />
+            </div>
+            <div class="space-y-1">
+              <label for="to" class="block text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">To</label>
+              <input type="date" id="to" name="to" value="${escapeAttr(d.range.to)}" class="glass-input py-2 px-3 text-sm" />
+            </div>
+            <button type="submit" class="btn-primary py-2.5 px-6 text-sm flex items-center gap-2">${iconSvg("refresh_cw", "size-4")} Apply</button>
+            <div class="flex items-center gap-1.5">${quickRanges}</div>
+          </form>
         </div>
 
-        <form method="get" action="/admin">
-          <button type="submit" class="w-full sm:w-auto btn-primary py-4 px-10 text-sm flex items-center justify-center gap-3 group">
-            ${iconSvg("refresh_cw", "size-5 group-hover:rotate-180 transition-transform duration-700")}
-            Refresh Stats
-          </button>
-        </form>
-      </div>
+        <!-- Overview -->
+        <section id="overview" class="scroll-mt-6 space-y-8">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            ${adminMetricCard("Active Channels", d.activeRooms.total, `${d.activeRooms.free} free · ${d.activeRooms.paid} paid`, "radio", true)}
+            ${adminMetricCard("Channels Created", created, `${free} free · ${paid} paid`, "check_circle")}
+            ${adminMetricCard("Messages Sent", messages, "Encrypted, over range", "message_circle")}
+            ${adminMetricCard("Activation", `${pct(secondParty, created)}%`, "Two-party channels", "users")}
+          </div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            ${adminMetricCard("Paid Conversion", `${pct(paid, created)}%`, "Paid of all created", "sparkles")}
+            ${adminMetricCard("Extensions", extended, "Repeat paid renewals", "calendar")}
+            ${adminMetricCard("Empty Expiries", `${pct(expiredEmpty, expiredFree + expiredPaid)}%`, "Expired, never messaged", "alert_triangle")}
+            ${adminMetricCard("Lockouts", lockouts, `${accessFailed} failed attempts`, "shield")}
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("bar_chart_3", "Daily Trend", "New free / new paid channels and messages per UTC day across the selected range. Exact counts — no sampling.")}
+            ${trendChart}
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("radio", "Activity by Hour (UTC)", "When channels are created and messages flow, by UTC hour. Global — no per-event timestamps stored, only an hour bucket.")}
+              ${activityHourHtml}
+            </div>
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("calendar", "Activity by Weekday (UTC)", "New channels + messages summed per weekday across the range.")}
+              ${weekdayHtml}
+            </div>
+          </div>
+        </section>
 
-      ${
-        d.aeError
-          ? `<div class="mx-4 sm:mx-0 flex items-start gap-3 px-5 py-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">
-               ${iconSvg("alert_triangle", "size-5 shrink-0 mt-0.5 text-amber-400")}
-               <div>
-                 <p class="font-semibold">Analytics Engine query error</p>
-                 <p class="mt-1 text-amber-400/80 font-mono text-xs break-all">${escapeAttr(d.aeError)}</p>
-                 <p class="mt-2 text-amber-400/60 text-xs">Check that CF_AE_API_TOKEN has <strong>Account Analytics: Read</strong> permission and the account ID matches.</p>
-               </div>
-             </div>`
-          : ""
-      }
-
-      <!-- Metric cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-        ${adminMetricCard("Active Channels", d.activeRooms, "Live count, pushed by DO", "radio", true)}
-        ${adminMetricCard("New Channels Today", d.aeReady ? d.newToday : "—", "Last 24h", "plus_circle")}
-        ${adminMetricCard("Messages Today", d.aeReady ? d.messagesThisDay : "—", "Encrypted, current UTC day", "message_circle")}
-        ${adminMetricCard("Total (30d)", d.aeReady ? d.sum90 : "—", "New rooms, past 30 days", "calendar")}
-      </div>
-
-      <!-- Campaigns + conversion funnel -->
-      ${campaignsSection}
-
-      <!-- Per-day breakdown -->
-      <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
-        <div class="flex items-center gap-3 text-slate-300">
-          ${iconSvg("calendar", "size-5 text-primary")}
-          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Daily Breakdown · Last 30 Days</h4>
-        </div>
-        <p class="text-xs text-slate-500 font-medium leading-relaxed">
-          New free / new paid / extensions / expired free / expired paid counters per UTC day, across all countries. <span class="text-emerald-300/70">New paid</span> counts a number's first upgrade to paid — repeat renewals of an already-paid number are counted under <span class="text-emerald-300/70">Extensions</span>, so one number extended several times is one paid room, not several. Expiries are not country-scoped because individual room records do not carry country metadata (by design).
-        </p>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
+        <!-- Geography -->
+        <section id="geography" class="scroll-mt-6 space-y-8">
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("globe", "Rooms by Steg-Number Country", `Country derived client-side from the E.164 steg number. Answers "which country's phone format was adopted?" — never stored alongside any individual room record.`)}
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead>
               <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
-                <th class="py-3 pr-8">Day (UTC)</th>
-                <th class="py-3 pr-8 text-right">New free</th>
-                <th class="py-3 pr-8 text-right">New paid</th>
-                <th class="py-3 pr-8 text-right">Extensions</th>
-                <th class="py-3 pr-8 text-right">Expired free</th>
-                <th class="py-3 pr-8 text-right">Expired paid</th>
-                <th class="py-3 text-right">Messages</th>
-              </tr>
-            </thead>
-            <tbody>${dailyRows}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Per-country breakdown (steg-number country) -->
-      <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
-        <div class="flex items-center gap-3 text-slate-300">
-          ${iconSvg("globe", "size-5 text-primary")}
-          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Rooms by Steg-Number Country · Aggregate Only</h4>
-        </div>
-        <p class="text-xs text-slate-500 font-medium leading-relaxed">
-          Country derived client-side from the E.164 steg number via libphonenumber-js. Answers "which country's phone format was adopted?" — a proxy for the user's social identity. Never stored alongside any individual room record.
-        </p>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
+                <th class="py-3 pr-8">Country</th><th class="py-3 pr-8 text-right">Free</th><th class="py-3 pr-8 text-right">Paid</th><th class="py-3 text-right">Total</th>
+              </tr></thead><tbody>${countryTable(d.country, "No country data yet for this range.")}</tbody></table></div>
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("globe", "Rooms by IP Location (CF-IPCountry)", `Country derived server-side from the connecting IP. Differs from the steg-number country for diaspora users, travellers, and VPN users.`)}
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead>
               <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
-                <th class="py-3 pr-8">Country</th>
-                <th class="py-3 pr-8 text-right">Free rooms</th>
-                <th class="py-3 pr-8 text-right">Paid rooms</th>
-                <th class="py-3 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>${countryRows}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Per-country breakdown (CF-IPCountry) -->
-      <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
-        <div class="flex items-center gap-3 text-slate-300">
-          ${iconSvg("map_pin", "size-5 text-primary")}
-          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Rooms by IP Location (CF-IPCountry) · Aggregate Only</h4>
-        </div>
-        <p class="text-xs text-slate-500 font-medium leading-relaxed">
-          Country derived server-side from the connecting IP via Cloudflare's geolocation. Answers "where are users physically connecting from?" — differs from the steg-number country for diaspora users, travellers, and VPN users.
-        </p>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
+                <th class="py-3 pr-8">Country</th><th class="py-3 pr-8 text-right">Free</th><th class="py-3 pr-8 text-right">Paid</th><th class="py-3 text-right">Total</th>
+              </tr></thead><tbody>${countryTable(d.cfCountry, "No IP-country data yet for this range.")}</tbody></table></div>
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("users", "Diaspora · Steg vs IP Country", `Rows where Steg ≠ CF country (marked <span class="inline-block size-1.5 rounded-full bg-primary mb-0.5"></span>) reveal diaspora usage.`)}
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead>
               <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
-                <th class="py-3 pr-8">Country</th>
-                <th class="py-3 pr-8 text-right">Free rooms</th>
-                <th class="py-3 pr-8 text-right">Paid rooms</th>
-                <th class="py-3 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>${cfCountryRows}</tbody>
-          </table>
-        </div>
-      </div>
+                <th class="py-3 pr-8">Steg</th><th class="py-3 pr-8">CF</th><th class="py-3 pr-8 text-right">Free</th><th class="py-3 pr-8 text-right">Paid</th><th class="py-3 text-right">Total</th>
+              </tr></thead><tbody>${diasporaRows}</tbody></table></div>
+          </div>
+        </section>
 
-      <!-- Diaspora breakdown (steg country vs IP country) -->
-      <div class="glass-card p-6 sm:p-10 space-y-6 mx-4 sm:mx-0">
-        <div class="flex items-center gap-3 text-slate-300">
-          ${iconSvg("users", "size-5 text-primary")}
-          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Diaspora Breakdown · Steg vs IP Country</h4>
-        </div>
-        <p class="text-xs text-slate-500 font-medium leading-relaxed">
-          Rows where Steg Country ≠ CF Country (marked <span class="inline-block size-1.5 rounded-full bg-primary mb-0.5"></span>) reveal diaspora usage — users whose steg number is from one country but who connect from another.
-        </p>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
+        <!-- Engagement -->
+        <section id="engagement" class="scroll-mt-6 space-y-8">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("message_circle", `Time to First Message · avg ${escapeAttr(ttfmAvg)}`, "How long after a channel is created before its first message. Distribution from bucketed counts (no per-message timestamps stored).")}
+              ${ttfmHistHtml}
+            </div>
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("calendar", `Channel Lifespan · avg ${escapeAttr(lifespanAvg)}`, "Total time from creation to expiry, including extensions. Averages from summed values; medians are not available without per-room data.")}
+              ${lifespanHistHtml}
+            </div>
+          </div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            ${adminMetricCard("Messages Read", reads, "Read receipts fired", "check_circle")}
+            ${adminMetricCard("Messages Edited", edited, "Edited before read", "message_circle")}
+            ${adminMetricCard("Messages Deleted", deleted, "Deleted before read", "message_circle")}
+            ${adminMetricCard("Solo Expiries", `${pct(expiredSolo, expiredFree + expiredPaid)}%`, "Expired, never a 2nd party", "users")}
+          </div>
+        </section>
+
+        <!-- Monetization -->
+        <section id="monetization" class="scroll-mt-6 space-y-8">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            ${adminMetricCard("Sales", sales, "Paid extensions realized", "sparkles")}
+            ${adminMetricCard("Revenue", formatMinor(revenueMinor), "Sum over range (minor → major)", "bar_chart_3")}
+            ${adminMetricCard("Pay Conversion", `${pct(paymentsPaid, paymentsInitiated)}%`, "Confirmed of initiated", "check_circle")}
+            ${adminMetricCard("Redeem Failures", redeemFailed, "Invalid / pending tokens", "alert_triangle")}
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("list", "Payment Funnel", "Server-side: checkout initiated → payment confirmed (webhook) → redeemed in a channel. The gaps are abandonment. Aggregate counts, never linked to a room.")}
+              ${paymentFunnelHtml}
+            </div>
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("calendar", "Extension Depth", "How many times numbers have been paid for: x1 = first purchase, x2 = first renewal, … A retention distribution, tracked per number in DO state, never by hash.")}
+              ${extensionHistHtml}
+            </div>
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("calendar", `Time to Paid · avg ${escapeAttr(conversionAvg)}`, "How long a number stays free (weekly) before its first paid extension. Distribution from bucketed counts — your free→paid conversion latency.")}
+            ${conversionHistHtml}
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("sparkles", "Sales by Price Point", "Units sold and gross revenue per price, over the range. Revenue is shown in major units; the price label carries the currency.")}
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead>
               <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
-                <th class="py-3 pr-8">Steg Country</th>
-                <th class="py-3 pr-8">CF Country</th>
-                <th class="py-3 pr-8 text-right">Free rooms</th>
-                <th class="py-3 pr-8 text-right">Paid rooms</th>
-                <th class="py-3 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>${diasporaRows}</tbody>
-          </table>
-        </div>
-      </div>
+                <th class="py-3 pr-8">Price</th><th class="py-3 pr-8 text-right">Units</th><th class="py-3 text-right">Revenue</th>
+              </tr></thead><tbody>${pricingRows}</tbody></table></div>
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("globe", "Revenue by Steg-Number Country", "Units sold and gross revenue grouped by the steg number's country. Aggregate only — no number, hash, or payment reference is stored.")}
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead>
+              <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                <th class="py-3 pr-8">Country</th><th class="py-3 pr-8 text-right">Units</th><th class="py-3 text-right">Revenue</th>
+              </tr></thead><tbody>${revenueCountryRows}</tbody></table></div>
+          </div>
+        </section>
 
-      <!-- Admin notes -->
-      <div class="glass-card p-6 sm:p-10 space-y-8 border-white/5 bg-slate-950/40 relative overflow-hidden group mx-4 sm:mx-0">
-        <div class="flex items-center gap-3 text-slate-300 relative z-10">
-          ${iconSvg("help_circle", "size-5 text-primary")}
-          <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Admin Information</h4>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 relative z-10">
-          ${[
-            "All values are counts derived from server data.",
-            "No private chat contents, keys, or IDs are shown.",
-            "Active rooms and message counts are DO-local in v2 and not cheaply aggregable. Tiles show —.",
-            "Country and daily counters are incremented on room creation / paid upgrade / expiry.",
-            "Refreshing the page hits GET /admin again — no client-side polling.",
-            "Access gated by ADMIN_USERNAME / ADMIN_PASSWORD env vars on Cloudflare Pages.",
-          ]
-            .map(
-              (note) => `
-              <div class="flex items-start gap-4">
-                <div class="size-1 rounded-full bg-primary/40 mt-1.5"></div>
-                <span class="text-xs text-slate-500 font-medium leading-relaxed">${escapeAttr(note)}</span>
-              </div>`,
-            )
-            .join("")}
-        </div>
+        <!-- Funnel & Campaigns -->
+        <section id="funnel" class="scroll-mt-6 space-y-8">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("globe", "Page Views by Route", "Content-page navigations over the range. Aggregate route labels only — no URL, query string, IP, or UA is stored.")}
+              ${pageViewsHtml}
+            </div>
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("list", "Traffic Source", "Coarse referrer category (search / social / other / direct). The full referrer URL is never stored; internal navigation is not counted.")}
+              ${referrerHtml}
+            </div>
+          </div>
+          ${campaignsSection}
+        </section>
+
+        <!-- Security -->
+        <section id="security" class="scroll-mt-6 space-y-8">
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("shield", "Access & Abuse", "Wrong-PIN attempts, 30-minute lockouts, and per-IP join rate-limit rejections over the range — your signal for credential-stuffing, slot-squatting, or targeted access attempts. Global counts, no country or room linkage.")}
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              ${adminMetricCard("Failed Attempts", accessFailed, "Wrong PIN on a full room", "alert_triangle")}
+              ${adminMetricCard("Lockouts", lockouts, "10 fails → 30-min lock", "shield")}
+              ${adminMetricCard("Rate-Limited Joins", metricCount(d.totals, "join_rate_limited"), "Per-IP create/slot blocks", "shield")}
+            </div>
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("radio", "Edge & Reliability", "WebSocket-upgrade and /admin rate-limit rejections at the edge, and the daily token-sweep cron. Aggregate counts for operational visibility.")}
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              ${adminMetricCard("WS Rate-Limited", metricCount(d.totals, "ws_rate_limited"), "Upgrade rejections (30/IP/min)", "shield")}
+              ${adminMetricCard("Admin Rate-Limited", metricCount(d.totals, "admin_rate_limited"), "/admin rejections (20/IP/min)", "shield")}
+              ${adminMetricCard("Tokens Swept", metricSum(d.totals, "cron_sweep"), `${metricCount(d.totals, "cron_sweep")} cron runs`, "calendar")}
+            </div>
+          </div>
+        </section>
       </div>
-    </div>
-  </main>
+    </main>
+  </div>
 </body>
 </html>
 `;
@@ -783,25 +1066,28 @@ function adminMetricCard(
   active = false,
 ): string {
   const activeDot = active
-    ? '<div class="size-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]"></div>'
+    ? '<div class="size-2 shrink-0 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]"></div>'
     : "";
+  // Icon sits alone on the top row (with the optional live dot). The note is
+  // a full-width line BELOW the value/label — never crammed beside the icon,
+  // which overflowed and overlapped it on narrow 2-column mobile cards.
   return `
-    <div class="glass-card-premium p-6 sm:p-10 space-y-8 group hover:border-primary/50 transition-all duration-500 mx-4 sm:mx-0">
-      <div class="flex items-center justify-between">
-        <div class="size-12 sm:size-14 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all">
-          <svg class="size-6 sm:size-7 text-primary/40 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#${icon}"/></svg>
+    <div class="glass-card-premium p-5 sm:p-8 space-y-4 group hover:border-primary/50 transition-all duration-500">
+      <div class="flex items-center justify-between gap-2">
+        <div class="size-11 sm:size-14 shrink-0 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all">
+          <svg class="size-5 sm:size-7 text-primary/40 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#${icon}"/></svg>
         </div>
-        <div class="flex flex-col items-end gap-1">
-          <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-600">${escapeAttr(note)}</span>
-          ${activeDot}
-        </div>
+        ${activeDot}
       </div>
-      <div class="space-y-3">
-        <div class="text-4xl sm:text-6xl font-mono font-black text-white group-hover:scale-110 transition-transform origin-left tracking-tighter">
+      <div class="space-y-1.5">
+        <div class="text-3xl sm:text-5xl font-mono font-black text-white tracking-tighter break-words">
           ${escapeAttr(String(value))}
         </div>
-        <div class="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-slate-500 group-hover:text-slate-400 transition-colors">
+        <div class="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
           ${escapeAttr(label)}
+        </div>
+        <div class="text-[9px] sm:text-[10px] font-medium uppercase tracking-wider text-slate-600 leading-snug">
+          ${escapeAttr(note)}
         </div>
       </div>
     </div>
@@ -843,7 +1129,6 @@ function renderCampaignsSection(
   campaigns: Campaign[],
   funnels: CampaignFunnel[],
   origin: string,
-  aeReady: boolean,
   iconSvg: (name: string, cls?: string) => string,
 ): string {
   const byCampaign = new Map<string, Record<string, number>>();
@@ -900,20 +1185,15 @@ function renderCampaignsSection(
     );
   }
 
-  const aeNote = aeReady
-    ? ""
-    : `<p class="text-xs text-amber-400/80 font-medium">Analytics Engine is not configured — funnel counts read 0. Campaigns can still be created and their tracking links shared.</p>`;
-
   return `
-      <div class="glass-card p-6 sm:p-10 space-y-8 mx-4 sm:mx-0">
+      <div class="glass-card p-6 sm:p-10 space-y-8">
         <div class="flex items-center gap-3 text-slate-300">
           ${iconSvg("bar_chart_3", "size-5 text-primary")}
           <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Conversion Funnel</h4>
         </div>
         <p class="text-xs text-slate-500 font-medium leading-relaxed">
-          Every session flows through the funnel — Landing → /chat → number generated → channel opened → extend started → extended. The step with the steepest drop-off is flagged <span class="text-amber-400 font-bold uppercase">friction</span>. Counts are per-session over the last 30 days; aggregate only, no user data. <span class="text-slate-400">Activation</span> = reached an open channel; <span class="text-slate-400">paid</span> = extended a number (both relative to landings).
+          Every session flows through the funnel — Landing → /chat → number generated → channel opened → extend started → extended. The step with the steepest drop-off is flagged <span class="text-amber-400 font-bold uppercase">friction</span>. Counts are per-session over the selected range; aggregate only, no user data. <span class="text-slate-400">Activation</span> = reached an open channel; <span class="text-slate-400">paid</span> = extended a number (both relative to landings).
         </p>
-        ${aeNote}
 
         <!-- Platform-wide funnel (link-independent) -->
         ${overallCard}
@@ -1065,7 +1345,11 @@ function renderFunnelCard(opts: {
 //     metadata is enough to trace a specific webhook through logs
 //     without naming the token. Mirrors v1.
 
-async function handlePaystackWebhook(request: Request, env: Env): Promise<Response> {
+async function handlePaystackWebhook(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   console.log("Paystack Webhook received");
   if (env.MONETIZATION_ENABLED !== "true") {
     return jsonResponse({ error: "not_found" }, 404);
@@ -1128,7 +1412,20 @@ async function handlePaystackWebhook(request: Request, env: Env): Promise<Respon
   }
 
   try {
-    await markPaid(env.DB, reference, reference);
+    // Fetch the token first so payment_paid can carry the price point.
+    const token = await findByTokenHash(env.DB, reference);
+    const changed = await markPaid(env.DB, reference, reference);
+    // Only count a real pending→paid transition, so Paystack's webhook
+    // retries don't inflate the funnel. Global (no country): the webhook
+    // request originates from Paystack's servers, not the user.
+    if (changed > 0 && token) {
+      enqueueMetric(
+        env.METRICS_QUEUE,
+        "payment_paid",
+        { dim: priceLabel(token.currency, token.amount_cents) },
+        ctx,
+      );
+    }
   } catch {
     // Even a DB failure returns 200 — Paystack retries on non-2xx,
     // so we'd rather absorb a transient blip and let the client
@@ -1138,7 +1435,11 @@ async function handlePaystackWebhook(request: Request, env: Env): Promise<Respon
   return jsonResponse({ status: "ok" });
 }
 
-async function handlePaymentInitiate(request: Request, env: Env): Promise<Response> {
+async function handlePaymentInitiate(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   if (env.MONETIZATION_ENABLED !== "true") {
     return jsonResponse({ error: "monetization_disabled" }, 503);
   }
@@ -1178,6 +1479,14 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
   // and we mark the row paid. No room_hash is ever sent to Paystack.
   const initResult = await paystackInitialize(tokenHash, amountCents, env);
   if (initResult.ok) {
+    // Top of the server-side payment funnel. cf country is the user's here
+    // (they call this from their browser, unlike the webhook).
+    enqueueMetric(
+      env.METRICS_QUEUE,
+      "payment_initiated",
+      { dim: priceLabel(currency, amountCents), cfCountry: (request.cf?.country ?? "") as string },
+      ctx,
+    );
     return jsonResponse({ checkout_url: initResult.checkoutUrl });
   }
 
@@ -1209,7 +1518,12 @@ function redirect(location: string, status = 302): Response {
 }
 
 /** GET /c/:slug — records a landing event and redirects into the funnel. */
-async function handleCampaignLink(slug: string, request: Request, env: Env): Promise<Response> {
+async function handleCampaignLink(
+  slug: string,
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   // Bad slug or unknown/archived campaign → silent redirect home; we
   // never reveal which slugs exist, and never count a phantom landing.
   if (!SLUG_RE.test(slug)) return redirect("/");
@@ -1217,7 +1531,7 @@ async function handleCampaignLink(slug: string, request: Request, env: Env): Pro
   if (!campaign) return redirect("/");
 
   const cfCountry = (request.cf?.country ?? "") as string;
-  writeFunnelEvent(env.ANALYTICS, "landing", slug, cfCountry);
+  enqueueMetric(env.METRICS_QUEUE, "funnel_landing", { cfCountry, dim: slug }, ctx);
 
   // Re-normalise on read as well as write — belt-and-braces against an
   // unsafe destination ever reaching the Location header (open-redirect
@@ -1229,7 +1543,11 @@ async function handleCampaignLink(slug: string, request: Request, env: Env): Pro
 }
 
 /** POST /api/funnel — client beacon for a single funnel step. */
-async function handleFunnelBeacon(request: Request, env: Env): Promise<Response> {
+async function handleFunnelBeacon(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   // Tolerant parse: sendBeacon ships text/plain, fetch ships JSON.
   let body: { step?: unknown; campaign?: unknown };
   try {
@@ -1246,7 +1564,7 @@ async function handleFunnelBeacon(request: Request, env: Env): Promise<Response>
   const campaign = raw && SLUG_RE.test(raw) ? raw : "direct";
 
   const cfCountry = (request.cf?.country ?? "") as string;
-  writeFunnelEvent(env.ANALYTICS, body.step, campaign, cfCountry);
+  enqueueMetric(env.METRICS_QUEUE, `funnel_${body.step}`, { cfCountry, dim: campaign }, ctx);
   return new Response(null, { status: 204 });
 }
 

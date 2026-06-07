@@ -16,9 +16,23 @@
 // elixir/lib/stelgano_web/channels/anon_room_channel.ex.
 
 import type { Env } from "./env";
-import { type EventType, writeEvent } from "./lib/analytics";
+import {
+  conversionBucket,
+  enqueueMetric,
+  enqueueMetrics,
+  extensionBucket,
+  lifespanBucket,
+  type MetricKey,
+  priceLabel,
+  ttfmBucket,
+  utcHour,
+} from "./lib/daily_metrics";
 import { deleteToken, findByTokenHash, markPaid, markRedeemed } from "./lib/extension_tokens";
-import { decrementActiveRooms, incrementActiveRooms } from "./lib/live_counters";
+import {
+  convertActiveToPaid,
+  decrementActiveRooms,
+  incrementActiveRooms,
+} from "./lib/live_counters";
 import { verifyTransaction } from "./lib/paystack";
 import {
   type ClientEvent,
@@ -75,6 +89,18 @@ type RoomState = {
   tier: "free" | "paid";
   /** epoch ms — when the alarm fires, the room self-destructs. */
   ttlExpiresAtMs: number;
+  /** epoch ms — room creation time. Set once at init and NOT changed on
+   *  extension, so room_lifespan reflects the channel's true total life.
+   *  Used for lifespan and time-to-first-message analytics. */
+  createdAtMs: number;
+  /** Set true on the first message ever sent in the room; never reset by
+   *  edit/delete. Lets time_to_first_message fire exactly once and lets
+   *  room_expired_empty exclude rooms whose only message was later deleted. */
+  everMessaged: boolean;
+  /** Count of paid extensions this number has received (1 = first purchase,
+   *  free→paid; 2 = first renewal; …). Tracked in room state, never by hash,
+   *  so the `extension` ordinal metric is a population distribution. */
+  extensionCount: number;
   /** Up to 2 records, one per party. */
   accessRecords: AccessRecord[];
   /** N=1 invariant — at most one current message. */
@@ -134,6 +160,19 @@ export class RoomDO implements DurableObject {
     // gates incoming messages until this resolves.
     this.state.blockConcurrencyWhile(async () => {
       this.room = (await this.state.storage.get<RoomState>(STATE_KEY)) ?? null;
+      // Backfill fields added after some rooms were created so lifespan /
+      // time-to-first analytics never see undefined. createdAtMs is derived
+      // best-effort from the TTL (approximate for legacy rooms, since the
+      // TTL may have been extended); everMessaged is inferred from whether a
+      // message is currently present. Persisted once so it stays stable.
+      if (this.room && this.room.createdAtMs === undefined) {
+        const ttlDays = this.room.tier === "paid" ? PAID_TTL_DAYS : FREE_TTL_DAYS;
+        this.room.createdAtMs = this.room.ttlExpiresAtMs - ttlDays * 86_400_000;
+        this.room.everMessaged = this.room.currentMessage != null;
+        // A legacy paid room had at least one purchase; free rooms zero.
+        this.room.extensionCount = this.room.tier === "paid" ? 1 : 0;
+        await this.persist();
+      }
     });
   }
 
@@ -281,13 +320,50 @@ export class RoomDO implements DurableObject {
       }
     }
 
-    const expiredType: EventType =
-      this.room.tier === "paid" ? "room_expired_paid" : "room_expired_free";
-    void decrementActiveRooms(this.env.DB);
-    writeEvent(this.env.ANALYTICS, expiredType);
+    if (this.room) void decrementActiveRooms(this.env.DB, this.room.tier);
+    this.emitExpiry(this.room);
     await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
     this.room = null;
+  }
+
+  /** Enqueues the expiry metric family (global, no country — matching the
+   *  long-standing design where room records carry no country): the tiered
+   *  expiry counter, the total channel lifespan (with a bucket dim),
+   *  room_expired_empty when the channel never carried a message, and
+   *  room_expired_solo when it never gained a second party. */
+  private emitExpiry(room: RoomState): void {
+    const expiredType: MetricKey = room.tier === "paid" ? "room_expired_paid" : "room_expired_free";
+    const lifespanHours = Math.max(0, (Date.now() - room.createdAtMs) / 3_600_000);
+    const items: Array<{ metric: MetricKey; value?: number; dim?: string }> = [
+      { metric: expiredType },
+      { metric: "room_lifespan", value: lifespanHours, dim: lifespanBucket(lifespanHours) },
+    ];
+    if (!room.everMessaged) items.push({ metric: "room_expired_empty" });
+    if (room.accessRecords.length < 2) items.push({ metric: "room_expired_solo" });
+    enqueueMetrics(this.env.METRICS_QUEUE, items);
+  }
+
+  /** Enqueues the monetization pair for a realized payment: the extension
+   *  ordinal (x1, x2, …) and the priced sale (count = unit, sum_value =
+   *  revenue in minor units), both carrying country. No payment reference,
+   *  room id, or hash is ever included — this stays an aggregate. */
+  private emitPaidSale(
+    sale: { currency: string; amount_cents: number },
+    extensionOrdinal: number,
+    stegCountry: string,
+    cfCountry: string,
+  ): void {
+    enqueueMetrics(this.env.METRICS_QUEUE, [
+      { metric: "extension", dim: extensionBucket(extensionOrdinal), stegCountry, cfCountry },
+      {
+        metric: "paid_sale",
+        dim: priceLabel(sale.currency, sale.amount_cents),
+        value: sale.amount_cents,
+        stegCountry,
+        cfCountry,
+      },
+    ]);
   }
 
   // -------------------------------------------------------------------------
@@ -318,9 +394,13 @@ export class RoomDO implements DurableObject {
       return;
     }
 
-    // Auto-initialise on first join. Tier defaults to "free"; if the
-    // client supplies a valid paid extension_secret we claim it atomically
-    // and start the room as "paid" — no separate redeem_extension needed.
+    // Auto-initialise on first join. Every number starts free (weekly TTL);
+    // a paid (yearly) number is reached only via redeem_extension — the
+    // client always creates the room free, then redeems to upgrade. We do
+    // NOT claim a paid token at creation: that raced the Paystack webhook
+    // and split the "new paid number" flow across two code paths. Any
+    // extension_secret in the join payload is ignored here; the client's
+    // post-join redeem_extension converts free → paid.
     if (!this.room?.isInitialized) {
       // Rate-limit room creation per client IP. Fail-open: if the rate
       // limiter is unavailable, we allow the request through. Checked
@@ -329,48 +409,33 @@ export class RoomDO implements DurableObject {
         () => ({ success: true }),
       );
       if (!rl.success) {
+        enqueueMetric(this.env.METRICS_QUEUE, "join_rate_limited", { dim: "create" });
         await this.padJoin(start);
         this.send(ws, { ref: evt.ref, error: { reason: "rate_limited" } });
         return;
       }
 
-      // Attempt to claim a paid extension token atomically with room creation.
-      // Only runs when monetization is enabled and the client sent a secret.
-      let tier: "free" | "paid" = "free";
-      let ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
-      const rawSecret =
-        typeof evt.data.extension_secret === "string" ? evt.data.extension_secret : null;
-      if (rawSecret && this.env.MONETIZATION_ENABLED === "true") {
-        const tokenHash = await sha256hex(rawSecret);
-        const token = await findByTokenHash(this.env.DB, tokenHash);
-        if (token?.status === "paid") {
-          const changed = await markRedeemed(this.env.DB, tokenHash);
-          if (changed > 0) {
-            tier = "paid";
-            ttlMs = Date.now() + PAID_TTL_DAYS * 86_400_000;
-          }
-        }
-      }
-
+      const ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
       this.room = {
         isInitialized: true,
         roomId: crypto.randomUUID(),
-        tier,
+        tier: "free",
         ttlExpiresAtMs: ttlMs,
+        createdAtMs: Date.now(),
+        everMessaged: false,
+        extensionCount: 0,
         accessRecords: [{ accessHash, failedAttempts: 0, lockedUntilMs: null }],
         currentMessage: null,
       };
       await this.persist();
       await this.state.storage.setAlarm(ttlMs);
-      void incrementActiveRooms(this.env.DB);
-      // Telemetry: blob2 = steg-number country (client-derived),
-      // blob3 = CF-IPCountry (server-side IP geolocation).
-      writeEvent(
-        this.env.ANALYTICS,
-        tier === "paid" ? "room_paid" : "room_free",
-        evt.data.country_iso ?? "",
+      void incrementActiveRooms(this.env.DB, "free");
+      // Telemetry: steg-number country (client-derived) + CF-IPCountry.
+      enqueueMetric(this.env.METRICS_QUEUE, "room_free", {
+        stegCountry: evt.data.country_iso ?? "",
         cfCountry,
-      );
+      });
+      enqueueMetric(this.env.METRICS_QUEUE, "activity_hour", { dim: utcHour(Date.now()) });
 
       ws.serializeAttachment({
         joined: true,
@@ -404,15 +469,27 @@ export class RoomDO implements DurableObject {
         () => ({ success: true }),
       );
       if (!rl.success) {
+        enqueueMetric(this.env.METRICS_QUEUE, "join_rate_limited", { dim: "slot" });
         await this.padJoin(start);
         this.send(ws, { ref: evt.ref, error: { reason: "rate_limited" } });
         return;
       }
     }
+    // Snapshot the slot count so we can tell a genuine second-party join
+    // (1 → 2 records) apart from a returning party. NOTE: the protocol is
+    // zero-knowledge here — a wrong PIN while the 2nd slot is still open
+    // also registers as a join, so second_party_joined counts "distinct
+    // access credentials registered", the best the server can know.
+    const recordsBefore = this.room.accessRecords.length;
     const result = this.checkAccess(accessHash);
     if (result.kind === "ok") {
       await this.persist();
-      writeEvent(this.env.ANALYTICS, "room_rejoin", evt.data.country_iso ?? "", cfCountry);
+      const secondPartyJoined = recordsBefore === 1 && this.room.accessRecords.length === 2;
+      enqueueMetric(
+        this.env.METRICS_QUEUE,
+        secondPartyJoined ? "second_party_joined" : "room_rejoin",
+        { stegCountry: evt.data.country_iso ?? "", cfCountry },
+      );
       ws.serializeAttachment({
         joined: true,
         senderHash,
@@ -479,9 +556,27 @@ export class RoomDO implements DurableObject {
       readAtMs: null,
     };
 
+    // First message ever in this room → record time-to-first-message
+    // (seconds from creation), then latch everMessaged so it fires once.
+    const isFirstMessage = !this.room.everMessaged;
     this.room.currentMessage = message;
+    if (isFirstMessage) this.room.everMessaged = true;
     await this.persist();
-    writeEvent(this.env.ANALYTICS, "message_sent", att.stegCountry ?? "", att.cfCountry ?? "");
+
+    enqueueMetric(this.env.METRICS_QUEUE, "message_sent", {
+      stegCountry: att.stegCountry ?? "",
+      cfCountry: att.cfCountry ?? "",
+    });
+    enqueueMetric(this.env.METRICS_QUEUE, "activity_hour", { dim: utcHour(message.insertedAtMs) });
+    if (isFirstMessage) {
+      const ttfmSeconds = Math.max(0, (message.insertedAtMs - this.room.createdAtMs) / 1000);
+      enqueueMetric(this.env.METRICS_QUEUE, "time_to_first_message", {
+        stegCountry: att.stegCountry ?? "",
+        cfCountry: att.cfCountry ?? "",
+        value: ttfmSeconds,
+        dim: ttfmBucket(ttfmSeconds),
+      });
+    }
 
     const payload = this.toPayload(message);
     this.broadcastAll({ event: "new_message", data: payload });
@@ -503,6 +598,8 @@ export class RoomDO implements DurableObject {
     msg.readAtMs = Date.now();
     await this.persist();
     this.broadcastAll({ event: "message_read", data: { message_id: msg.id } });
+    // Global (no country): the read-receipt handler has no attachment in scope.
+    enqueueMetric(this.env.METRICS_QUEUE, "message_read");
     void ws;
   }
 
@@ -535,6 +632,10 @@ export class RoomDO implements DurableObject {
       event: "message_edited",
       data: { message_id: msg.id, ciphertext: msg.ciphertext, iv: msg.iv },
     });
+    enqueueMetric(this.env.METRICS_QUEUE, "message_edited", {
+      stegCountry: att.stegCountry ?? "",
+      cfCountry: att.cfCountry ?? "",
+    });
     this.send(ws, { ref: evt.ref, ok: {} });
   }
 
@@ -557,6 +658,10 @@ export class RoomDO implements DurableObject {
     await this.persist();
 
     this.broadcastAll({ event: "message_deleted", data: { message_id: msg.id } });
+    enqueueMetric(this.env.METRICS_QUEUE, "message_deleted", {
+      stegCountry: att.stegCountry ?? "",
+      cfCountry: att.cfCountry ?? "",
+    });
     this.send(ws, { ref: evt.ref, ok: {} });
   }
 
@@ -581,10 +686,8 @@ export class RoomDO implements DurableObject {
       }
     }
 
-    const expiredType: EventType =
-      this.room?.tier === "paid" ? "room_expired_paid" : "room_expired_free";
-    void decrementActiveRooms(this.env.DB);
-    writeEvent(this.env.ANALYTICS, expiredType);
+    if (this.room) void decrementActiveRooms(this.env.DB, this.room.tier);
+    if (this.room) this.emitExpiry(this.room);
     await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
     this.room = null;
@@ -615,12 +718,14 @@ export class RoomDO implements DurableObject {
       return;
     }
     if (!this.room) {
+      enqueueMetric(this.env.METRICS_QUEUE, "redeem_failed", { dim: "no_room" });
       this.send(ws, { ref: evt.ref, error: { reason: "not_found" } });
       return;
     }
 
     const secret = evt.data.extension_secret;
     if (typeof secret !== "string" || secret.length === 0) {
+      enqueueMetric(this.env.METRICS_QUEUE, "redeem_failed", { dim: "invalid_token" });
       this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
       return;
     }
@@ -630,6 +735,7 @@ export class RoomDO implements DurableObject {
 
     const token = await findByTokenHash(this.env.DB, tokenHash);
     if (!token) {
+      enqueueMetric(this.env.METRICS_QUEUE, "redeem_failed", { dim: "invalid_token" });
       this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
       return;
     }
@@ -644,6 +750,7 @@ export class RoomDO implements DurableObject {
         // Proceed with the local check as if it were already paid.
         token.status = "paid";
       } else {
+        enqueueMetric(this.env.METRICS_QUEUE, "redeem_failed", { dim: "payment_pending" });
         this.send(ws, { ref: evt.ref, error: { reason: "payment_pending" } });
         return;
       }
@@ -651,6 +758,7 @@ export class RoomDO implements DurableObject {
 
     if (token.status !== "paid") {
       // Already redeemed or expired/deleted.
+      enqueueMetric(this.env.METRICS_QUEUE, "redeem_failed", { dim: "invalid_token" });
       this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
       return;
     }
@@ -659,6 +767,7 @@ export class RoomDO implements DurableObject {
     if (changed === 0) {
       // Race: another connection redeemed it between our findByTokenHash
       // and markRedeemed. Treat as invalid.
+      enqueueMetric(this.env.METRICS_QUEUE, "redeem_failed", { dim: "invalid_token" });
       this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
       return;
     }
@@ -693,17 +802,43 @@ export class RoomDO implements DurableObject {
     // "paid rooms" — e.g. one number extended three times would read as
     // three paid rooms instead of one.
     const wasPaid = this.room.tier === "paid";
+    const createdAtMs = this.room.createdAtMs;
     this.room.tier = "paid";
+    this.room.extensionCount = (this.room.extensionCount ?? 0) + 1;
     this.room.ttlExpiresAtMs = newTtlMs;
     await this.persist();
     await this.state.storage.setAlarm(newTtlMs);
+    // First free→paid conversion moves the live tier counter.
+    if (!wasPaid) void convertActiveToPaid(this.env.DB);
 
-    // Telemetry: blob2 = steg-number country, blob3 = CF-IPCountry.
-    // cfCountry survives hibernation via WsAttachment.cfCountry.
+    // Telemetry: steg-number country + CF-IPCountry (survive hibernation
+    // via the WsAttachment). The new-paid vs. renewal split feeds the
+    // headline counters; emitPaidSale adds the extension-ordinal retention
+    // distribution and the priced-sale / revenue breakdown.
     const att = ws.deserializeAttachment() as WsAttachment | null;
     const iso = evt.data.country_iso ?? att?.stegCountry ?? "";
     const cfCountry = att?.cfCountry ?? "";
-    writeEvent(this.env.ANALYTICS, wasPaid ? "room_extended" : "room_paid", iso, cfCountry);
+    enqueueMetric(this.env.METRICS_QUEUE, wasPaid ? "room_extended" : "room_paid", {
+      stegCountry: iso,
+      cfCountry,
+    });
+    this.emitPaidSale(
+      { currency: token.currency, amount_cents: token.amount_cents },
+      this.room.extensionCount,
+      iso,
+      cfCountry,
+    );
+    enqueueMetric(this.env.METRICS_QUEUE, "activity_hour", { dim: utcHour(Date.now()) });
+    // First conversion from free → record how long the number stayed free.
+    if (!wasPaid) {
+      const freeHours = Math.max(0, (Date.now() - createdAtMs) / 3_600_000);
+      enqueueMetric(this.env.METRICS_QUEUE, "time_to_paid", {
+        stegCountry: iso,
+        cfCountry,
+        value: freeHours,
+        dim: conversionBucket(freeHours),
+      });
+    }
 
     const ttlIso = new Date(newTtlMs).toISOString();
     this.broadcastAll({
@@ -754,8 +889,11 @@ export class RoomDO implements DurableObject {
     }
 
     target.failedAttempts += 1;
+    // Security telemetry — global (no country), fire-and-forget.
+    enqueueMetric(this.env.METRICS_QUEUE, "access_failed");
     if (target.failedAttempts >= MAX_ACCESS_ATTEMPTS) {
       target.lockedUntilMs = now + LOCKOUT_MINUTES * 60_000;
+      enqueueMetric(this.env.METRICS_QUEUE, "access_lockout");
       return { kind: "locked" };
     }
 

@@ -1171,14 +1171,11 @@ export class ChatState {
 
     // phone is the normalised (digits-only) form.
 
-    // Read the extension secret before joining so we can pass it in the
-    // join payload. For a new paid room the server creates it as paid
-    // atomically; for an existing room the server ignores it and we fall
-    // through to the post-join redeemExtension call below.
-    // Read and immediately remove the secret so it never lingers in
-    // sessionStorage past this point. A crash or navigation between
-    // checkout-return and join-success would otherwise leave the
-    // raw secret in sessionStorage, allowing a replay on next open.
+    // If we returned from a Paystack checkout, read the extension secret —
+    // used purely for the post-join redeem below (the server creates every
+    // room free and ignores any secret at join time). We read it now so the
+    // value is in hand before the join; the redeem path removes it from
+    // sessionStorage on success so a raw secret never lingers to be replayed.
     let pendingSecret: string | null = null;
     try {
       pendingSecret = sessionStorage.getItem("stelegano_extension_secret");
@@ -1188,12 +1185,7 @@ export class ChatState {
 
     let joinReply: JoinReply | undefined;
     try {
-      joinReply = await this.client.join(
-        senderHash,
-        accessHash,
-        countryIso,
-        pendingSecret ?? undefined,
-      );
+      joinReply = await this.client.join(senderHash, accessHash, countryIso);
     } catch (err) {
       const e = err as RoomClientError;
       if (e.reason === "locked" || e.reason === "unauthorized") {
@@ -1264,15 +1256,13 @@ export class ChatState {
       fireFunnel("extend_completed");
     }
 
-    // If we returned from a Paystack checkout, attempt to redeem the
-    // extension secret. For new paid rooms the server already handled it
-    // atomically during join (via extension_secret in the join payload),
-    // so this call will return invalid_token and be silently swallowed.
-    // For existing-room extends (the "Extend" button in chat), this is
-    // the primary redemption path — the join ignored the secret.
+    // If we returned from a Paystack checkout, redeem the extension secret.
+    // The server creates every room free and ignores the secret at join, so
+    // this redeem_extension is the single conversion path for BOTH a brand-new
+    // paid number and an existing-room extend (the "Extend" button in chat).
     //
-    // If the webhook is delayed, the server returns payment_pending.
-    // We retry a few times before giving up.
+    // If the webhook is delayed, the server proactively verifies with Paystack
+    // and otherwise returns payment_pending; we retry a few times before giving up.
     if (pendingSecret && this.client) {
       this.attemptRedeem(pendingSecret);
     }

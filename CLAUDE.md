@@ -41,6 +41,7 @@ Routes all requests through a single `fetch()` handler. Responsibilities:
 - Serves the admin dashboard and all JSON API routes (`/api/payment/initiate`, `/api/room/:hash/exists`, `/api/webhooks/paystack`)
 - Upgrades WebSocket connections and forwards them to the correct `RoomDO` instance via `stub.fetch()`, injecting `X-Client-IP` for per-IP rate limiting inside the DO
 - Runs the daily Cron Trigger (`0 3 * * *`): sweeps expired extension tokens from D1
+- Runs the `queue()` consumer for `METRICS_QUEUE`: coalesces each batch and applies it as one transactional `db.batch()` UPSERT into `daily_metrics` (the sole analytics writer)
 
 ### Durable Object: `src/room.ts` — `RoomDO`
 
@@ -55,7 +56,7 @@ One instance per `room_hash`. Single-threaded execution enforces the N=1 invaria
 - `currentMessage` — N=1; at most one `StoredMessage` at any time
 
 **Join flow:**
-1. First join initialises the room (rate-limited by `RATE_LIMITER_ROOM_CREATE`, 3/IP/min). If a valid paid `extension_secret` is supplied, the room starts as `"paid"` atomically.
+1. First join initialises the room (rate-limited by `RATE_LIMITER_ROOM_CREATE`, 3/IP/min). **Every number starts `"free"` (weekly TTL)** — any `extension_secret` in the join payload is ignored at creation. A paid (yearly) number is reached only via the `redeem_extension` event the client sends right after joining; that single path (with its proactive Paystack verification) handles both brand-new paid numbers and extensions, so the server never races the webhook at creation time.
 2. Second-party slot registration is also rate-limited by `RATE_LIMITER_ROOM_CREATE` to prevent slot exhaustion attacks.
 3. Subsequent joins check `accessHash` against stored records; 10 failed attempts → 30-min lockout.
 
@@ -117,21 +118,30 @@ Renders the entire chat UI from `ChatState`. Uses surgical DOM updates (`diffChi
 
 Manages the WebSocket connection lifecycle: connect, send typed events, handle server replies and broadcasts. Implements client-side ref tracking (request/reply correlation).
 
-### Telemetry: `src/lib/analytics.ts`
+### Telemetry: `src/lib/daily_metrics.ts` (D1, queued aggregator)
 
-All event writes go through `writeEvent()` → `env.ANALYTICS.writeDataPoint()` on the Cloudflare Analytics Engine binding. Fire-and-forget; no row locking; no write contention under concurrent load.
+Analytics live entirely in D1 — exact and permanent (no sampling, no 90-day cap). Analytics Engine has been removed. The chat hot path never touches the database: handlers call `enqueueMetric()` / `enqueueMetrics()` (fire-and-forget, fail-open) which `send()` to the `METRICS_QUEUE` Cloudflare Queue. The `queue()` consumer in `_worker.ts` is the **only writer** — it coalesces each batch in memory by composite key (`coalesce()`) and applies it in one transactional `db.batch()` UPSERT (`flushMetricBatch()`). D1 write rate is therefore batches/sec, not events/sec.
 
-**Write schema** (one data point per event):
-- `blobs[0]` = `EventType`: `"room_free"` | `"room_paid"` | `"room_rejoin"` | `"room_expired_free"` | `"room_expired_paid"` | `"message_sent"`
-- `blobs[1]` = ISO-3166 alpha-2 steg-number country (client-derived), or `""` for global-only events
-- `blobs[2]` = CF-IPCountry alpha-2 (server-side IP geolocation), or `""` when unavailable
-- `doubles[0]` = 1
+**Storage** — `daily_metrics` table (migration `0006`), one row per `(day × metric × steg_country × cf_country × dim)`:
+- `day` — `YYYY-MM-DD` UTC, bucketed from each event's emit `ts` (the timestamp is used only to choose the day, then discarded)
+- `metric` — a `MetricKey`:
+  - **lifecycle** (free = weekly TTL, paid = yearly TTL): `room_free`, `room_paid`, `room_extended`, `room_rejoin`, `room_expired_free`, `room_expired_paid`, `room_expired_empty` (never messaged), `room_expired_solo` (never got a 2nd party), `room_lifespan` (dim = bucket)
+  - **engagement**: `message_sent`, `message_edited`, `message_deleted`, `message_read`, `second_party_joined`, `time_to_first_message` (dim = bucket), `activity_hour` (dim = UTC hour `00`–`23`, global — intra-day activity)
+  - **monetization**: `extension` (dim = ordinal `x1`,`x2`,…`x10+` — the Nth paid extension of a number, tracked in DO state never by hash), `paid_sale` (dim = price label e.g. `USD_200`, `sum_value` = revenue in minor units), `time_to_paid` (`sum_value` = hours, dim = bucket — free→paid conversion latency), `payment_initiated` / `payment_paid` (dim = price label — server-side payment funnel), `redeem_failed` (dim = reason)
+  - **acquisition**: `page_view` (dim = normalized route), `referrer` (dim = `search`|`social`|`other`|`direct`; internal navigation not counted)
+  - **security/abuse/reliability**: `access_failed`, `access_lockout`, `join_rate_limited` (dim = `create`|`slot`), `ws_rate_limited`, `admin_rate_limited`, `cron_sweep` (count = cron runs, `sum_value` = tokens swept)
+  - **funnel**: one `funnel_<step>` per `FunnelStep` (dim = campaign slug)
 
-**Admin dashboard reads** (`_worker.ts`): `queryCountryMetrics()`, `queryDailyMetrics()`, `queryDiasporaMetrics()` from `src/lib/analytics.ts`, using `CF_ACCOUNT_ID` and `CF_AE_API_TOKEN`. All return `[]` gracefully when credentials are absent.
+Active-room counts are split by tier in `live_counters` (`free_active` / `paid_active`, migration `0007`): the DO increments by tier at creation, moves free→paid on conversion, and decrements the right tier at expiry — so the dashboard shows live weekly vs. yearly numbers, not just a total.
+- `steg_country` / `cf_country` — ISO-3166 alpha-2 (client-derived steg country / server-side CF-IPCountry), or `""`
+- `dim` — extra dimension: campaign slug for `funnel_*`, a coarse distribution bucket for `room_lifespan` / `time_to_first_message`, else `""`
+- `count` — event count; `sum_value` — summed numeric (seconds/hours) for distributions, so `avg = sum_value / count`
 
-`queryDiasporaMetrics()` groups by both steg-number country and CF-IPCountry simultaneously — rows where they differ are diaspora signals.
+**Admin dashboard reads** (`_worker.ts`): `queryTotals`, `queryDailyTrend`, `queryCountryRange`, `queryCfCountryRange`, `queryDiasporaRange`, `queryHistogram`, `queryFunnelRange`, `queryPricing`, `queryRevenueByCountry` — all parameterized (`.bind()`, never string-interpolated) and date-range driven (`parseDateRange`, default last 30 days, span clamped ≤366). The sidebar dashboard has Overview / Geography / Engagement / **Monetization** (sales, revenue, payment funnel, extension-depth, sales-by-price, revenue-by-country) / Funnel & Campaigns / Security sections. Charts are server-rendered inline SVG (`src/lib/charts.ts`), CSP-safe (no JS). Distribution metrics carry a bucket in `dim`, giving histograms **and** averages from one row family.
 
-*Expiry events are intentionally global (no country dimension)* — room records never carry a country code, to preserve server-blindness.
+*Expiry and security metrics are intentionally global (no country dimension)* — room records never carry a country code, to preserve server-blindness. The queue is at-least-once; a redelivered acked batch can over-count rarely and slightly — negligible for analytics, far better than sampling. Queue outage is fail-open (a dropped metric never blocks a chat event).
+
+**Capacity & swappable backend.** The dimensions are bounded (≤19 metrics × sparse country pairs × ~16 buckets / operator campaigns), so at realistic cardinality the table grows ~0.5–2 GB/yr — years of headroom under D1's 10 GB cap, with daily grain kept forever (no downsampling). Per-country sharding was rejected: it breaks cross-country/diaspora aggregation, D1 location is region-level (not per-country) so it gives no residency benefit for anonymized aggregates, and a skewed key leaves one hot shard still near the cap. If the table ever approaches the limit, the **producer → queue → consumer seam makes the backend swappable**: only two things change — the `queue()` consumer's write target (POST the coalesced batch to a columnar store like Tinybird/ClickHouse instead of `db.batch()`) and the dashboard read helpers (query that store instead of D1). The DO instrumentation, queue, metric catalog, and the anonymized aggregate schema stay identical. Columnar compression (~20–50× on this shape) makes 10 GB hold the equivalent of hundreds of GB. Whatever the backend, keep sending **only aggregates** — never per-event rows with timestamps (that reintroduces a re-identification trail).
 
 ### Monetization: `src/lib/extension_tokens.ts` + `src/lib/paystack.ts`
 
@@ -198,6 +208,9 @@ Fully optional (disabled by default). When enabled, steg numbers have a free TTL
 **D1 (SQLite at the edge).** Migrations in [`migrations/`](migrations/):
 - `0001_create_extension_tokens.sql` — `extension_tokens` table (blind payment token store; no `room_id` column by design)
 - `0004_live_counters.sql` — `live_counters` table (active-room snapshot for the admin dashboard)
+- `0007_live_counters_by_tier.sql` — adds `free_active` / `paid_active` columns to `live_counters` (active rooms split by tier)
+- `0005_create_campaigns.sql` — `campaigns` table (operator-authored campaign metadata for funnel attribution)
+- `0006_create_daily_metrics.sql` — `daily_metrics` table (the analytics store; aggregate counts/sums per day × metric × country × dim, written by the metrics-queue consumer)
 
 Room state (access records, current message, TTL, tier) lives entirely in DO Storage (SQLite per-DO), not in D1. D1 carries only global data that needs to outlive a specific DO instance.
 
@@ -217,8 +230,6 @@ Non-sensitive vars in `wrangler.toml [vars]`; secrets set via `wrangler secret p
 | `FREE_TTL_DAYS` | No | Free tier TTL in days (default: `7`) |
 | `PAID_TTL_DAYS` | No | Paid tier TTL in days (default: `365`) |
 | `MONETIZATION_ENABLED` | No | Set to `"true"` to enable paid tiers |
-| `CF_ACCOUNT_ID` | No | CF account ID for admin AE GraphQL queries (safe to commit) |
-| `CF_AE_API_TOKEN` | No | CF Analytics Engine API token (secret) |
 | `PAYSTACK_SECRET_KEY` | If monetization | Paystack secret key |
 | `PAYSTACK_PUBLIC_KEY` | If monetization | Paystack public key (not read server-side; hosted checkout only) |
 | `PAYSTACK_CALLBACK_URL` | If monetization | Post-payment redirect URL |

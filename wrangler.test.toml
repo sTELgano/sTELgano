@@ -2,14 +2,10 @@
 #
 # Test-only wrangler config used by vitest.workers.config.ts.
 #
-# Identical to wrangler.toml with one deliberate omission:
-# [[analytics_engine_datasets]] is NOT declared here. wrangler 3.x
-# (bundled inside @cloudflare/vitest-pool-workers) injects a
-# mock-analytics-engine middleware when it sees that binding, and its
-# esbuild plugin calls build.resolve() from inside an onStart callback
-# — which deadlocks esbuild's bundler. Omitting the binding skips the
-# middleware injection entirely. writeEvent() is null-safe and becomes a
-# no-op when env.ANALYTICS is absent, so no test behaviour changes.
+# Mirrors wrangler.toml. The metrics queue is declared with a fast
+# batch timeout so the producer → queue() consumer → daily_metrics
+# path is exercised end-to-end within a test's lifetime (the DO
+# emission tests poll D1 after driving the WS protocol).
 
 name = "stelgano"
 main = "./_worker.ts"
@@ -38,7 +34,9 @@ simple = { limit = 20, period = 60 }
 name = "RATE_LIMITER_WS"
 type = "ratelimit"
 namespace_id = "1002"
-simple = { limit = 30, period = 60 }
+# High limit so the many WebSocket upgrades across the test suite (the
+# metric-emission tests open a socket per join) don't trip the limiter.
+simple = { limit = 9999, period = 60 }
 
 [[unsafe.bindings]]
 name = "RATE_LIMITER_ROOM_CREATE"
@@ -52,6 +50,18 @@ database_name = "stelgano"
 database_id = "REPLACE_WITH_ID_FROM_WRANGLER_D1_CREATE"
 migrations_dir = "migrations"
 
+# Metrics queue — producer binding + self-consumer. Short batch timeout so
+# enqueued metrics are flushed into daily_metrics quickly during tests.
+[[queues.producers]]
+binding = "METRICS_QUEUE"
+queue = "stelgano-metrics-test"
+
+[[queues.consumers]]
+queue = "stelgano-metrics-test"
+max_batch_size = 100
+max_batch_timeout = 1
+max_retries = 3
+
 [vars]
 HOST = "localhost"
 PAYMENT_CURRENCY = "USD"
@@ -61,7 +71,6 @@ PAID_TTL_DAYS = "365"
 # Enable monetization so the paid-tier code paths (webhook, payment
 # initiate, extension_secret join) are exercised in the test suite.
 MONETIZATION_ENABLED = "true"
-CF_ACCOUNT_ID = ""
 # Admin credentials — test-only values matching the admin.test.ts expectations.
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "letmein"

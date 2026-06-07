@@ -73,16 +73,28 @@ type = "ratelimit"
 namespace_id = "1003"
 simple = { limit = 3, period = 60 }
 
-# Analytics Engine — replaces the D1 country_metrics / daily_metrics
-# UPSERT writes. Fire-and-forget writeDataPoint() has no row locking so
-# it scales to concurrent bursts that would serialize D1 UPSERTs. Admin
-# reads query this dataset via the CF GraphQL API (CF_ACCOUNT_ID +
-# CF_AE_API_TOKEN secrets).
-[[analytics_engine_datasets]]
-binding = "ANALYTICS"
-dataset = "stelgano_events"
+# Metrics queue — decouples analytics writes from the chat hot path.
+# Producers (RoomDO + funnel routes) fire-and-forget enqueue; the queue()
+# consumer in _worker.ts coalesces each batch by composite key and applies
+# it with one transactional db.batch() UPSERT into daily_metrics. D1 write
+# rate becomes batches/sec, not events/sec.
+#
+# Create once per account before first deploy (CI does NOT create queues):
+#   wrangler queues create stelgano-metrics
+#   wrangler queues create stelgano-metrics-dlq
+[[queues.producers]]
+binding = "METRICS_QUEUE"
+queue = "stelgano-metrics"
 
-# D1 database: extension tokens + live_counters snapshot.
+[[queues.consumers]]
+queue = "stelgano-metrics"
+max_batch_size = 100
+max_batch_timeout = 30
+max_retries = 3
+max_concurrency = 2
+dead_letter_queue = "stelgano-metrics-dlq"
+
+# D1 database: extension tokens + live_counters snapshot + daily_metrics.
 [[d1_databases]]
 binding = "DB"
 database_name = "stelgano"
@@ -119,7 +131,6 @@ head_sampling_rate = 1
 #   wrangler secret put PAYSTACK_PUBLIC_KEY
 #   wrangler secret put PAYSTACK_CALLBACK_URL
 #   wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN
-#   wrangler secret put CF_AE_API_TOKEN
 [vars]
 HOST = "stelgano.com"
 PAYMENT_CURRENCY = "USD"
@@ -127,11 +138,6 @@ PRICE_CENTS = "500"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
 MONETIZATION_ENABLED = "true"
-# Cloudflare account ID — needed by the admin dashboard to query Analytics
-# Engine via the GraphQL API. Not a secret: safe to commit. Get it from
-# the Cloudflare dashboard URL or `wrangler whoami`.
-CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
-CF_AE_DATASET = "stelgano_events"
 
 # ---------------------------------------------------------------------------
 # Staging environment (staging branch → stelgano-staging Worker)
@@ -146,7 +152,10 @@ CF_AE_DATASET = "stelgano_events"
 #   wrangler secret put PAYSTACK_PUBLIC_KEY --env staging
 #   wrangler secret put PAYSTACK_CALLBACK_URL --env staging
 #   wrangler secret put PAYSTACK_RECEIPT_EMAIL_DOMAIN --env staging
-#   wrangler secret put CF_AE_API_TOKEN --env staging
+#
+# Also create the staging metrics queues once:
+#   wrangler queues create stelgano-metrics-staging
+#   wrangler queues create stelgano-metrics-staging-dlq
 #
 # After secrets are set, push to staging — CI deploys automatically.
 # ---------------------------------------------------------------------------
@@ -180,10 +189,18 @@ type = "ratelimit"
 namespace_id = "2003"
 simple = { limit = 3, period = 60 }
 
-# Analytics Engine not inherited — repeat for staging with a separate dataset.
-[[env.staging.analytics_engine_datasets]]
-binding = "ANALYTICS"
-dataset = "stelgano_events_staging"
+# Queues not inherited — repeat for staging with separate queues.
+[[env.staging.queues.producers]]
+binding = "METRICS_QUEUE"
+queue = "stelgano-metrics-staging"
+
+[[env.staging.queues.consumers]]
+queue = "stelgano-metrics-staging"
+max_batch_size = 100
+max_batch_timeout = 30
+max_retries = 3
+max_concurrency = 2
+dead_letter_queue = "stelgano-metrics-staging-dlq"
 
 [[env.staging.d1_databases]]
 binding = "DB"
@@ -199,5 +216,3 @@ FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
 # Enable monetization in staging so the full paid-tier flow can be exercised.
 MONETIZATION_ENABLED = "true"
-CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
-CF_AE_DATASET = "stelgano_events_staging"

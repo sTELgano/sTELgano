@@ -38,6 +38,14 @@ export default defineWorkersConfig(async () => {
       poolOptions: {
         workers: {
           singleWorker: true,
+          // Disable per-test storage isolation. The metrics queue consumer
+          // writes to D1 asynchronously, and its delivery can land just
+          // after the producing test ends — which trips vitest-pool-workers'
+          // isolated-storage stack-frame guard ("failed to push frame"). A
+          // single shared storage realm sidesteps that; the metric-reading
+          // suites reset their tables in beforeEach to stay deterministic,
+          // and other suites key on unique ids so accumulation is harmless.
+          isolatedStorage: false,
           // Pages Advanced Mode puts the entrypoint at `_worker.ts`.
           // The pool needs an explicit path — it does not infer it
           // from `pages_build_output_dir` in wrangler.toml.

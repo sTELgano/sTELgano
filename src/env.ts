@@ -10,11 +10,12 @@
 // Regenerate worker-configuration.d.ts whenever wrangler.toml changes:
 //   npx wrangler types
 
+import type { MetricMessage } from "./lib/daily_metrics";
+
 export interface Env extends Cloudflare.Env {
-  // Optional deployment tuning — set via `wrangler secret put`, absent from
-  // the auto-generated Cloudflare.Env since they are not committed vars.
-  CF_AE_API_TOKEN?: string;
-  CF_AE_DATASET: "stelgano_events" | "stelgano_events_staging";
+  // Metrics queue producer. wrangler types generates this as an untyped
+  // Queue; we override with the message type so producers are type-checked.
+  METRICS_QUEUE: Queue<MetricMessage>;
   // Secrets set via `wrangler secret put` — not in wrangler.toml, so absent
   // from the CI-generated Cloudflare.Env. Declaring here keeps typecheck
   // passing regardless of whether wrangler types had CF auth.
