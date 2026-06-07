@@ -394,9 +394,13 @@ export class RoomDO implements DurableObject {
       return;
     }
 
-    // Auto-initialise on first join. Tier defaults to "free"; if the
-    // client supplies a valid paid extension_secret we claim it atomically
-    // and start the room as "paid" — no separate redeem_extension needed.
+    // Auto-initialise on first join. Every number starts free (weekly TTL);
+    // a paid (yearly) number is reached only via redeem_extension — the
+    // client always creates the room free, then redeems to upgrade. We do
+    // NOT claim a paid token at creation: that raced the Paystack webhook
+    // and split the "new paid number" flow across two code paths. Any
+    // extension_secret in the join payload is ignored here; the client's
+    // post-join redeem_extension converts free → paid.
     if (!this.room?.isInitialized) {
       // Rate-limit room creation per client IP. Fail-open: if the rate
       // limiter is unavailable, we allow the request through. Checked
@@ -411,59 +415,27 @@ export class RoomDO implements DurableObject {
         return;
       }
 
-      // Attempt to claim a paid extension token atomically with room creation.
-      // Only runs when monetization is enabled and the client sent a secret.
-      let tier: "free" | "paid" = "free";
-      let ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
-      // Captured for the paid_sale metric when a token is claimed at init.
-      let sale: { currency: string; amount_cents: number } | null = null;
-      const rawSecret =
-        typeof evt.data.extension_secret === "string" ? evt.data.extension_secret : null;
-      if (rawSecret && this.env.MONETIZATION_ENABLED === "true") {
-        const tokenHash = await sha256hex(rawSecret);
-        const token = await findByTokenHash(this.env.DB, tokenHash);
-        if (token?.status === "paid") {
-          const changed = await markRedeemed(this.env.DB, tokenHash);
-          if (changed > 0) {
-            tier = "paid";
-            ttlMs = Date.now() + PAID_TTL_DAYS * 86_400_000;
-            sale = { currency: token.currency, amount_cents: token.amount_cents };
-          }
-        }
-      }
-
+      const ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
       this.room = {
         isInitialized: true,
         roomId: crypto.randomUUID(),
-        tier,
+        tier: "free",
         ttlExpiresAtMs: ttlMs,
         createdAtMs: Date.now(),
         everMessaged: false,
-        extensionCount: tier === "paid" ? 1 : 0,
+        extensionCount: 0,
         accessRecords: [{ accessHash, failedAttempts: 0, lockedUntilMs: null }],
         currentMessage: null,
       };
       await this.persist();
       await this.state.storage.setAlarm(ttlMs);
-      void incrementActiveRooms(this.env.DB, tier);
+      void incrementActiveRooms(this.env.DB, "free");
       // Telemetry: steg-number country (client-derived) + CF-IPCountry.
-      const iso = evt.data.country_iso ?? "";
-      enqueueMetric(this.env.METRICS_QUEUE, tier === "paid" ? "room_paid" : "room_free", {
-        stegCountry: iso,
+      enqueueMetric(this.env.METRICS_QUEUE, "room_free", {
+        stegCountry: evt.data.country_iso ?? "",
         cfCountry,
       });
       enqueueMetric(this.env.METRICS_QUEUE, "activity_hour", { dim: utcHour(Date.now()) });
-      // A number bought outright at creation is its first paid extension (x1),
-      // converted from free with ~0 latency.
-      if (sale) {
-        this.emitPaidSale(sale, 1, iso, cfCountry);
-        enqueueMetric(this.env.METRICS_QUEUE, "time_to_paid", {
-          stegCountry: iso,
-          cfCountry,
-          value: 0,
-          dim: conversionBucket(0),
-        });
-      }
 
       ws.serializeAttachment({
         joined: true,

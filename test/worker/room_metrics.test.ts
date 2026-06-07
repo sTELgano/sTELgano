@@ -198,31 +198,29 @@ describe("RoomDO analytics emission", () => {
 });
 
 describe("RoomDO monetization analytics", () => {
-  it("emits room_paid + extension(x1) + paid_sale when a number is bought at creation", async () => {
-    const secret = await paidSecret("buy-at-create", 200, "USD");
-    const room = hex64("metrics-paid-create");
+  it("emits room_free at create, then room_paid + extension(x1) + paid_sale + time_to_paid on redeem", async () => {
+    const secret = await paidSecret("extend-free", 200, "USD");
+    const room = hex64("metrics-extend");
     const ws = await openSocket(room);
+    // Join creates a FREE number (the secret is ignored at creation).
+    await join(ws, "s", "a", "KE");
+    // redeem_extension upgrades free → paid: this is the "new paid number" flow.
     send(ws, {
-      event: "join",
-      ref: "j",
-      data: {
-        sender_hash: hex64("s"),
-        access_hash: hex64("a"),
-        country_iso: "KE",
-        extension_secret: secret,
-      },
+      event: "redeem_extension",
+      ref: "r",
+      data: { extension_secret: secret, country_iso: "KE" },
     });
-    await waitRef(ws, "j");
+    await waitRef(ws, "r");
 
     const rows = await pollMetrics((r) => has(r, "paid_sale") && has(r, "time_to_paid"));
-    expect(has(rows, "room_paid")).toBe(true);
+    expect(has(rows, "room_free")).toBe(true); // created free first
+    expect(has(rows, "room_paid")).toBe(true); // converted on redeem
     expect(rows.find((r) => r.metric === "extension")?.dim).toBe("x1");
     const sale = rows.find((r) => r.metric === "paid_sale");
     expect(sale?.dim).toBe("USD_200");
     expect(sale?.sumValue).toBe(200);
     expect(sale?.stegCountry).toBe("KE");
-    // Buy-at-create converts from free with ~0 latency, and counts as activity.
-    expect(rows.find((r) => r.metric === "time_to_paid")?.dim).toBe("<1h");
+    expect(rows.find((r) => r.metric === "time_to_paid")).toBeTruthy();
     expect(has(rows, "activity_hour")).toBe(true);
     ws.close();
   }, 20_000);

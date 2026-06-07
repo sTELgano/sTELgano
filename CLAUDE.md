@@ -56,7 +56,7 @@ One instance per `room_hash`. Single-threaded execution enforces the N=1 invaria
 - `currentMessage` — N=1; at most one `StoredMessage` at any time
 
 **Join flow:**
-1. First join initialises the room (rate-limited by `RATE_LIMITER_ROOM_CREATE`, 3/IP/min). If a valid paid `extension_secret` is supplied, the room starts as `"paid"` atomically.
+1. First join initialises the room (rate-limited by `RATE_LIMITER_ROOM_CREATE`, 3/IP/min). **Every number starts `"free"` (weekly TTL)** — any `extension_secret` in the join payload is ignored at creation. A paid (yearly) number is reached only via the `redeem_extension` event the client sends right after joining; that single path (with its proactive Paystack verification) handles both brand-new paid numbers and extensions, so the server never races the webhook at creation time.
 2. Second-party slot registration is also rate-limited by `RATE_LIMITER_ROOM_CREATE` to prevent slot exhaustion attacks.
 3. Subsequent joins check `accessHash` against stored records; 10 failed attempts → 30-min lockout.
 

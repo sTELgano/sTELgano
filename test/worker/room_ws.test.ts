@@ -194,7 +194,7 @@ describe("RoomDO — join", () => {
     ws.close();
   });
 
-  it("creates room as paid when a valid paid extension_secret is supplied", async () => {
+  it("creates the room free, then redeem_extension upgrades it to paid", async () => {
     // Arrange: insert a paid extension token in D1.
     const secret = "a".repeat(64); // raw secret the client would stash in sessionStorage
     const tokenHash = await sha256hex(secret);
@@ -207,7 +207,9 @@ describe("RoomDO — join", () => {
     });
     await markPaid(env.DB, tokenHash);
 
-    // Act: first join with extension_secret — monetization is enabled via .dev.vars.
+    // Act 1: first join. Any extension_secret in the payload is IGNORED at
+    // creation — every number starts free. The room comes back with a ~7-day
+    // (free) TTL, not 365.
     const room = hex64("room-join-paid");
     const ws = await openSocket(room);
     send(ws, {
@@ -219,20 +221,27 @@ describe("RoomDO — join", () => {
         extension_secret: secret,
       },
     });
-    const reply = await waitRef(ws, "1");
-    expect("ok" in reply).toBe(true);
+    const joinReply = await waitRef(ws, "1");
+    expect("ok" in joinReply).toBe(true);
+    const freeTtl = new Date(
+      (joinReply as { ok: { ttl_expires_at: string } }).ok.ttl_expires_at,
+    ).getTime();
+    // Clearly free (≈7 days), not paid (365): well under a 30-day horizon.
+    expect(freeTtl).toBeLessThan(Date.now() + 30 * 86_400_000);
+    // The token is untouched by the join.
+    expect((await findByTokenHash(env.DB, tokenHash))?.status).toBe("paid");
 
-    // The TTL in the reply should be approximately PAID_TTL_DAYS (365 days)
-    // from now, not FREE_TTL_DAYS (7 days). Allow ±60s for test execution.
-    const ok = (reply as { ok: { ttl_expires_at: string } }).ok;
-    const ttlMs = new Date(ok.ttl_expires_at).getTime();
-    const expectedPaidMs = Date.now() + 365 * 86_400_000;
-    expect(ttlMs).toBeGreaterThan(expectedPaidMs - 60_000);
-    expect(ttlMs).toBeLessThan(expectedPaidMs + 60_000);
-
-    // The token must now be redeemed in D1.
-    const token = await findByTokenHash(env.DB, tokenHash);
-    expect(token?.status).toBe("redeemed");
+    // Act 2: redeem_extension upgrades the existing free room to paid.
+    send(ws, { event: "redeem_extension", ref: "2", data: { extension_secret: secret } });
+    const redeemReply = await waitRef(ws, "2");
+    expect("ok" in redeemReply).toBe(true);
+    const paidTtl = new Date(
+      (redeemReply as { ok: { ttl_expires_at: string } }).ok.ttl_expires_at,
+    ).getTime();
+    // Now clearly paid (≈1 year): well past a 300-day horizon.
+    expect(paidTtl).toBeGreaterThan(Date.now() + 300 * 86_400_000);
+    // The token is consumed (deleted) on redemption.
+    expect(await findByTokenHash(env.DB, tokenHash)).toBeNull();
 
     ws.close();
   });
