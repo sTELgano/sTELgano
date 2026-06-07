@@ -24,7 +24,6 @@
 
 import { INLINE_SCRIPT_HASHES } from "./src/csp_hashes";
 import type { Env } from "./src/env";
-import { backfillFromAE } from "./src/lib/ae_migrate";
 import {
   archiveCampaign,
   type Campaign,
@@ -244,20 +243,6 @@ async function dispatch(
   const archiveMatch = url.pathname.match(/^\/api\/admin\/campaigns\/([^/]+)\/archive$/);
   if (archiveMatch && request.method === "POST") {
     return handleCampaignArchive(archiveMatch[1] ?? "", request, env);
-  }
-
-  // TEMPORARY — POST /api/admin/migrate-ae: one-time backfill of historical
-  // analytics from Analytics Engine into daily_metrics. Remove with
-  // src/lib/ae_migrate.ts once the backfill has run.
-  if (url.pathname === "/api/admin/migrate-ae" && request.method === "POST") {
-    if (!checkBasicAuth(request, env)) return basicAuthChallenge();
-    const res = await backfillFromAE(env, url.searchParams.get("force") === "1");
-    const q = res.ok
-      ? res.alreadyDone
-        ? "migrate=done"
-        : `migrate=ok&n=${res.events}&r=${res.rows}`
-      : `migrate=err&msg=${encodeURIComponent(res.error ?? "failed")}`;
-    return redirect(`/admin?${q}`, 303);
   }
 
   // GET /api/room/:roomHash/exists — probe whether a room has
@@ -575,9 +560,6 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
     revenueByCountry,
     campaigns,
     activeRooms,
-    migrate: url.searchParams.get("migrate"),
-    migrateN: url.searchParams.get("n"),
-    migrateMsg: url.searchParams.get("msg"),
   });
 
   return new Response(html, {
@@ -670,10 +652,6 @@ function renderAdminHtml(d: {
   revenueByCountry: RevenueCountryRow[];
   campaigns: Campaign[];
   activeRooms: ActiveRooms;
-  // TEMPORARY — AE backfill button/banner state (remove with ae_migrate.ts).
-  migrate?: string | null;
-  migrateN?: string | null;
-  migrateMsg?: string | null;
 }): string {
   // `shrink-0` is essential: without it an inline SVG inside a flex row
   // shrinks toward zero width when space is tight (small screens), so the
@@ -865,26 +843,6 @@ function renderAdminHtml(d: {
         </div>
         <p class="text-xs text-slate-500 font-medium leading-relaxed">${blurb}</p>`;
 
-  // TEMPORARY — AE backfill banner + button (remove with ae_migrate.ts).
-  let migrateBanner = "";
-  if (d.migrate === "ok") {
-    migrateBanner = `<div class="flex items-center gap-3 px-5 py-3 rounded-xl border border-primary/30 bg-primary/10 text-primary text-sm">${iconSvg("check_circle", "size-5")}<span>Restored <strong>${escapeAttr(d.migrateN ?? "0")}</strong> historical events from the previous analytics store.</span></div>`;
-  } else if (d.migrate === "done") {
-    migrateBanner = `<div class="flex items-center gap-3 px-5 py-3 rounded-xl border border-white/10 bg-white/5 text-slate-300 text-sm">${iconSvg("check_circle", "size-5 text-primary")}<span>Already restored — historical data is in place.</span></div>`;
-  } else if (d.migrate === "err") {
-    migrateBanner = `<div class="flex items-center gap-3 px-5 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">${iconSvg("alert_triangle", "size-5 text-amber-400")}<span>Restore failed: <span class="font-mono text-xs break-all">${escapeAttr(d.migrateMsg ?? "unknown error")}</span></span></div>`;
-  }
-  const migrateCard = `
-        <div class="glass-card p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-dashed border-primary/20">
-          <div class="space-y-1 min-w-0">
-            <div class="text-[10px] font-black uppercase tracking-[0.3em] text-primary/70">One-time maintenance</div>
-            <p class="text-xs text-slate-400 leading-relaxed">Backfill the dashboard with the last ~90 days of history from the previous (pre-cutover) analytics store. Safe to run once; those counts are sampled estimates.</p>
-          </div>
-          <form method="post" action="/api/admin/migrate-ae" class="shrink-0">
-            <button type="submit" class="btn-primary py-2.5 px-6 text-sm flex items-center gap-2">${iconSvg("refresh_cw", "size-4")} Restore historical data</button>
-          </form>
-        </div>`;
-
   return `<!DOCTYPE html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <html lang="en" data-theme="dark" style="scroll-behavior:smooth">
@@ -944,9 +902,6 @@ function renderAdminHtml(d: {
             <div class="flex items-center gap-1.5">${quickRanges}</div>
           </form>
         </div>
-
-        ${migrateBanner}
-        ${migrateCard}
 
         <!-- Overview -->
         <section id="overview" class="scroll-mt-6 space-y-8">

@@ -138,10 +138,6 @@ PRICE_CENTS = "500"
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
 MONETIZATION_ENABLED = "true"
-# TEMPORARY — for the one-time AE → daily_metrics backfill (admin button).
-# Remove together with src/lib/ae_migrate.ts after the backfill is run.
-CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
-CF_AE_DATASET = "stelgano_events"
 
 # ---------------------------------------------------------------------------
 # Staging environment (staging branch → stelgano-staging Worker)
@@ -220,6 +216,3 @@ FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
 # Enable monetization in staging so the full paid-tier flow can be exercised.
 MONETIZATION_ENABLED = "true"
-# TEMPORARY — for the one-time AE → daily_metrics backfill (admin button).
-CF_ACCOUNT_ID = "6fd5ad0d703dfa14f0e9a63ac847dab9"
-CF_AE_DATASET = "stelgano_events_staging"
