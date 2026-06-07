@@ -33,30 +33,40 @@ import {
   normaliseDestination,
   SLUG_RE,
 } from "./src/lib/campaigns";
-import { type Bucket, renderHistogram, renderTrendChart } from "./src/lib/charts";
+import { type Bucket, renderFunnelBars, renderHistogram, renderTrendChart } from "./src/lib/charts";
 import {
   type BucketRow,
   type CampaignFunnel,
+  CONVERSION_BUCKETS,
   type CountryRow,
   type DailyTrendRow,
   type DateRange,
   type DiasporaRow,
+  EXTENSION_BUCKETS,
   enqueueMetric,
   FUNNEL_STEPS,
   flushMetricBatch,
+  HOURS_OF_DAY,
   isFunnelStep,
   LIFESPAN_BUCKETS,
   type MetricKey,
   type MetricMessage,
   type MetricTotal,
+  type PriceRow,
+  pageRoute,
   parseDateRange,
+  priceLabel,
   queryCfCountryRange,
   queryCountryRange,
   queryDailyTrend,
   queryDiasporaRange,
   queryFunnelRange,
   queryHistogram,
+  queryPricing,
+  queryRevenueByCountry,
   queryTotals,
+  type RevenueCountryRow,
+  referrerCategory,
   sumFunnels,
   TTFM_BUCKETS,
   utcDay,
@@ -68,7 +78,7 @@ import {
   findByTokenHash,
   markPaid,
 } from "./src/lib/extension_tokens";
-import { getActiveRooms } from "./src/lib/live_counters";
+import { type ActiveRooms, getActiveRooms } from "./src/lib/live_counters";
 import {
   hmacSha512Hex,
   initialize as paystackInitialize,
@@ -89,24 +99,38 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     // WebSocket upgrade responses MUST NOT be mangled with extra
     // headers — Cloudflare's proxy rejects 101 responses that
     // carry non-upgrade headers. So we short-circuit the
     // security-header wrapper for the room WS path before routing.
     if (request.headers.get("upgrade") === "websocket") {
-      return dispatch(request, env, url);
+      return dispatch(request, env, url, ctx);
     }
-    const response = await dispatch(request, env, url);
+    // Acquisition telemetry for content-page navigations (aggregate only:
+    // a fixed route label + a coarse referrer category — never the URL,
+    // query string, IP, or UA). waitUntil keeps the send alive past the
+    // response; non-content paths skip.
+    if (request.method === "GET") {
+      const route = pageRoute(url.pathname);
+      if (route) {
+        enqueueMetric(env.METRICS_QUEUE, "page_view", { dim: route }, ctx);
+        const cat = referrerCategory(request.headers.get("referer"), env.HOST);
+        if (cat !== "internal") enqueueMetric(env.METRICS_QUEUE, "referrer", { dim: cat }, ctx);
+      }
+    }
+    const response = await dispatch(request, env, url, ctx);
     return applySecurityHeaders(response, url.pathname);
   },
 
   // Cron handler — fires daily at 03:00 UTC via [triggers] in wrangler.toml.
   // Sweeps extension_tokens past their expires_at.
-  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const cutoff = new Date().toISOString();
-    await deleteExpired(env.DB, cutoff);
+    const swept = await deleteExpired(env.DB, cutoff);
+    // Reliability: one data point per cron run; sum_value = tokens swept.
+    enqueueMetric(env.METRICS_QUEUE, "cron_sweep", { value: swept }, ctx);
   },
 
   // Metrics queue consumer — the ONLY writer to daily_metrics. Coalesces the
@@ -122,7 +146,12 @@ export default {
   },
 } satisfies ExportedHandler<Env, MetricMessage>;
 
-async function dispatch(request: Request, env: Env, url: URL): Promise<Response> {
+async function dispatch(
+  request: Request,
+  env: Env,
+  url: URL,
+  ctx: ExecutionContext,
+): Promise<Response> {
   // GET /healthz — used by deploy smoke tests, not by users.
   if (url.pathname === "/healthz") {
     return new Response("ok", { headers: { "content-type": "text/plain" } });
@@ -168,6 +197,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
     const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
     const wsRl = await env.RATE_LIMITER_WS.limit({ key: ip }).catch(() => ({ success: true }));
     if (!wsRl.success) {
+      enqueueMetric(env.METRICS_QUEUE, "ws_rate_limited", {}, ctx);
       return new Response("Too Many Requests", {
         status: 429,
         headers: { "retry-after": "60" },
@@ -192,7 +222,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   // archived slugs redirect to "/" with no event (no existence leak).
   const trackMatch = url.pathname.match(/^\/c\/([^/]+)$/);
   if (trackMatch && request.method === "GET") {
-    return handleCampaignLink(trackMatch[1] ?? "", request, env);
+    return handleCampaignLink(trackMatch[1] ?? "", request, env, ctx);
   }
 
   // POST /api/funnel — lightweight, unauthenticated funnel beacon fired
@@ -200,7 +230,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   // is { step, campaign }. The server adds CF-IPCountry and writes one
   // Analytics Engine data point. No stored state, no user data.
   if (url.pathname === "/api/funnel" && request.method === "POST") {
-    return handleFunnelBeacon(request, env);
+    return handleFunnelBeacon(request, env, ctx);
   }
 
   // POST /api/admin/campaigns — create a campaign (Basic-Auth gated).
@@ -241,7 +271,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   // (status=pending) and returns a Paystack checkout URL the
   // client redirects to. Returns 503 when monetization is off.
   if (url.pathname === "/api/payment/initiate" && request.method === "POST") {
-    return handlePaymentInitiate(request, env);
+    return handlePaymentInitiate(request, env, ctx);
   }
 
   // POST /api/webhooks/paystack — Paystack hits this after a
@@ -250,7 +280,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
   // markPaid in D1. Returns 200 for all non-signature failures
   // so the response doesn't leak which references exist.
   if (url.pathname === "/api/webhooks/paystack" && request.method === "POST") {
-    return handlePaystackWebhook(request, env);
+    return handlePaystackWebhook(request, env, ctx);
   }
 
   // GET /api/config — exposes monetization/TTL settings to the
@@ -275,6 +305,7 @@ async function dispatch(request: Request, env: Env, url: URL): Promise<Response>
       success: true,
     }));
     if (!adminRl.success) {
+      enqueueMetric(env.METRICS_QUEUE, "admin_rate_limited", {}, ctx);
       return new Response("Too Many Requests", {
         status: 429,
         headers: { "retry-after": "60", "content-type": "text/plain" },
@@ -452,8 +483,15 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   let funnels: CampaignFunnel[] = [];
   let lifespanHist: BucketRow[] = [];
   let ttfmHist: BucketRow[] = [];
+  let extensionHist: BucketRow[] = [];
+  let conversionHist: BucketRow[] = [];
+  let activityHourHist: BucketRow[] = [];
+  let pageViews: BucketRow[] = [];
+  let referrers: BucketRow[] = [];
+  let pricing: PriceRow[] = [];
+  let revenueByCountry: RevenueCountryRow[] = [];
   let campaigns: Campaign[] = [];
-  let activeRooms = 0;
+  let activeRooms: ActiveRooms = { total: 0, free: 0, paid: 0 };
   try {
     [
       totals,
@@ -464,6 +502,13 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
       funnels,
       lifespanHist,
       ttfmHist,
+      extensionHist,
+      conversionHist,
+      activityHourHist,
+      pageViews,
+      referrers,
+      pricing,
+      revenueByCountry,
       campaigns,
       activeRooms,
     ] = await Promise.all([
@@ -480,6 +525,13 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
       queryFunnelRange(env.DB, from, to),
       queryHistogram(env.DB, from, to, "room_lifespan"),
       queryHistogram(env.DB, from, to, "time_to_first_message"),
+      queryHistogram(env.DB, from, to, "extension"),
+      queryHistogram(env.DB, from, to, "time_to_paid"),
+      queryHistogram(env.DB, from, to, "activity_hour"),
+      queryHistogram(env.DB, from, to, "page_view"),
+      queryHistogram(env.DB, from, to, "referrer"),
+      queryPricing(env.DB, from, to),
+      queryRevenueByCountry(env.DB, from, to),
       listCampaigns(env.DB).catch(() => [] as Campaign[]),
       getActiveRooms(env.DB),
     ]);
@@ -499,6 +551,13 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
     funnels,
     lifespanHist,
     ttfmHist,
+    extensionHist,
+    conversionHist,
+    activityHourHist,
+    pageViews,
+    referrers,
+    pricing,
+    revenueByCountry,
     campaigns,
     activeRooms,
   });
@@ -560,6 +619,18 @@ function pct(n: number, total: number): number {
   return total > 0 ? Math.round((n / total) * 100) : 0;
 }
 
+/** Renders a price-point label ("USD_200") as "USD 2.00", and a revenue
+ *  amount in minor units as a major-unit decimal. */
+function formatPriceLabel(label: string): string {
+  const [cur, cents] = label.split("_");
+  const n = Number(cents);
+  if (!cur || !Number.isFinite(n)) return label;
+  return `${cur} ${(n / 100).toFixed(2)}`;
+}
+function formatMinor(minor: number): string {
+  return (minor / 100).toFixed(2);
+}
+
 function renderAdminHtml(d: {
   updated: string;
   origin: string;
@@ -572,8 +643,15 @@ function renderAdminHtml(d: {
   funnels: CampaignFunnel[];
   lifespanHist: BucketRow[];
   ttfmHist: BucketRow[];
+  extensionHist: BucketRow[];
+  conversionHist: BucketRow[];
+  activityHourHist: BucketRow[];
+  pageViews: BucketRow[];
+  referrers: BucketRow[];
+  pricing: PriceRow[];
+  revenueByCountry: RevenueCountryRow[];
   campaigns: Campaign[];
-  activeRooms: number;
+  activeRooms: ActiveRooms;
 }): string {
   const iconSvg = (name: string, cls = "size-4") =>
     `<svg class="${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
@@ -615,6 +693,79 @@ function renderAdminHtml(d: {
   );
   const ttfmHistHtml = renderHistogram(orderedBuckets(d.ttfmHist, TTFM_BUCKETS));
   const lifespanHistHtml = renderHistogram(orderedBuckets(d.lifespanHist, LIFESPAN_BUCKETS));
+  const expiredSolo = metricCount(d.totals, "room_expired_solo");
+
+  // --- Activity: hour-of-day histogram + weekday distribution (derived) ---
+  const activityHourHtml = renderHistogram(orderedBuckets(d.activityHourHist, HOURS_OF_DAY));
+  const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekdayCounts = new Map<string, number>();
+  for (const r of d.trend) {
+    const wd = WEEKDAYS[new Date(`${r.day}T00:00:00Z`).getUTCDay()] ?? "";
+    weekdayCounts.set(wd, (weekdayCounts.get(wd) ?? 0) + r.count);
+  }
+  const weekdayHtml = renderHistogram(
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((l) => ({
+      label: l,
+      count: weekdayCounts.get(l) ?? 0,
+    })),
+  );
+
+  // --- Acquisition ---
+  const pageViewsHtml = renderHistogram(
+    [...d.pageViews]
+      .sort((a, b) => b.count - a.count)
+      .map((r) => ({ label: r.bucket, count: r.count })),
+  );
+  const referrerHtml = renderHistogram(
+    [...d.referrers]
+      .sort((a, b) => b.count - a.count)
+      .map((r) => ({ label: r.bucket, count: r.count })),
+  );
+  const edited = metricCount(d.totals, "message_edited");
+  const deleted = metricCount(d.totals, "message_deleted");
+  const reads = metricCount(d.totals, "message_read");
+
+  // --- Monetization ---
+  const sales = metricCount(d.totals, "paid_sale");
+  const revenueMinor = metricSum(d.totals, "paid_sale");
+  const paymentsInitiated = metricCount(d.totals, "payment_initiated");
+  const paymentsPaid = metricCount(d.totals, "payment_paid");
+  const redeemFailed = metricCount(d.totals, "redeem_failed");
+  const extensionHistHtml = renderHistogram(orderedBuckets(d.extensionHist, EXTENSION_BUCKETS));
+  const conversionAvg = avgDurationFromHours(
+    metricSum(d.totals, "time_to_paid"),
+    metricCount(d.totals, "time_to_paid"),
+  );
+  const conversionHistHtml = renderHistogram(orderedBuckets(d.conversionHist, CONVERSION_BUCKETS));
+  const paymentFunnelHtml = renderFunnelBars([
+    { label: "Checkout initiated", count: paymentsInitiated },
+    { label: "Payment confirmed", count: paymentsPaid },
+    { label: "Redeemed (sale)", count: sales },
+  ]);
+  const pricingRows = d.pricing.length
+    ? d.pricing
+        .map(
+          (r) => `
+          <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(formatPriceLabel(r.price))}</td>
+            <td class="py-3 pr-8 text-right font-mono text-primary">${r.units}</td>
+            <td class="py-3 text-right font-mono text-slate-300">${formatMinor(r.revenueMinor)}</td>
+          </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="3" class="py-4 text-sm text-slate-500 italic">No sales yet for this range.</td></tr>`;
+  const revenueCountryRows = d.revenueByCountry.length
+    ? d.revenueByCountry
+        .map(
+          (r) => `
+          <tr class="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+            <td class="py-3 pr-8 font-mono text-white">${escapeAttr(r.country_code)}</td>
+            <td class="py-3 pr-8 text-right font-mono text-primary">${r.units}</td>
+            <td class="py-3 text-right font-mono text-slate-300">${formatMinor(r.revenueMinor)}</td>
+          </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="3" class="py-4 text-sm text-slate-500 italic">No sales yet for this range.</td></tr>`;
 
   // --- Geography tables ---
   const countryTable = (rows: CountryRow[], emptyMsg: string) =>
@@ -658,6 +809,7 @@ function renderAdminHtml(d: {
     ["overview", "Overview", "bar_chart_3"],
     ["geography", "Geography", "globe"],
     ["engagement", "Engagement", "users"],
+    ["monetization", "Monetization", "sparkles"],
     ["funnel", "Funnel & Campaigns", "list"],
     ["security", "Security", "shield"],
   ];
@@ -751,7 +903,7 @@ function renderAdminHtml(d: {
         <!-- Overview -->
         <section id="overview" class="scroll-mt-6 space-y-8">
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            ${adminMetricCard("Active Channels", d.activeRooms, "Live count, pushed by DO", "radio", true)}
+            ${adminMetricCard("Active Channels", d.activeRooms.total, `${d.activeRooms.free} free · ${d.activeRooms.paid} paid`, "radio", true)}
             ${adminMetricCard("Channels Created", created, `${free} free · ${paid} paid`, "check_circle")}
             ${adminMetricCard("Messages Sent", messages, "Encrypted, over range", "message_circle")}
             ${adminMetricCard("Activation", `${pct(secondParty, created)}%`, "Two-party channels", "users")}
@@ -765,6 +917,16 @@ function renderAdminHtml(d: {
           <div class="glass-card p-6 sm:p-10 space-y-6">
             ${sectionHeader("bar_chart_3", "Daily Trend", "New free / new paid channels and messages per UTC day across the selected range. Exact counts — no sampling.")}
             ${trendChart}
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("radio", "Activity by Hour (UTC)", "When channels are created and messages flow, by UTC hour. Global — no per-event timestamps stored, only an hour bucket.")}
+              ${activityHourHtml}
+            </div>
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("calendar", "Activity by Weekday (UTC)", "New channels + messages summed per weekday across the range.")}
+              ${weekdayHtml}
+            </div>
           </div>
         </section>
 
@@ -805,20 +967,83 @@ function renderAdminHtml(d: {
               ${lifespanHistHtml}
             </div>
           </div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            ${adminMetricCard("Messages Read", reads, "Read receipts fired", "check_circle")}
+            ${adminMetricCard("Messages Edited", edited, "Edited before read", "message_circle")}
+            ${adminMetricCard("Messages Deleted", deleted, "Deleted before read", "message_circle")}
+            ${adminMetricCard("Solo Expiries", `${pct(expiredSolo, expiredFree + expiredPaid)}%`, "Expired, never a 2nd party", "users")}
+          </div>
+        </section>
+
+        <!-- Monetization -->
+        <section id="monetization" class="scroll-mt-6 space-y-8">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            ${adminMetricCard("Sales", sales, "Paid extensions realized", "sparkles")}
+            ${adminMetricCard("Revenue", formatMinor(revenueMinor), "Sum over range (minor → major)", "bar_chart_3")}
+            ${adminMetricCard("Pay Conversion", `${pct(paymentsPaid, paymentsInitiated)}%`, "Confirmed of initiated", "check_circle")}
+            ${adminMetricCard("Redeem Failures", redeemFailed, "Invalid / pending tokens", "alert_triangle")}
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("list", "Payment Funnel", "Server-side: checkout initiated → payment confirmed (webhook) → redeemed in a channel. The gaps are abandonment. Aggregate counts, never linked to a room.")}
+              ${paymentFunnelHtml}
+            </div>
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("calendar", "Extension Depth", "How many times numbers have been paid for: x1 = first purchase, x2 = first renewal, … A retention distribution, tracked per number in DO state, never by hash.")}
+              ${extensionHistHtml}
+            </div>
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("calendar", `Time to Paid · avg ${escapeAttr(conversionAvg)}`, "How long a number stays free (weekly) before its first paid extension. Distribution from bucketed counts — your free→paid conversion latency.")}
+            ${conversionHistHtml}
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("sparkles", "Sales by Price Point", "Units sold and gross revenue per price, over the range. Revenue is shown in major units; the price label carries the currency.")}
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead>
+              <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                <th class="py-3 pr-8">Price</th><th class="py-3 pr-8 text-right">Units</th><th class="py-3 text-right">Revenue</th>
+              </tr></thead><tbody>${pricingRows}</tbody></table></div>
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("globe", "Revenue by Steg-Number Country", "Units sold and gross revenue grouped by the steg number's country. Aggregate only — no number, hash, or payment reference is stored.")}
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead>
+              <tr class="text-left text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 border-b border-white/5">
+                <th class="py-3 pr-8">Country</th><th class="py-3 pr-8 text-right">Units</th><th class="py-3 text-right">Revenue</th>
+              </tr></thead><tbody>${revenueCountryRows}</tbody></table></div>
+          </div>
         </section>
 
         <!-- Funnel & Campaigns -->
-        <section id="funnel" class="scroll-mt-6">
+        <section id="funnel" class="scroll-mt-6 space-y-8">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("globe", "Page Views by Route", "Content-page navigations over the range. Aggregate route labels only — no URL, query string, IP, or UA is stored.")}
+              ${pageViewsHtml}
+            </div>
+            <div class="glass-card p-6 sm:p-10 space-y-6">
+              ${sectionHeader("list", "Traffic Source", "Coarse referrer category (search / social / other / direct). The full referrer URL is never stored; internal navigation is not counted.")}
+              ${referrerHtml}
+            </div>
+          </div>
           ${campaignsSection}
         </section>
 
         <!-- Security -->
         <section id="security" class="scroll-mt-6 space-y-8">
           <div class="glass-card p-6 sm:p-10 space-y-6">
-            ${sectionHeader("shield", "Access & Abuse", "Wrong-PIN attempts and 30-minute lockouts over the range — your signal for credential-stuffing or targeted access attempts. Global counts, no country or room linkage.")}
-            <div class="grid grid-cols-2 gap-4 sm:gap-6">
+            ${sectionHeader("shield", "Access & Abuse", "Wrong-PIN attempts, 30-minute lockouts, and per-IP join rate-limit rejections over the range — your signal for credential-stuffing, slot-squatting, or targeted access attempts. Global counts, no country or room linkage.")}
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               ${adminMetricCard("Failed Attempts", accessFailed, "Wrong PIN on a full room", "alert_triangle")}
               ${adminMetricCard("Lockouts", lockouts, "10 fails → 30-min lock", "shield")}
+              ${adminMetricCard("Rate-Limited Joins", metricCount(d.totals, "join_rate_limited"), "Per-IP create/slot blocks", "shield")}
+            </div>
+          </div>
+          <div class="glass-card p-6 sm:p-10 space-y-6">
+            ${sectionHeader("radio", "Edge & Reliability", "WebSocket-upgrade and /admin rate-limit rejections at the edge, and the daily token-sweep cron. Aggregate counts for operational visibility.")}
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              ${adminMetricCard("WS Rate-Limited", metricCount(d.totals, "ws_rate_limited"), "Upgrade rejections (30/IP/min)", "shield")}
+              ${adminMetricCard("Admin Rate-Limited", metricCount(d.totals, "admin_rate_limited"), "/admin rejections (20/IP/min)", "shield")}
+              ${adminMetricCard("Tokens Swept", metricSum(d.totals, "cron_sweep"), `${metricCount(d.totals, "cron_sweep")} cron runs`, "calendar")}
             </div>
           </div>
         </section>
@@ -1114,7 +1339,11 @@ function renderFunnelCard(opts: {
 //     metadata is enough to trace a specific webhook through logs
 //     without naming the token. Mirrors v1.
 
-async function handlePaystackWebhook(request: Request, env: Env): Promise<Response> {
+async function handlePaystackWebhook(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   console.log("Paystack Webhook received");
   if (env.MONETIZATION_ENABLED !== "true") {
     return jsonResponse({ error: "not_found" }, 404);
@@ -1177,7 +1406,20 @@ async function handlePaystackWebhook(request: Request, env: Env): Promise<Respon
   }
 
   try {
-    await markPaid(env.DB, reference, reference);
+    // Fetch the token first so payment_paid can carry the price point.
+    const token = await findByTokenHash(env.DB, reference);
+    const changed = await markPaid(env.DB, reference, reference);
+    // Only count a real pending→paid transition, so Paystack's webhook
+    // retries don't inflate the funnel. Global (no country): the webhook
+    // request originates from Paystack's servers, not the user.
+    if (changed > 0 && token) {
+      enqueueMetric(
+        env.METRICS_QUEUE,
+        "payment_paid",
+        { dim: priceLabel(token.currency, token.amount_cents) },
+        ctx,
+      );
+    }
   } catch {
     // Even a DB failure returns 200 — Paystack retries on non-2xx,
     // so we'd rather absorb a transient blip and let the client
@@ -1187,7 +1429,11 @@ async function handlePaystackWebhook(request: Request, env: Env): Promise<Respon
   return jsonResponse({ status: "ok" });
 }
 
-async function handlePaymentInitiate(request: Request, env: Env): Promise<Response> {
+async function handlePaymentInitiate(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   if (env.MONETIZATION_ENABLED !== "true") {
     return jsonResponse({ error: "monetization_disabled" }, 503);
   }
@@ -1227,6 +1473,14 @@ async function handlePaymentInitiate(request: Request, env: Env): Promise<Respon
   // and we mark the row paid. No room_hash is ever sent to Paystack.
   const initResult = await paystackInitialize(tokenHash, amountCents, env);
   if (initResult.ok) {
+    // Top of the server-side payment funnel. cf country is the user's here
+    // (they call this from their browser, unlike the webhook).
+    enqueueMetric(
+      env.METRICS_QUEUE,
+      "payment_initiated",
+      { dim: priceLabel(currency, amountCents), cfCountry: (request.cf?.country ?? "") as string },
+      ctx,
+    );
     return jsonResponse({ checkout_url: initResult.checkoutUrl });
   }
 
@@ -1258,7 +1512,12 @@ function redirect(location: string, status = 302): Response {
 }
 
 /** GET /c/:slug — records a landing event and redirects into the funnel. */
-async function handleCampaignLink(slug: string, request: Request, env: Env): Promise<Response> {
+async function handleCampaignLink(
+  slug: string,
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   // Bad slug or unknown/archived campaign → silent redirect home; we
   // never reveal which slugs exist, and never count a phantom landing.
   if (!SLUG_RE.test(slug)) return redirect("/");
@@ -1266,7 +1525,7 @@ async function handleCampaignLink(slug: string, request: Request, env: Env): Pro
   if (!campaign) return redirect("/");
 
   const cfCountry = (request.cf?.country ?? "") as string;
-  enqueueMetric(env.METRICS_QUEUE, "funnel_landing", { cfCountry, dim: slug });
+  enqueueMetric(env.METRICS_QUEUE, "funnel_landing", { cfCountry, dim: slug }, ctx);
 
   // Re-normalise on read as well as write — belt-and-braces against an
   // unsafe destination ever reaching the Location header (open-redirect
@@ -1278,7 +1537,11 @@ async function handleCampaignLink(slug: string, request: Request, env: Env): Pro
 }
 
 /** POST /api/funnel — client beacon for a single funnel step. */
-async function handleFunnelBeacon(request: Request, env: Env): Promise<Response> {
+async function handleFunnelBeacon(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   // Tolerant parse: sendBeacon ships text/plain, fetch ships JSON.
   let body: { step?: unknown; campaign?: unknown };
   try {
@@ -1295,7 +1558,7 @@ async function handleFunnelBeacon(request: Request, env: Env): Promise<Response>
   const campaign = raw && SLUG_RE.test(raw) ? raw : "direct";
 
   const cfCountry = (request.cf?.country ?? "") as string;
-  enqueueMetric(env.METRICS_QUEUE, `funnel_${body.step}`, { cfCountry, dim: campaign });
+  enqueueMetric(env.METRICS_QUEUE, `funnel_${body.step}`, { cfCountry, dim: campaign }, ctx);
   return new Response(null, { status: 204 });
 }
 

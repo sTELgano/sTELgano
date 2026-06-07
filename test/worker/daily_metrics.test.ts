@@ -17,12 +17,17 @@ import {
   queryDiasporaRange,
   queryFunnelRange,
   queryHistogram,
+  queryPricing,
   queryRange,
+  queryRevenueByCountry,
   queryTotals,
 } from "../../src/lib/daily_metrics";
 
 const DB = env.DB as D1Database;
-const DAY = (d: number) => Date.UTC(2026, 5, d); // June <d>, 2026 (UTC)
+// A fixed past month (June 2020), deliberately NOT today's date: storage
+// isolation is off, so seeding in an unused year keeps these exact-count
+// assertions immune to any real-dated stray metric writes from other suites.
+const DAY = (d: number) => Date.UTC(2020, 5, d);
 
 function msg(partial: Partial<MetricMessage> & { metric: MetricMessage["metric"] }): MetricMessage {
   return {
@@ -48,13 +53,13 @@ describe("flushMetricBatch", () => {
     ];
     await flushMetricBatch(DB, batch);
 
-    let rows = await queryRange(DB, "2026-06-01", "2026-06-30");
+    let rows = await queryRange(DB, "2020-06-01", "2020-06-30");
     expect(rows.find((r) => r.metric === "message_sent")?.count).toBe(2);
     expect(rows.find((r) => r.metric === "room_free")?.count).toBe(1);
 
     // Re-running the same batch ADDS (does not duplicate rows).
     await flushMetricBatch(DB, batch);
-    rows = await queryRange(DB, "2026-06-01", "2026-06-30");
+    rows = await queryRange(DB, "2020-06-01", "2020-06-30");
     expect(rows.filter((r) => r.metric === "message_sent")).toHaveLength(1);
     expect(rows.find((r) => r.metric === "message_sent")?.count).toBe(4);
   });
@@ -64,7 +69,7 @@ describe("flushMetricBatch", () => {
       msg({ metric: "room_lifespan", dim: "1-24h", value: 2 }),
       msg({ metric: "room_lifespan", dim: "1-24h", value: 3 }),
     ]);
-    const rows = await queryRange(DB, "2026-06-01", "2026-06-30");
+    const rows = await queryRange(DB, "2020-06-01", "2020-06-30");
     expect(rows[0]).toMatchObject({ metric: "room_lifespan", count: 2, sumValue: 5 });
   });
 
@@ -94,7 +99,7 @@ describe("flushMetricBatch", () => {
 
   it("is a no-op for an empty batch", async () => {
     await flushMetricBatch(DB, []);
-    expect(await queryRange(DB, "2026-06-01", "2026-06-30")).toEqual([]);
+    expect(await queryRange(DB, "2020-06-01", "2020-06-30")).toEqual([]);
   });
 
   it("propagates a D1 error so the queue retries the batch", async () => {
@@ -132,7 +137,7 @@ describe("read helpers", () => {
   });
 
   it("queryTotals sums count and sum_value per metric across the range", async () => {
-    const totals = await queryTotals(DB, "2026-06-01", "2026-06-30");
+    const totals = await queryTotals(DB, "2020-06-01", "2020-06-30");
     const by = (m: string) => totals.find((t) => t.metric === m);
     expect(by("room_free")?.count).toBe(2);
     expect(by("message_sent")?.count).toBe(3);
@@ -140,19 +145,19 @@ describe("read helpers", () => {
   });
 
   it("queryDailyTrend returns per-day counts only for requested metrics", async () => {
-    const trend = await queryDailyTrend(DB, "2026-06-01", "2026-06-30", [
+    const trend = await queryDailyTrend(DB, "2020-06-01", "2020-06-30", [
       "room_free",
       "message_sent",
     ]);
     const cell = (day: string, m: string) =>
       trend.find((r) => r.day === day && r.metric === m)?.count ?? 0;
-    expect(cell("2026-06-01", "room_free")).toBe(1);
-    expect(cell("2026-06-07", "message_sent")).toBe(2);
+    expect(cell("2020-06-01", "room_free")).toBe(1);
+    expect(cell("2020-06-07", "message_sent")).toBe(2);
     expect(trend.some((r) => r.metric === "room_paid")).toBe(false);
   });
 
   it("queryCountryRange / queryCfCountryRange split free vs paid by country", async () => {
-    const steg = await queryCountryRange(DB, "2026-06-01", "2026-06-30");
+    const steg = await queryCountryRange(DB, "2020-06-01", "2020-06-30");
     expect(steg.find((r) => r.country_code === "KE")).toMatchObject({
       free_rooms: 1,
       paid_rooms: 1,
@@ -162,23 +167,23 @@ describe("read helpers", () => {
       paid_rooms: 0,
     });
 
-    const cf = await queryCfCountryRange(DB, "2026-06-01", "2026-06-30");
+    const cf = await queryCfCountryRange(DB, "2020-06-01", "2020-06-30");
     expect(cf.find((r) => r.country_code === "GB")).toMatchObject({ paid_rooms: 1 });
   });
 
   it("queryDiasporaRange keys on (steg, cf) pairs", async () => {
-    const rows = await queryDiasporaRange(DB, "2026-06-01", "2026-06-30");
+    const rows = await queryDiasporaRange(DB, "2020-06-01", "2020-06-30");
     const pair = rows.find((r) => r.steg_country === "KE" && r.cf_country === "GB");
     expect(pair).toMatchObject({ paid_rooms: 1 });
   });
 
   it("queryHistogram returns bucket counts for a distribution metric", async () => {
-    const hist = await queryHistogram(DB, "2026-06-01", "2026-06-30", "room_lifespan");
+    const hist = await queryHistogram(DB, "2020-06-01", "2020-06-30", "room_lifespan");
     expect(hist).toEqual([{ bucket: "1-24h", count: 1 }]);
   });
 
   it("queryFunnelRange rebuilds per-campaign funnels (dim → campaign, '' → direct)", async () => {
-    const funnels = await queryFunnelRange(DB, "2026-06-01", "2026-06-30");
+    const funnels = await queryFunnelRange(DB, "2020-06-01", "2020-06-30");
     const promo = funnels.find((f) => f.campaign === "promo");
     expect(promo?.steps.landing).toBe(2);
     expect(promo?.steps.channel_opened).toBe(1);
@@ -187,17 +192,54 @@ describe("read helpers", () => {
 
   it("filters days inclusively at both ends", async () => {
     // Range starting on day 7 excludes the day-1 rows.
-    const day7 = await queryTotals(DB, "2026-06-07", "2026-06-07");
+    const day7 = await queryTotals(DB, "2020-06-07", "2020-06-07");
     expect(day7.find((t) => t.metric === "room_free")?.count).toBe(1); // only the US/day-7 one
-    const day1 = await queryTotals(DB, "2026-06-01", "2026-06-01");
+    const day1 = await queryTotals(DB, "2020-06-01", "2020-06-01");
     expect(day1.find((t) => t.metric === "message_sent")?.count).toBe(1);
   });
 
+  it("queryPricing groups sales by price point with units + revenue", async () => {
+    await flushMetricBatch(DB, [
+      msg({ metric: "paid_sale", dim: "USD_200", value: 200, stegCountry: "KE", ts: DAY(2) }),
+      msg({ metric: "paid_sale", dim: "USD_200", value: 200, stegCountry: "US", ts: DAY(2) }),
+      msg({ metric: "paid_sale", dim: "USD_1000", value: 1000, stegCountry: "KE", ts: DAY(2) }),
+    ]);
+    const pricing = await queryPricing(DB, "2020-06-01", "2020-06-30");
+    const at = (p: string) => pricing.find((r) => r.price === p);
+    expect(at("USD_200")).toMatchObject({ units: 2, revenueMinor: 400 });
+    expect(at("USD_1000")).toMatchObject({ units: 1, revenueMinor: 1000 });
+  });
+
+  it("queryRevenueByCountry groups sales by steg country", async () => {
+    await flushMetricBatch(DB, [
+      msg({ metric: "paid_sale", dim: "USD_200", value: 200, stegCountry: "KE", ts: DAY(2) }),
+      msg({ metric: "paid_sale", dim: "USD_1000", value: 1000, stegCountry: "KE", ts: DAY(2) }),
+      msg({ metric: "paid_sale", dim: "USD_200", value: 200, stegCountry: "US", ts: DAY(2) }),
+    ]);
+    const rev = await queryRevenueByCountry(DB, "2020-06-01", "2020-06-30");
+    expect(rev.find((r) => r.country_code === "KE")).toMatchObject({
+      units: 2,
+      revenueMinor: 1200,
+    });
+    expect(rev.find((r) => r.country_code === "US")).toMatchObject({ units: 1, revenueMinor: 200 });
+  });
+
+  it("queryHistogram surfaces the extension-depth distribution", async () => {
+    await flushMetricBatch(DB, [
+      msg({ metric: "extension", dim: "x1", ts: DAY(2) }),
+      msg({ metric: "extension", dim: "x1", ts: DAY(2) }),
+      msg({ metric: "extension", dim: "x2", ts: DAY(2) }),
+    ]);
+    const hist = await queryHistogram(DB, "2020-06-01", "2020-06-30", "extension");
+    expect(hist.find((b) => b.bucket === "x1")?.count).toBe(2);
+    expect(hist.find((b) => b.bucket === "x2")?.count).toBe(1);
+  });
+
   it("is injection-safe: a malicious date param cannot alter the table", async () => {
-    const evil = "2026-06-01'; DROP TABLE daily_metrics;--";
-    await expect(queryRange(DB, evil, "2026-06-30")).resolves.toBeDefined();
+    const evil = "2020-06-01'; DROP TABLE daily_metrics;--";
+    await expect(queryRange(DB, evil, "2020-06-30")).resolves.toBeDefined();
     // Table still exists and still holds the seeded rows.
-    const all = await queryRange(DB, "2026-06-01", "2026-06-30");
+    const all = await queryRange(DB, "2020-06-01", "2020-06-30");
     expect(all.length).toBeGreaterThan(0);
   });
 });

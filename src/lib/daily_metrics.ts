@@ -67,21 +67,44 @@ export function sumFunnels(funnels: CampaignFunnel[]): Record<FunnelStep, number
 // Metric keys & queue message shape.
 // ---------------------------------------------------------------------------
 
-/** Room/message/security metric keys. */
+/** Room/message/monetization/security metric keys. */
 export type CoreMetric =
+  // Channel lifecycle (a number starts free = weekly TTL; paying extends it
+  // to paid = yearly TTL).
   | "room_free"
   | "room_paid"
   | "room_extended"
   | "room_rejoin"
   | "room_expired_free"
   | "room_expired_paid"
-  | "message_sent"
-  | "second_party_joined"
-  | "room_expired_empty"
-  | "time_to_first_message" // sum_value = seconds; dim = ttfm bucket
+  | "room_expired_empty" // expired having never carried a message
+  | "room_expired_solo" // expired having never gained a second party
   | "room_lifespan" // sum_value = hours; dim = lifespan bucket
+  // Engagement.
+  | "message_sent"
+  | "message_edited"
+  | "message_deleted"
+  | "message_read"
+  | "second_party_joined"
+  | "time_to_first_message" // sum_value = seconds; dim = ttfm bucket
+  | "activity_hour" // dim = UTC hour "00".."23" (global): intra-day activity
+  // Monetization.
+  | "extension" // dim = ordinal bucket (x1, x2, …): the Nth paid extension
+  | "paid_sale" // dim = price label; sum_value = amount in minor units (revenue)
+  | "time_to_paid" // sum_value = hours; dim = conversion bucket: free→paid latency
+  | "payment_initiated" // dim = price label (server-side payment funnel: top)
+  | "payment_paid" // dim = price label (webhook confirmed: mid)
+  | "redeem_failed" // dim = reason
+  // Acquisition.
+  | "page_view" // dim = normalized route
+  | "referrer" // dim = source category (search | social | other | direct)
+  // Security / abuse / reliability.
   | "access_failed"
-  | "access_lockout";
+  | "access_lockout"
+  | "join_rate_limited" // dim = "create" | "slot"
+  | "ws_rate_limited" // WebSocket-upgrade rate-limit rejection (edge)
+  | "admin_rate_limited" // /admin rate-limit rejection
+  | "cron_sweep"; // count = cron runs; sum_value = expired tokens deleted
 
 /** All metric keys, including one per funnel step (dim = campaign slug). */
 export type MetricKey = CoreMetric | `funnel_${FunnelStep}`;
@@ -117,16 +140,25 @@ function toMessage(metric: MetricKey, opts: EnqueueOpts = {}): MetricMessage {
   };
 }
 
+/** Minimal slice of ExecutionContext — just what we need to keep a
+ *  fire-and-forget send alive past a request handler's response. */
+type WaitUntil = { waitUntil(promise: Promise<unknown>): void };
+
 /** Fire-and-forget enqueue of one metric event. No-op when the queue
  *  binding is absent (tests). Fail-open: a send rejection is swallowed so
- *  a queue outage never blocks or errors a chat event. */
+ *  a queue outage never blocks or errors a chat event. Pass `ctx` from a
+ *  request/cron handler so the send is registered with waitUntil and isn't
+ *  dropped when the response returns (the DO keeps its own context alive,
+ *  so it omits ctx). */
 export function enqueueMetric(
   queue: Queue<MetricMessage> | undefined,
   metric: MetricKey,
   opts: EnqueueOpts = {},
+  ctx?: WaitUntil,
 ): void {
   if (!queue) return;
-  void queue.send(toMessage(metric, opts)).catch(() => {});
+  const p = queue.send(toMessage(metric, opts)).catch(() => {});
+  ctx?.waitUntil(p);
 }
 
 /** Fire-and-forget enqueue of several metric events in one sendBatch —
@@ -135,10 +167,12 @@ export function enqueueMetrics(
   queue: Queue<MetricMessage> | undefined,
   items: Array<{ metric: MetricKey } & Omit<EnqueueOpts, "nowMs">>,
   nowMs?: number,
+  ctx?: WaitUntil,
 ): void {
   if (!queue || items.length === 0) return;
   const batch = items.map((it) => ({ body: toMessage(it.metric, { ...it, nowMs }) }));
-  void queue.sendBatch(batch).catch(() => {});
+  const p = queue.sendBatch(batch).catch(() => {});
+  ctx?.waitUntil(p);
 }
 
 // ---------------------------------------------------------------------------
@@ -170,6 +204,119 @@ export function ttfmBucket(seconds: number): (typeof TTFM_BUCKETS)[number] {
   if (seconds < 3600) return "10-60m";
   if (seconds < 86_400) return "1-24h";
   return "1d+";
+}
+
+export const EXTENSION_BUCKETS = [
+  "x1",
+  "x2",
+  "x3",
+  "x4",
+  "x5",
+  "x6",
+  "x7",
+  "x8",
+  "x9",
+  "x10+",
+] as const;
+
+/** Ordinal bucket for the Nth paid extension of a single number (1-based),
+ *  capped at x10+. The DO tracks its own extension count in room state (never
+ *  by hash), so this is a population distribution, not a per-number trail. */
+export function extensionBucket(n: number): (typeof EXTENSION_BUCKETS)[number] {
+  if (n <= 1) return "x1";
+  if (n >= 10) return "x10+";
+  return `x${n}` as (typeof EXTENSION_BUCKETS)[number];
+}
+
+/** Stable price-point label for the `dim` of monetization metrics, e.g.
+ *  "USD_200". Currency is uppercased; cents kept as an integer string. */
+export function priceLabel(currency: string, amountCents: number): string {
+  return `${(currency || "USD").toUpperCase()}_${Math.max(0, Math.round(amountCents))}`;
+}
+
+export const CONVERSION_BUCKETS = ["<1h", "1-24h", "1-3d", "3-7d", "7d+"] as const;
+
+/** Coarse bucket for free→paid conversion latency, in hours. */
+export function conversionBucket(hours: number): (typeof CONVERSION_BUCKETS)[number] {
+  if (hours < 1) return "<1h";
+  if (hours < 24) return "1-24h";
+  if (hours < 24 * 3) return "1-3d";
+  if (hours < 24 * 7) return "3-7d";
+  return "7d+";
+}
+
+/** UTC hour-of-day as a zero-padded "00".."23" label, for activity_hour. */
+export function utcHour(ms: number): string {
+  return String(new Date(ms).getUTCHours()).padStart(2, "0");
+}
+
+/** Ordered "00".."23" labels for rendering the hour-of-day histogram. */
+export const HOURS_OF_DAY = Array.from({ length: 24 }, (_, h) =>
+  String(h).padStart(2, "0"),
+) as readonly string[];
+
+// ---------------------------------------------------------------------------
+// Acquisition classifiers (pure) — normalize a request into a coarse route
+// and referrer-source category. No full URL, query string, or host is ever
+// stored: page_view keeps only a fixed route label, referrer only a category.
+// ---------------------------------------------------------------------------
+
+const PAGE_ROUTES = new Set([
+  "/",
+  "/blog",
+  "/spec",
+  "/security",
+  "/privacy",
+  "/terms",
+  "/about",
+  "/pricing",
+  "/chat",
+]);
+
+/** Normalizes a pathname to a stable content-page route label, or null for
+ *  anything that isn't an operator-facing content page (assets, API, admin,
+ *  room WS, payment, campaign links, etc. are skipped). */
+export function pageRoute(pathname: string): string | null {
+  if (PAGE_ROUTES.has(pathname)) return pathname;
+  if (/^\/blog\/[^/]+$/.test(pathname)) return "/blog/:slug";
+  return null;
+}
+
+const SEARCH_HOSTS = ["google.", "bing.", "duckduckgo.", "yahoo.", "ecosia.", "baidu.", "yandex."];
+const SOCIAL_HOSTS = [
+  "t.co",
+  "twitter.com",
+  "x.com",
+  "facebook.com",
+  "instagram.com",
+  "reddit.com",
+  "linkedin.com",
+  "lnkd.in",
+  "youtube.com",
+  "tiktok.com",
+  "t.me",
+];
+
+/** Buckets a Referer header into a coarse source category. Same-host
+ *  (internal) navigation returns "internal" — callers skip emitting those,
+ *  so only external/direct acquisition is counted. */
+export function referrerCategory(referer: string | null, selfHost: string): string {
+  if (!referer) return "direct";
+  let host: string;
+  try {
+    host = new URL(referer).hostname.toLowerCase();
+  } catch {
+    return "other";
+  }
+  if (
+    selfHost &&
+    (host === selfHost.toLowerCase() || host.endsWith(`.${selfHost.toLowerCase()}`))
+  ) {
+    return "internal";
+  }
+  if (SEARCH_HOSTS.some((h) => host.includes(h))) return "search";
+  if (SOCIAL_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return "social";
+  return "other";
 }
 
 // ---------------------------------------------------------------------------
@@ -444,6 +591,47 @@ export async function queryHistogram(
     .bind(from, to, metric)
     .all<{ bucket: string; count: number }>();
   return (results ?? []).map((r) => ({ bucket: r.bucket, count: Number(r.count ?? 0) }));
+}
+
+export type PriceRow = { price: string; units: number; revenueMinor: number };
+export type RevenueCountryRow = { country_code: string; units: number; revenueMinor: number };
+
+/** Sales grouped by price point over [from, to]: units sold (count) and gross
+ *  revenue in minor currency units (sum_value). dim holds the price label. */
+export async function queryPricing(db: D1Database, from: string, to: string): Promise<PriceRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT dim, SUM(count) AS units, SUM(sum_value) AS revenue FROM daily_metrics
+       WHERE day >= ? AND day <= ? AND metric = 'paid_sale' GROUP BY dim ORDER BY units DESC`,
+    )
+    .bind(from, to)
+    .all<{ dim: string; units: number; revenue: number }>();
+  return (results ?? []).map((r) => ({
+    price: r.dim,
+    units: Number(r.units ?? 0),
+    revenueMinor: Number(r.revenue ?? 0),
+  }));
+}
+
+/** Sales grouped by steg-number country over [from, to]: units + revenue. */
+export async function queryRevenueByCountry(
+  db: D1Database,
+  from: string,
+  to: string,
+): Promise<RevenueCountryRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT steg_country, SUM(count) AS units, SUM(sum_value) AS revenue FROM daily_metrics
+       WHERE day >= ? AND day <= ? AND metric = 'paid_sale' AND steg_country <> ''
+       GROUP BY steg_country ORDER BY revenue DESC`,
+    )
+    .bind(from, to)
+    .all<{ steg_country: string; units: number; revenue: number }>();
+  return (results ?? []).map((r) => ({
+    country_code: r.steg_country,
+    units: Number(r.units ?? 0),
+    revenueMinor: Number(r.revenue ?? 0),
+  }));
 }
 
 /** Per-campaign funnel counts over [from, to]. dim holds the campaign slug. */

@@ -12,9 +12,10 @@
 
 // @ts-expect-error — see healthz.test.ts
 import { env, SELF } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { type DailyMetricRow, queryRange } from "../../src/lib/daily_metrics";
+import { createPending, markPaid } from "../../src/lib/extension_tokens";
 
 const DB = env.DB as D1Database;
 
@@ -24,6 +25,28 @@ function hex64(tag: string): string {
     .map((c) => c.charCodeAt(0).toString(16).padStart(2, "0"))
     .join("");
   return hex.slice(0, 64).padEnd(64, "0");
+}
+
+async function sha256hex(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** Inserts a paid extension token and returns the raw secret the client
+ *  would send on join / redeem. */
+async function paidSecret(tag: string, amountCents = 200, currency = "USD"): Promise<string> {
+  const secret = hex64(tag);
+  const tokenHash = await sha256hex(secret);
+  await createPending(DB, {
+    tokenHash,
+    amountCents,
+    currency,
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+  });
+  await markPaid(DB, tokenHash, "test");
+  return secret;
 }
 
 type ServerFrame =
@@ -94,6 +117,13 @@ async function pollMetrics(
   }
   return rows;
 }
+
+// Storage isolation is off (see vitest.workers.config.ts) so each test
+// starts from a clean metrics table — assertions reflect only this test's
+// DO emissions, not rows left by earlier suites.
+beforeEach(async () => {
+  await DB.prepare("DELETE FROM daily_metrics").run();
+});
 
 const has = (rows: DailyMetricRow[], metric: string) => rows.some((r) => r.metric === metric);
 const countOf = (rows: DailyMetricRow[], metric: string) =>
@@ -166,6 +196,87 @@ describe("RoomDO analytics emission", () => {
     expectSecurityGlobal(rows);
   }, 40_000);
 });
+
+describe("RoomDO monetization analytics", () => {
+  it("emits room_paid + extension(x1) + paid_sale when a number is bought at creation", async () => {
+    const secret = await paidSecret("buy-at-create", 200, "USD");
+    const room = hex64("metrics-paid-create");
+    const ws = await openSocket(room);
+    send(ws, {
+      event: "join",
+      ref: "j",
+      data: {
+        sender_hash: hex64("s"),
+        access_hash: hex64("a"),
+        country_iso: "KE",
+        extension_secret: secret,
+      },
+    });
+    await waitRef(ws, "j");
+
+    const rows = await pollMetrics((r) => has(r, "paid_sale") && has(r, "time_to_paid"));
+    expect(has(rows, "room_paid")).toBe(true);
+    expect(rows.find((r) => r.metric === "extension")?.dim).toBe("x1");
+    const sale = rows.find((r) => r.metric === "paid_sale");
+    expect(sale?.dim).toBe("USD_200");
+    expect(sale?.sumValue).toBe(200);
+    expect(sale?.stegCountry).toBe("KE");
+    // Buy-at-create converts from free with ~0 latency, and counts as activity.
+    expect(rows.find((r) => r.metric === "time_to_paid")?.dim).toBe("<1h");
+    expect(has(rows, "activity_hour")).toBe(true);
+    ws.close();
+  }, 20_000);
+});
+
+describe("RoomDO message-engagement analytics", () => {
+  it("emits message_edited, message_read, and message_deleted", async () => {
+    // Room 1: send → edit (before read) → read.
+    const room1 = hex64("metrics-edit-read");
+    const a = await openSocket(room1);
+    await join(a, "sa", "aa");
+    const b = await openSocket(room1);
+    await join(b, "sb", "ab");
+    send(a, { event: "send_message", ref: "m1", data: { ciphertext: TINY_CT, iv: TINY_IV } });
+    const m1 = (await waitRef(a, "m1")) as { ok: { message_id: string } };
+    const id1 = m1.ok.message_id;
+    send(a, {
+      event: "edit_message",
+      ref: "e",
+      data: { message_id: id1, ciphertext: TINY_CT, iv: TINY_IV },
+    });
+    await waitRef(a, "e");
+    send(b, { event: "read_receipt", data: { message_id: id1 } });
+
+    // Room 2: single party sends then deletes its own unread message.
+    const room2 = hex64("metrics-delete");
+    const c = await openSocket(room2);
+    await join(c, "sc", "ac");
+    send(c, { event: "send_message", ref: "m2", data: { ciphertext: TINY_CT, iv: TINY_IV } });
+    const m2 = (await waitRef(c, "m2")) as { ok: { message_id: string } };
+    send(c, { event: "delete_message", ref: "d", data: { message_id: m2.ok.message_id } });
+    await waitRef(c, "d");
+
+    const rows = await pollMetrics(
+      (r) => has(r, "message_edited") && has(r, "message_read") && has(r, "message_deleted"),
+    );
+    expect(has(rows, "message_edited")).toBe(true);
+    expect(has(rows, "message_read")).toBe(true);
+    expect(has(rows, "message_deleted")).toBe(true);
+    a.close();
+    b.close();
+    c.close();
+  }, 25_000);
+});
+
+// NOTE: acquisition emits (page_view / referrer) and the other request-path
+// + cron emits (payment_*, funnel_*, cron_sweep, *_rate_limited) are wired
+// with ctx.waitUntil so they deliver in production, but they are NOT
+// integration-tested here: vitest-pool-workers only advances miniflare's
+// queue timer on worker I/O, and a single SELF.fetch followed by direct D1
+// reads never ticks it (the DO tests pass only because their many WS frames
+// keep the worker busy). The classifier logic (pageRoute / referrerCategory)
+// is covered deterministically by the pure unit tests, and the queue→D1
+// consumer path is proven by the DO emission tests above.
 
 describe("RoomDO analytics privacy", () => {
   it("never writes an identifier into any daily_metrics row", async () => {

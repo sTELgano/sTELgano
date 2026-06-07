@@ -8,14 +8,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   coalesce,
+  conversionBucket,
   type DateRange,
   enqueueMetric,
   enqueueMetrics,
+  extensionBucket,
   lifespanBucket,
   type MetricMessage,
+  pageRoute,
   parseDateRange,
+  priceLabel,
+  referrerCategory,
   ttfmBucket,
   utcDay,
+  utcHour,
 } from "../../src/lib/daily_metrics";
 
 // A queue test double that records what was sent.
@@ -67,6 +73,84 @@ describe("ttfmBucket", () => {
     expect(ttfmBucket(600)).toBe("10-60m");
     expect(ttfmBucket(3600)).toBe("1-24h");
     expect(ttfmBucket(86_400)).toBe("1d+");
+  });
+});
+
+describe("extensionBucket", () => {
+  it("maps the Nth paid extension to an ordinal bucket, capped at x10+", () => {
+    expect(extensionBucket(0)).toBe("x1"); // defensive: first purchase
+    expect(extensionBucket(1)).toBe("x1");
+    expect(extensionBucket(2)).toBe("x2");
+    expect(extensionBucket(9)).toBe("x9");
+    expect(extensionBucket(10)).toBe("x10+");
+    expect(extensionBucket(50)).toBe("x10+");
+  });
+});
+
+describe("priceLabel", () => {
+  it("builds a stable currency_cents label", () => {
+    expect(priceLabel("usd", 200)).toBe("USD_200");
+    expect(priceLabel("KES", 10_000)).toBe("KES_10000");
+  });
+  it("defaults a blank currency and rounds cents", () => {
+    expect(priceLabel("", 199.6)).toBe("USD_200");
+  });
+});
+
+describe("conversionBucket", () => {
+  it("buckets free→paid latency by hours", () => {
+    expect(conversionBucket(0)).toBe("<1h");
+    expect(conversionBucket(1)).toBe("1-24h");
+    expect(conversionBucket(24)).toBe("1-3d");
+    expect(conversionBucket(24 * 3)).toBe("3-7d");
+    expect(conversionBucket(24 * 7)).toBe("7d+");
+  });
+});
+
+describe("utcHour", () => {
+  it("returns a zero-padded UTC hour label", () => {
+    expect(utcHour(Date.UTC(2026, 5, 7, 9, 30))).toBe("09");
+    expect(utcHour(Date.UTC(2026, 5, 7, 23, 59))).toBe("23");
+    expect(utcHour(Date.UTC(2026, 5, 7, 0, 0))).toBe("00");
+  });
+});
+
+describe("pageRoute", () => {
+  it("normalizes known content routes and collapses blog slugs", () => {
+    expect(pageRoute("/")).toBe("/");
+    expect(pageRoute("/spec")).toBe("/spec");
+    expect(pageRoute("/blog")).toBe("/blog");
+    expect(pageRoute("/blog/zero-ops-global-scale")).toBe("/blog/:slug");
+  });
+  it("skips non-content paths (assets, api, admin, room, payment)", () => {
+    for (const p of [
+      "/admin",
+      "/api/funnel",
+      "/room/abc/ws",
+      "/assets/app.css",
+      "/healthz",
+      "/x",
+      "/c/promo",
+      "/payment/callback",
+      "/blog/a/b",
+    ]) {
+      expect(pageRoute(p)).toBeNull();
+    }
+  });
+});
+
+describe("referrerCategory", () => {
+  const host = "stelgano.com";
+  it("classifies common sources, never storing the URL", () => {
+    expect(referrerCategory(null, host)).toBe("direct");
+    expect(referrerCategory("https://www.google.com/search?q=x", host)).toBe("search");
+    expect(referrerCategory("https://t.co/abc", host)).toBe("social");
+    expect(referrerCategory("https://news.ycombinator.com/", host)).toBe("other");
+    expect(referrerCategory("garbage", host)).toBe("other");
+  });
+  it("marks same-site navigation internal (callers skip it)", () => {
+    expect(referrerCategory("https://stelgano.com/blog", host)).toBe("internal");
+    expect(referrerCategory("https://staging.stelgano.com/", host)).toBe("internal");
   });
 });
 

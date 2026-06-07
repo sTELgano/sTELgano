@@ -124,12 +124,20 @@ Analytics live entirely in D1 — exact and permanent (no sampling, no 90-day ca
 
 **Storage** — `daily_metrics` table (migration `0006`), one row per `(day × metric × steg_country × cf_country × dim)`:
 - `day` — `YYYY-MM-DD` UTC, bucketed from each event's emit `ts` (the timestamp is used only to choose the day, then discarded)
-- `metric` — a `MetricKey`: room lifecycle (`room_free`, `room_paid`, `room_extended`, `room_rejoin`, `room_expired_free`, `room_expired_paid`), engagement (`message_sent`, `second_party_joined`, `time_to_first_message`, `room_lifespan`, `room_expired_empty`), security (`access_failed`, `access_lockout`), and one `funnel_<step>` per `FunnelStep`
+- `metric` — a `MetricKey`:
+  - **lifecycle** (free = weekly TTL, paid = yearly TTL): `room_free`, `room_paid`, `room_extended`, `room_rejoin`, `room_expired_free`, `room_expired_paid`, `room_expired_empty` (never messaged), `room_expired_solo` (never got a 2nd party), `room_lifespan` (dim = bucket)
+  - **engagement**: `message_sent`, `message_edited`, `message_deleted`, `message_read`, `second_party_joined`, `time_to_first_message` (dim = bucket), `activity_hour` (dim = UTC hour `00`–`23`, global — intra-day activity)
+  - **monetization**: `extension` (dim = ordinal `x1`,`x2`,…`x10+` — the Nth paid extension of a number, tracked in DO state never by hash), `paid_sale` (dim = price label e.g. `USD_200`, `sum_value` = revenue in minor units), `time_to_paid` (`sum_value` = hours, dim = bucket — free→paid conversion latency), `payment_initiated` / `payment_paid` (dim = price label — server-side payment funnel), `redeem_failed` (dim = reason)
+  - **acquisition**: `page_view` (dim = normalized route), `referrer` (dim = `search`|`social`|`other`|`direct`; internal navigation not counted)
+  - **security/abuse/reliability**: `access_failed`, `access_lockout`, `join_rate_limited` (dim = `create`|`slot`), `ws_rate_limited`, `admin_rate_limited`, `cron_sweep` (count = cron runs, `sum_value` = tokens swept)
+  - **funnel**: one `funnel_<step>` per `FunnelStep` (dim = campaign slug)
+
+Active-room counts are split by tier in `live_counters` (`free_active` / `paid_active`, migration `0007`): the DO increments by tier at creation, moves free→paid on conversion, and decrements the right tier at expiry — so the dashboard shows live weekly vs. yearly numbers, not just a total.
 - `steg_country` / `cf_country` — ISO-3166 alpha-2 (client-derived steg country / server-side CF-IPCountry), or `""`
 - `dim` — extra dimension: campaign slug for `funnel_*`, a coarse distribution bucket for `room_lifespan` / `time_to_first_message`, else `""`
 - `count` — event count; `sum_value` — summed numeric (seconds/hours) for distributions, so `avg = sum_value / count`
 
-**Admin dashboard reads** (`_worker.ts`): `queryTotals`, `queryDailyTrend`, `queryCountryRange`, `queryCfCountryRange`, `queryDiasporaRange`, `queryHistogram`, `queryFunnelRange` — all parameterized (`.bind()`, never string-interpolated) and date-range driven (`parseDateRange`, default last 30 days, span clamped ≤366). Charts are server-rendered inline SVG (`src/lib/charts.ts`), CSP-safe (no JS). Distribution metrics carry a bucket in `dim`, giving histograms **and** averages from one row family.
+**Admin dashboard reads** (`_worker.ts`): `queryTotals`, `queryDailyTrend`, `queryCountryRange`, `queryCfCountryRange`, `queryDiasporaRange`, `queryHistogram`, `queryFunnelRange`, `queryPricing`, `queryRevenueByCountry` — all parameterized (`.bind()`, never string-interpolated) and date-range driven (`parseDateRange`, default last 30 days, span clamped ≤366). The sidebar dashboard has Overview / Geography / Engagement / **Monetization** (sales, revenue, payment funnel, extension-depth, sales-by-price, revenue-by-country) / Funnel & Campaigns / Security sections. Charts are server-rendered inline SVG (`src/lib/charts.ts`), CSP-safe (no JS). Distribution metrics carry a bucket in `dim`, giving histograms **and** averages from one row family.
 
 *Expiry and security metrics are intentionally global (no country dimension)* — room records never carry a country code, to preserve server-blindness. The queue is at-least-once; a redelivered acked batch can over-count rarely and slightly — negligible for analytics, far better than sampling. Queue outage is fail-open (a dropped metric never blocks a chat event).
 
@@ -200,6 +208,7 @@ Fully optional (disabled by default). When enabled, steg numbers have a free TTL
 **D1 (SQLite at the edge).** Migrations in [`migrations/`](migrations/):
 - `0001_create_extension_tokens.sql` — `extension_tokens` table (blind payment token store; no `room_id` column by design)
 - `0004_live_counters.sql` — `live_counters` table (active-room snapshot for the admin dashboard)
+- `0007_live_counters_by_tier.sql` — adds `free_active` / `paid_active` columns to `live_counters` (active rooms split by tier)
 - `0005_create_campaigns.sql` — `campaigns` table (operator-authored campaign metadata for funnel attribution)
 - `0006_create_daily_metrics.sql` — `daily_metrics` table (the analytics store; aggregate counts/sums per day × metric × country × dim, written by the metrics-queue consumer)
 
