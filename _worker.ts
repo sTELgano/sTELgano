@@ -1066,25 +1066,28 @@ function adminMetricCard(
   active = false,
 ): string {
   const activeDot = active
-    ? '<div class="size-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]"></div>'
+    ? '<div class="size-2 shrink-0 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]"></div>'
     : "";
+  // Icon sits alone on the top row (with the optional live dot). The note is
+  // a full-width line BELOW the value/label — never crammed beside the icon,
+  // which overflowed and overlapped it on narrow 2-column mobile cards.
   return `
-    <div class="glass-card-premium p-6 sm:p-10 space-y-8 group hover:border-primary/50 transition-all duration-500 mx-4 sm:mx-0">
-      <div class="flex items-center justify-between">
-        <div class="size-12 sm:size-14 shrink-0 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all">
-          <svg class="size-6 sm:size-7 text-primary/40 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#${icon}"/></svg>
+    <div class="glass-card-premium p-5 sm:p-8 space-y-4 group hover:border-primary/50 transition-all duration-500">
+      <div class="flex items-center justify-between gap-2">
+        <div class="size-11 sm:size-14 shrink-0 rounded-2xl bg-primary/5 flex items-center justify-center border border-primary/20 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all">
+          <svg class="size-5 sm:size-7 text-primary/40 group-hover:text-primary transition-colors" aria-hidden="true"><use href="/icons.svg#${icon}"/></svg>
         </div>
-        <div class="flex flex-col items-end gap-1 min-w-0 pl-3">
-          <span class="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-600 text-right">${escapeAttr(note)}</span>
-          ${activeDot}
-        </div>
+        ${activeDot}
       </div>
-      <div class="space-y-3">
-        <div class="text-4xl sm:text-6xl font-mono font-black text-white group-hover:scale-110 transition-transform origin-left tracking-tighter">
+      <div class="space-y-1.5">
+        <div class="text-3xl sm:text-5xl font-mono font-black text-white tracking-tighter break-words">
           ${escapeAttr(String(value))}
         </div>
-        <div class="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-slate-500 group-hover:text-slate-400 transition-colors">
+        <div class="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
           ${escapeAttr(label)}
+        </div>
+        <div class="text-[9px] sm:text-[10px] font-medium uppercase tracking-wider text-slate-600 leading-snug">
+          ${escapeAttr(note)}
         </div>
       </div>
     </div>
@@ -1183,7 +1186,7 @@ function renderCampaignsSection(
   }
 
   return `
-      <div class="glass-card p-6 sm:p-10 space-y-8 mx-4 sm:mx-0">
+      <div class="glass-card p-6 sm:p-10 space-y-8">
         <div class="flex items-center gap-3 text-slate-300">
           ${iconSvg("bar_chart_3", "size-5 text-primary")}
           <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Conversion Funnel</h4>
