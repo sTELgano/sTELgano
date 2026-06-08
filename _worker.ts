@@ -85,17 +85,19 @@ import {
   timingSafeHexEqual,
   verifyTransaction,
 } from "./src/lib/paystack";
+import { resolvePrice } from "./src/lib/pricing";
 
 export { RoomDO } from "./src/room";
 
 const ROOM_HASH_RE = /^[a-f0-9]{64}$/;
 const TOKEN_HASH_RE = /^[a-f0-9]{64}$/;
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
+function jsonResponse(body: unknown, status = 200, cacheControl?: string): Response {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  // Geo-varying responses (e.g. /api/config's per-country price) must opt out
+  // of any shared cache so one country's price can't be served to another.
+  if (cacheControl) headers["cache-control"] = cacheControl;
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 export default {
@@ -287,13 +289,19 @@ async function dispatch(
   // client. Used by chat.ts to render correct prices/TTL copy and
   // to decide whether to show the new_channel tier-selection screen.
   if (url.pathname === "/api/config" && request.method === "GET") {
-    return jsonResponse({
-      monetization_enabled: env.MONETIZATION_ENABLED === "true",
-      free_ttl_days: parseInt(env.FREE_TTL_DAYS ?? "7", 10) || 7,
-      paid_ttl_days: parseInt(env.PAID_TTL_DAYS ?? "365", 10) || 365,
-      price_cents: parseInt(env.PRICE_CENTS ?? "200", 10) || 200,
-      currency: env.PAYMENT_CURRENCY ?? "USD",
-    });
+    // Geo-aware price so the client shows the same amount it will be charged.
+    const price = resolvePrice((request.cf?.country ?? "") as string, env);
+    return jsonResponse(
+      {
+        monetization_enabled: env.MONETIZATION_ENABLED === "true",
+        free_ttl_days: parseInt(env.FREE_TTL_DAYS ?? "7", 10) || 7,
+        paid_ttl_days: parseInt(env.PAID_TTL_DAYS ?? "365", 10) || 365,
+        price_cents: price.cents,
+        currency: price.currency,
+      },
+      200,
+      "no-store",
+    );
   }
 
   // GET /admin — aggregate metrics dashboard. HTTP Basic Auth
@@ -1506,8 +1514,10 @@ async function handlePaymentInitiate(
   // Compute expiry: 30 days (matching v1's Monetization.create_token/1).
   // Tokens swept by the daily cron if abandoned before this deadline.
   const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
-  const amountCents = parseInt(env.PRICE_CENTS, 10) || 200;
-  const currency = env.PAYMENT_CURRENCY || "USD";
+  // Geo-aware: charge the price for the payer's country (CF-IPCountry). The
+  // resolved amount is stored on the blind token, so it flows to Paystack and
+  // the paid_sale/revenue metrics unchanged — the country itself is not stored.
+  const { cents: amountCents, currency } = resolvePrice((request.cf?.country ?? "") as string, env);
 
   try {
     await createPending(env.DB, {

@@ -134,7 +134,14 @@ head_sampling_rate = 1
 [vars]
 HOST = "stelgano.com"
 PAYMENT_CURRENCY = "USD"
-PRICE_CENTS = "500"
+# Default price (minor units) for any country not in an income tier below —
+# also the fallback for unknown/datacenter IPs (CF-IPCountry blank). Set a
+# little above the mid tiers so "appear as nowhere" isn't a discount.
+PRICE_CENTS = "600"
+# Income-tier prices in minor units. Countries are mapped to tiers in
+# src/lib/pricing.ts; uncategorised countries use PRICE_CENTS. high=$12,
+# upper-middle=$8, lower-middle=$4, low=$2.
+PRICE_TIERS = '{"high":1200,"upper":800,"lower":400,"low":200}'
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
 MONETIZATION_ENABLED = "true"
@@ -212,6 +219,9 @@ migrations_dir = "migrations"
 HOST = "staging.stelgano.com"
 PAYMENT_CURRENCY = "USD"
 PRICE_CENTS = "10"
+# Tiered prices kept tiny on staging so the full geo-pricing path is
+# exercisable (high=$0.50, upper=$0.40, lower=$0.20, low=$0.10).
+PRICE_TIERS = '{"high":50,"upper":40,"lower":20,"low":10}'
 FREE_TTL_DAYS = "7"
 PAID_TTL_DAYS = "365"
 # Enable monetization in staging so the full paid-tier flow can be exercised.

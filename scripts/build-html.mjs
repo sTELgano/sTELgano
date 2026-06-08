@@ -106,7 +106,9 @@ async function build() {
     // in its metadata (used on serious/legal pages where the amber
     // "See the trick" CTA is out of place).
     const showTrick =
-      String(meta.nav_trick ?? "on").trim().toLowerCase() !== "off";
+      String(meta.nav_trick ?? "on")
+        .trim()
+        .toLowerCase() !== "off";
     const shell = showTrick
       ? layout.replace(/<!--\s*TRICK:(?:START|END)\s*-->\n?/g, "")
       : layout.replace(/<!--\s*TRICK:START\s*-->[\s\S]*?<!--\s*TRICK:END\s*-->\n?/g, "");
