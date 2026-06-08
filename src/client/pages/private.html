@@ -1,0 +1,288 @@
+<!--
+  title: sTELgano
+-->
+
+<!-- ===================================================================
+     Dedicated paid-traffic landing page (Facebook / Meta).
+     Message-matched to the "Private chat, hidden as a contact." ad.
+     Single goal: get the visitor into /chat. One promise, one CTA,
+     minimal exits. Reachable at /private; point the ad at
+     /private?c=<campaign-slug> for funnel attribution (the shared
+     layout records the landing + campaign automatically).
+     ==================================================================== -->
+
+<!-- Hero — mirrors the ad headline and bullets verbatim so the click
+     feels continuous (scent match). -->
+<section class="relative flex flex-col items-center justify-center px-2 sm:px-6 pt-16 pb-8 text-center overflow-hidden">
+  <div class="orb orb-1 opacity-20 left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-75! h-75! sm:w-150! sm:h-150!"></div>
+
+  <div class="relative z-10 max-w-3xl mx-auto space-y-8 animate-in">
+    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+      <svg class="size-4" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+      Private Chat &middot; Ordinary Contact
+    </div>
+
+    <h1 class="text-5xl sm:text-7xl font-extrabold tracking-tighter font-display leading-[0.95]">
+      Private chat,<br><span class="text-gradient">hidden as a contact.</span>
+    </h1>
+
+    <p class="text-lg sm:text-2xl text-slate-300 font-medium leading-snug max-w-2xl mx-auto">
+      For conversations you don't want sitting in a visible chat app. Your channel lives inside a phone number saved in your contacts &mdash; invisible to anyone who picks up your phone.
+    </p>
+
+    <!-- The three ad bullets, restated as proof points. -->
+    <ul class="flex flex-col sm:flex-row sm:flex-wrap items-stretch justify-center gap-3 max-w-2xl mx-auto pt-2">
+      <li class="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-sm font-medium text-slate-200">
+        <svg class="size-5 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg>
+        No account to discover
+      </li>
+      <li class="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-sm font-medium text-slate-200">
+        <svg class="size-5 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg>
+        No chat history to scroll
+      </li>
+      <li class="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-sm font-medium text-slate-200">
+        <svg class="size-5 text-primary shrink-0" aria-hidden="true"><use href="/icons.svg#check_circle"/></svg>
+        Looks like a normal number
+      </li>
+    </ul>
+
+    <div class="flex flex-col items-center gap-4 pt-4">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 w-full sm:w-auto">
+        <a href="/chat" class="btn-primary px-10 py-5 text-xl group w-full sm:w-auto">
+          Start Private Chat
+          <svg class="size-6 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+        </a>
+        <a href="#see-the-trick" class="inline-flex items-center justify-center gap-2.5 px-10 py-5 text-xl font-bold rounded-2xl bg-amber-400 text-slate-950 hover:bg-amber-300 transition-all shadow-[0_0_28px_rgba(251,191,36,0.3)] group w-full sm:w-auto">
+          See the trick
+          <svg class="size-6 group-hover:scale-110 transition-transform" aria-hidden="true"><use href="/icons.svg#lightbulb"/></svg>
+        </a>
+      </div>
+      <p class="text-[11px] text-slate-500 font-medium flex items-center gap-2">
+        <svg class="size-3.5 text-primary" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
+        Free to start &middot; No download &middot; No sign-up &middot; Works in any browser
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- The "aha" visual — sits directly under the hero so the core idea
+     lands immediately. Two contact cards showing the whole trick at a
+     glance: each person keeps the other's REAL number; a second,
+     identical number sits underneath on both phones — that shared line
+     is the private channel. Built as markup (not a raster image) so it
+     stays crisp, on-brand, and editable. -->
+<section id="see-the-trick" class="scroll-mt-24 px-2 sm:px-6 py-12 sm:py-16 max-w-5xl mx-auto">
+  <div class="text-center mb-10 animate-in">
+    <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">See the trick</h2>
+    <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display">Two phones. One number only you two know.</h3>
+    <p class="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto mt-4 leading-relaxed">
+      Each of you keeps the other's real number. Underneath it sits a second number that's <span class="text-white font-semibold">identical on both phones</span> &mdash; that shared line is what opens your private channel. To anyone scrolling your contacts, it's just one more number on a card.
+    </p>
+  </div>
+
+  <figure class="space-y-6">
+    <div class="rounded-[2rem] bg-primary/5 border border-primary/15 p-4 sm:p-8 shadow-[0_0_60px_rgba(16,185,129,0.08)]">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-8">
+      <!-- John's phone, showing his contact for Jane -->
+      <div class="space-y-3">
+        <p class="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500 text-center">On John's phone</p>
+        <div class="rounded-[1.75rem] border border-white/15 bg-gradient-to-b from-slate-800/95 to-slate-900 p-5 ring-1 ring-primary/20 shadow-[0_0_40px_rgba(16,185,129,0.15)]">
+          <div class="flex flex-col items-center gap-2 pb-5 border-b border-white/5">
+            <div class="size-16 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center text-primary font-black text-xl font-display">JD</div>
+            <div class="text-white font-bold font-display text-lg">Jane Doe</div>
+            <div class="text-[10px] uppercase tracking-widest text-slate-500">Contact</div>
+          </div>
+          <div class="space-y-3 pt-5">
+            <div class="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 bg-white/5 border border-white/10">
+              <div class="min-w-0">
+                <div class="text-[10px] uppercase tracking-wider text-slate-500">Mobile</div>
+                <div class="font-mono text-sm text-slate-200 truncate">+1 (415) 555-0148</div>
+              </div>
+              <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-white/5 text-slate-400 border border-white/10">Real number</span>
+            </div>
+            <div class="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 bg-primary/10 border border-primary/30 shadow-[0_0_24px_rgba(16,185,129,0.12)]">
+              <div class="min-w-0">
+                <div class="text-[10px] uppercase tracking-wider text-primary/90 flex items-center gap-1">
+                  <svg class="size-3" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg> Mobile
+                </div>
+                <div class="font-mono text-sm text-white truncate">+1 (646) 555-0192</div>
+              </div>
+              <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary/20 text-primary border border-primary/30">Private channel</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Jane's phone, showing her contact for John -->
+      <div class="space-y-3">
+        <p class="text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500 text-center">On Jane's phone</p>
+        <div class="rounded-[1.75rem] border border-white/15 bg-gradient-to-b from-slate-800/95 to-slate-900 p-5 ring-1 ring-primary/20 shadow-[0_0_40px_rgba(16,185,129,0.15)]">
+          <div class="flex flex-col items-center gap-2 pb-5 border-b border-white/5">
+            <div class="size-16 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center text-primary font-black text-xl font-display">JD</div>
+            <div class="text-white font-bold font-display text-lg">John Doe</div>
+            <div class="text-[10px] uppercase tracking-widest text-slate-500">Contact</div>
+          </div>
+          <div class="space-y-3 pt-5">
+            <div class="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 bg-white/5 border border-white/10">
+              <div class="min-w-0">
+                <div class="text-[10px] uppercase tracking-wider text-slate-500">Mobile</div>
+                <div class="font-mono text-sm text-slate-200 truncate">+1 (212) 555-0177</div>
+              </div>
+              <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-white/5 text-slate-400 border border-white/10">Real number</span>
+            </div>
+            <div class="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 bg-primary/10 border border-primary/30 shadow-[0_0_24px_rgba(16,185,129,0.12)]">
+              <div class="min-w-0">
+                <div class="text-[10px] uppercase tracking-wider text-primary/90 flex items-center gap-1">
+                  <svg class="size-3" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg> Mobile
+                </div>
+                <div class="font-mono text-sm text-white truncate">+1 (646) 555-0192</div>
+              </div>
+              <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary/20 text-primary border border-primary/30">Private channel</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- The link between them, spelled out. -->
+    <figcaption class="flex flex-col items-center gap-2 pt-2">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold">
+        <svg class="size-4" aria-hidden="true"><use href="/icons.svg#shield_check"/></svg>
+        <span class="font-mono">+1 (646) 555-0192</span> &mdash; the same on both phones
+      </div>
+      <p class="text-xs text-slate-500 max-w-md text-center leading-relaxed">The real numbers differ &mdash; you each still call and text normally. Only the matching private number opens the channel, and only with each person's PIN.</p>
+    </figcaption>
+  </figure>
+</section>
+
+<!-- The wedge — what sets sTELgano apart from every other private
+     messenger. Encryption protects the contents; we also protect the
+     fact that a conversation exists at all. This answers "why not just
+     use Signal?" before the visitor can ask it. -->
+<section class="px-2 sm:px-6 py-16 sm:py-24 max-w-5xl mx-auto">
+  <div class="text-center mb-12 animate-in">
+    <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">What makes us different</h2>
+    <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display max-w-3xl mx-auto leading-tight">
+      Every secure messenger hides <span class="text-slate-400">what you said.</span><br class="hidden sm:block">
+      We also hide <span class="text-gradient">that you said anything.</span>
+    </h3>
+    <p class="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto mt-5 leading-relaxed">
+      Signal, WhatsApp and Telegram encrypt your messages &mdash; but the app icon, the contact, and the conversation thread all still sit there in plain sight. The encryption is strong; the <span class="text-white font-semibold">existence</span> of the chat isn't hidden at all.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
+    <div class="glass-card p-8 space-y-4">
+      <div class="size-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+        <svg class="size-6 text-slate-400" aria-hidden="true"><use href="/icons.svg#lock"/></svg>
+      </div>
+      <h4 class="text-lg font-bold text-white font-display">Encryption hides the contents</h4>
+      <p class="text-sm text-slate-400 leading-relaxed font-medium">No one can read what's inside. But a visible app and a named conversation still announce that a private exchange is happening &mdash; and with whom.</p>
+    </div>
+    <div class="glass-card-premium p-8 space-y-4 border-primary/20">
+      <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+        <svg class="size-6 text-primary" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
+      </div>
+      <h4 class="text-lg font-bold text-white font-display">sTELgano also hides the conversation</h4>
+      <p class="text-sm text-slate-300 leading-relaxed font-medium">Same strong encryption &mdash; <span class="text-white font-semibold">plus</span> invisibility. There's no app to find and no thread to open. It looks like an ordinary number in your contacts. Nothing to explain.</p>
+    </div>
+  </div>
+</section>
+
+<!-- "What they see" — the passcode test, the single most persuasive
+     idea in the product. Concrete, not abstract. -->
+<section class="px-2 sm:px-6 py-20 sm:py-28 max-w-4xl mx-auto">
+  <div class="glass-card-premium p-8 sm:p-12 text-center border-primary/10 animate-in">
+    <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-5">The test that matters</h2>
+    <p class="text-2xl sm:text-3xl font-bold text-white font-display leading-tight mb-6">
+      Someone unlocks your phone and opens sTELgano.<br class="hidden sm:block">
+      <span class="text-slate-400">What do they see?</span>
+    </p>
+    <p class="text-lg text-slate-300 leading-relaxed max-w-xl mx-auto">
+      A blank screen with two fields. No contacts. No history. No notifications. No way to even tell a conversation exists &mdash; unless they already know the number <span class="text-white font-semibold">and</span> your PIN.
+    </p>
+  </div>
+</section>
+
+<!-- How it works — condensed to set the one expectation that matters:
+     this is for TWO people. Stating it up front prevents solo visitors
+     from generating a number, hitting a wall with no one on the other
+     end, and bouncing. -->
+<section class="px-2 sm:px-6 py-12 sm:py-20 max-w-5xl mx-auto">
+  <div class="text-center mb-14 animate-in">
+    <h2 class="text-xs font-bold uppercase tracking-[0.4em] text-primary mb-4">How it works</h2>
+    <h3 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-display">You and one other person. Under a minute.</h3>
+    <p class="text-slate-400 text-base sm:text-lg max-w-xl mx-auto mt-4 leading-relaxed">
+      sTELgano connects two people who already trust each other. You'll need someone to share the number with &mdash; a partner, a source, a friend.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+    <div class="glass-card p-7 space-y-4 relative overflow-hidden group">
+      <div class="absolute -right-3 -bottom-3 text-7xl font-black text-white/3 group-hover:text-white/5 transition-colors italic pointer-events-none">1</div>
+      <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-xl ring-1 ring-primary/20">1</div>
+      <h4 class="text-lg font-bold text-white font-display">Hide it in their contact</h4>
+      <p class="text-sm text-slate-400 leading-relaxed font-medium">Generate a number that matches their real one &mdash; local if theirs is local, the same country if it's international &mdash; and add it as a second number on their existing contact card. It blends in right next to the number you already have for them. No contact for them yet? Save it as a new one under any name.</p>
+    </div>
+    <div class="glass-card p-7 space-y-4 relative overflow-hidden group">
+      <div class="absolute -right-3 -bottom-3 text-7xl font-black text-white/3 group-hover:text-white/5 transition-colors italic pointer-events-none">2</div>
+      <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-xl ring-1 ring-primary/20">2</div>
+      <h4 class="text-lg font-bold text-white font-display">Each pick a PIN</h4>
+      <p class="text-sm text-slate-400 leading-relaxed font-medium">You each choose your own private PIN. It never leaves your device &mdash; it's hashed locally to prove you're allowed in.</p>
+    </div>
+    <div class="glass-card p-7 space-y-4 relative overflow-hidden group">
+      <div class="absolute -right-3 -bottom-3 text-7xl font-black text-white/3 group-hover:text-white/5 transition-colors italic pointer-events-none">3</div>
+      <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-xl ring-1 ring-primary/20">3</div>
+      <h4 class="text-lg font-bold text-white font-display">Open the channel</h4>
+      <p class="text-sm text-slate-400 leading-relaxed font-medium">Enter the number and your PIN. Your browser derives the key and connects you &mdash; end-to-end encrypted, nothing stored.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Trust strip — what the server never sees. The objection-killer for
+     a privacy buyer who's seen "private" promised before. -->
+<section class="px-2 sm:px-6 py-12 sm:py-20 max-w-4xl mx-auto">
+  <div class="glass-card p-8 sm:p-10 animate-in">
+    <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-danger mb-7 flex items-center gap-2">
+      <svg class="size-4" aria-hidden="true"><use href="/icons.svg#x_circle"/></svg> What our servers never see
+    </h3>
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
+      <li class="flex items-start gap-3 text-sm">
+        <div class="size-1.5 rounded-full bg-danger/40 mt-2 shrink-0"></div>
+        <div><span class="font-bold text-white">Your messages</span><span class="text-slate-400 font-medium">&mdash; encrypted in your browser with AES-256-GCM before they ever leave it.</span></div>
+      </li>
+      <li class="flex items-start gap-3 text-sm">
+        <div class="size-1.5 rounded-full bg-danger/40 mt-2 shrink-0"></div>
+        <div><span class="font-bold text-white">The phone number</span><span class="text-slate-400 font-medium">&mdash; only an irreversible hash reaches us. We can't recover it.</span></div>
+      </li>
+      <li class="flex items-start gap-3 text-sm">
+        <div class="size-1.5 rounded-full bg-danger/40 mt-2 shrink-0"></div>
+        <div><span class="font-bold text-white">Your PIN</span><span class="text-slate-400 font-medium">&mdash; hashed on your device, never transmitted or stored.</span></div>
+      </li>
+      <li class="flex items-start gap-3 text-sm">
+        <div class="size-1.5 rounded-full bg-danger/40 mt-2 shrink-0"></div>
+        <div><span class="font-bold text-white">Any account</span><span class="text-slate-400 font-medium">&mdash; there isn't one. No email, no signup, nothing tying a session to you.</span></div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Radical honesty — on-brand, and it converts the right buyer while
+       filtering out the wrong one. -->
+  <p class="text-center text-sm text-slate-500 leading-relaxed max-w-xl mx-auto mt-8">
+    Built to protect against someone with physical access to your phone &mdash; a partner, a family member. We're honest about the limit: it is <span class="text-slate-300">not</span> designed to defeat a government or law enforcement.
+  </p>
+</section>
+
+<!-- Final CTA -->
+<section class="px-2 sm:px-6 py-20 sm:py-28 text-center relative overflow-hidden">
+  <div class="orb orb-2 opacity-20 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-75! h-75! sm:w-125! sm:h-125!"></div>
+  <div class="relative z-10 animate-in space-y-7">
+    <h3 class="text-3xl sm:text-5xl font-extrabold text-white font-display tracking-tighter">Start a channel <span class="text-gradient">only two people can open.</span></h3>
+    <p class="text-slate-400 text-base sm:text-lg max-w-md mx-auto">Free to start. No download, no sign-up. Open it now and share the number with someone you trust.</p>
+    <a href="/chat" class="btn-primary px-12 py-5 text-xl group inline-flex">
+      Start Private Chat
+      <svg class="size-6 group-hover:translate-x-1 transition-transform" aria-hidden="true"><use href="/icons.svg#arrow_right"/></svg>
+    </a>
+  </div>
+</section>

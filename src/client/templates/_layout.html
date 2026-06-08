@@ -6,12 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
   <!-- Favicons -->
+  <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon-96x96.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
 
   <!-- OpenGraph & SEO -->
-  <meta property="og:title" content="sTELgano - Zero Trace Encrypted Channels">
-  <meta property="og:description" content="The secure channel platform hidden in your contacts. No accounts, no logs, end-to-end encrypted.">
+  <meta property="og:title" content="sTELgano — Private chat, hidden as a contact">
+  <meta property="og:description" content="A private conversation hidden inside a number saved in your contacts. No app to find, no history to scroll, nothing to explain.">
   <meta property="og:image" content="/images/og_image.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -19,8 +20,8 @@
   <meta property="og:url" content="/">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="sTELgano - Zero Trace Encrypted Channels">
-  <meta name="twitter:description" content="The secure channel platform hidden in your contacts. No accounts, no logs, end-to-end encrypted.">
+  <meta name="twitter:title" content="sTELgano — Private chat, hidden as a contact">
+  <meta name="twitter:description" content="A private conversation hidden inside a number saved in your contacts. No app to find, no history to scroll, nothing to explain.">
   <meta name="twitter:image" content="/images/og_image.jpg">
 
   <!-- Minimal title — reveals nothing about the nature of the service in browser history. -->
@@ -117,6 +118,9 @@
 
       <div class="flex items-center gap-2 sm:gap-6">
         <div class="hidden md:flex items-center gap-8 mr-4">
+<!-- TRICK:START --><a href="/private#see-the-trick" class="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400 hover:text-amber-300 transition-all">
+            <svg class="size-3.5" aria-hidden="true"><use href="/icons.svg#lightbulb"/></svg>See the trick
+          </a><!-- TRICK:END -->
           <a href="/spec" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">Spec</a>
           <a href="/about" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">About</a>
           <a href="/blog" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 hover:text-white transition-all">Blog</a>
@@ -150,6 +154,9 @@
         </button>
       </div>
       <div class="flex flex-col gap-6">
+<!-- TRICK:START --><a href="/private#see-the-trick" class="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-all px-2 py-1 border-l-2 border-amber-400/40 hover:border-amber-400">
+          <svg class="size-4" aria-hidden="true"><use href="/icons.svg#lightbulb"/></svg>See the trick
+        </a><!-- TRICK:END -->
         <a href="/spec" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Spec</a>
         <a href="/about" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">About</a>
         <a href="/blog" class="text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all px-2 py-1 border-l-2 border-transparent hover:border-primary">Blog</a>
@@ -161,7 +168,7 @@
     </nav>
   </div>
 
-  <main class="flex-1 flex flex-col h-screen overflow-y-auto pt-16">
+  <main class="flex-1 flex flex-col h-screen overflow-y-auto pt-16 motion-safe:scroll-smooth">
     <div class="w-full flex-1 flex flex-col max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
       {{CONTENT}}
     </div>

@@ -100,7 +100,18 @@ async function build() {
         : DEFAULT_LAYOUT;
     const layout = await loadLayout(layoutName);
 
-    const html = layout
+    // Per-page nav CTA visibility. The shared layout wraps optional
+    // promo nav links in <!-- TRICK:START --> … <!-- TRICK:END -->.
+    // Default is to show them; a page opts out with `nav_trick: off`
+    // in its metadata (used on serious/legal pages where the amber
+    // "See the trick" CTA is out of place).
+    const showTrick =
+      String(meta.nav_trick ?? "on").trim().toLowerCase() !== "off";
+    const shell = showTrick
+      ? layout.replace(/<!--\s*TRICK:(?:START|END)\s*-->\n?/g, "")
+      : layout.replace(/<!--\s*TRICK:START\s*-->[\s\S]*?<!--\s*TRICK:END\s*-->\n?/g, "");
+
+    const html = shell
       .replace(/\{\{TITLE\}\}/g, escapeHtml(meta.title))
       .replace(/\{\{CONTENT\}\}/g, body);
 
