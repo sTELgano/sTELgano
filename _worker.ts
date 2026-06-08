@@ -660,9 +660,15 @@ function renderAdminHtml(d: {
     `<svg class="${cls} shrink-0" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
 
   // --- Derived headline figures over the selected range ---
+  // Every channel is created on the free tier; room_paid is a *conversion* of
+  // an existing free channel (via redeem_extension), never an independent
+  // creation. So the count of distinct channels created is room_free alone —
+  // adding paid would double-count every channel that later converted. The
+  // free/paid split below is therefore a subset breakdown that sums to created.
   const free = metricCount(d.totals, "room_free");
   const paid = metricCount(d.totals, "room_paid");
-  const created = free + paid;
+  const created = free;
+  const stillFree = Math.max(0, free - paid);
   const messages = metricCount(d.totals, "message_sent");
   const secondParty = metricCount(d.totals, "second_party_joined");
   const extended = metricCount(d.totals, "room_extended");
@@ -759,6 +765,7 @@ function renderAdminHtml(d: {
   const edited = metricCount(d.totals, "message_edited");
   const deleted = metricCount(d.totals, "message_deleted");
   const reads = metricCount(d.totals, "message_read");
+  const rejoins = metricCount(d.totals, "room_rejoin");
 
   // --- Monetization ---
   const sales = metricCount(d.totals, "paid_sale");
@@ -939,7 +946,7 @@ function renderAdminHtml(d: {
         <section id="overview" class="scroll-mt-6 space-y-8">
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             ${adminMetricCard("Active Channels", d.activeRooms.total, `${d.activeRooms.free} free · ${d.activeRooms.paid} paid`, "radio", true)}
-            ${adminMetricCard("Channels Created", created, `${free} free · ${paid} paid`, "check_circle")}
+            ${adminMetricCard("Channels Created", created, `${stillFree} free · ${paid} paid`, "check_circle")}
             ${adminMetricCard("Messages Sent", messages, "Encrypted, over range", "message_circle")}
             ${adminMetricCard("Activation", `${pct(secondParty, created)}%`, "Two-party channels", "users")}
           </div>
@@ -1013,6 +1020,7 @@ function renderAdminHtml(d: {
             ${adminMetricCard("Messages Read", reads, "Read receipts fired", "check_circle")}
             ${adminMetricCard("Messages Edited", edited, "Edited before read", "message_circle")}
             ${adminMetricCard("Messages Deleted", deleted, "Deleted before read", "message_circle")}
+            ${adminMetricCard("Rejoins", rejoins, "Returning party re-entries", "radio")}
             ${adminMetricCard("Solo Expiries", `${pct(expiredSolo, expiredFree + expiredPaid)}%`, "Expired, never a 2nd party", "users")}
           </div>
         </section>

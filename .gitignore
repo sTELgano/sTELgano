@@ -113,3 +113,6 @@ Thumbs.db
 /project/feedback/
 /project/TODOs.md
 /ads
+
+# Local D1 data backups (never commit production data)
+.backups/
