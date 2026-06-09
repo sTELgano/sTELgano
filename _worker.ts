@@ -1619,7 +1619,6 @@ async function handlePaystackWebhook(
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
-  console.log("Paystack Webhook received");
   if (env.MONETIZATION_ENABLED !== "true") {
     return jsonResponse({ error: "not_found" }, 404);
   }
