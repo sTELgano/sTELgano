@@ -58,6 +58,7 @@ import {
   priceLabel,
   queryCfCountryRange,
   queryCountryRange,
+  queryDailySum,
   queryDailyTrend,
   queryDiasporaRange,
   queryFunnelRange,
@@ -78,6 +79,15 @@ import {
   findByTokenHash,
   markPaid,
 } from "./src/lib/extension_tokens";
+import {
+  buildCohortTriangle,
+  type CohortRow,
+  type GrowthGrade,
+  runRate,
+  weeklyActiveChannels,
+  weeklyBuckets,
+  wowGrowth,
+} from "./src/lib/growth";
 import { type ActiveRooms, getActiveRooms } from "./src/lib/live_counters";
 import {
   hmacSha512Hex,
@@ -480,8 +490,17 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   if (!checkBasicAuth(request, env)) return basicAuthChallenge();
 
   const url = new URL(request.url);
-  const range = parseDateRange(url.searchParams, Date.now());
+  const nowMs = Date.now();
+  const range = parseDateRange(url.searchParams, nowMs);
   const { from, to } = range;
+  // Growth panel: a fixed 12-week (84-day) window, independent of the page's
+  // selected range — weeklyBuckets()/runRate() slice it relative to nowMs.
+  const growthFrom = utcDay(nowMs - 84 * 86_400_000);
+  const growthTo = utcDay(nowMs);
+  // Cohort cells for a cohort created N weeks ago are emitted up to N weeks
+  // later, so the cohort_active scan needs a wider window than the 12-week
+  // display (≈17 weeks) to capture every observable cell.
+  const cohortFrom = utcDay(nowMs - 120 * 86_400_000);
 
   let totals: MetricTotal[] = [];
   let trend: DailyTrendRow[] = [];
@@ -500,6 +519,9 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
   let revenueByCountry: RevenueCountryRow[] = [];
   let campaigns: Campaign[] = [];
   let activeRooms: ActiveRooms = { total: 0, free: 0, paid: 0 };
+  let growthCounts: DailyTrendRow[] = [];
+  let growthRevenue: Array<{ day: string; value: number }> = [];
+  let cohortActive: BucketRow[] = [];
   try {
     [
       totals,
@@ -519,6 +541,9 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
       revenueByCountry,
       campaigns,
       activeRooms,
+      growthCounts,
+      growthRevenue,
+      cohortActive,
     ] = await Promise.all([
       queryTotals(env.DB, from, to),
       queryDailyTrend(
@@ -542,6 +567,13 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
       queryRevenueByCountry(env.DB, from, to),
       listCampaigns(env.DB).catch(() => [] as Campaign[]),
       getActiveRooms(env.DB),
+      queryDailyTrend(env.DB, growthFrom, growthTo, [
+        "room_free",
+        "second_party_joined",
+        "message_sent",
+      ]),
+      queryDailySum(env.DB, growthFrom, growthTo, "paid_sale"),
+      queryHistogram(env.DB, cohortFrom, growthTo, "cohort_active"),
     ]);
   } catch {
     // D1 unavailable — render an empty dashboard rather than 500.
@@ -568,6 +600,10 @@ async function handleAdminDashboard(request: Request, env: Env): Promise<Respons
     revenueByCountry,
     campaigns,
     activeRooms,
+    growthCounts,
+    growthRevenue,
+    cohortActive,
+    nowMs,
   });
 
   return new Response(html, {
@@ -660,6 +696,10 @@ function renderAdminHtml(d: {
   revenueByCountry: RevenueCountryRow[];
   campaigns: Campaign[];
   activeRooms: ActiveRooms;
+  growthCounts: DailyTrendRow[];
+  growthRevenue: Array<{ day: string; value: number }>;
+  cohortActive: BucketRow[];
+  nowMs: number;
 }): string {
   // `shrink-0` is essential: without it an inline SVG inside a flex row
   // shrinks toward zero width when space is tight (small screens), so the
@@ -890,6 +930,54 @@ function renderAdminHtml(d: {
         </div>
         <p class="text-xs text-slate-500 font-medium leading-relaxed">${blurb}</p>`;
 
+  // --- Growth · week-over-week (fixed trailing 12-week window, see growth.ts) ---
+  const growthDaily = (metric: string) =>
+    d.growthCounts.filter((r) => r.metric === metric).map((r) => ({ day: r.day, value: r.count }));
+  const growthCurrency = d.pricing.find((p) => p.price.includes("_"))?.price.split("_")[0] ?? "USD";
+  const gNum = (n: number) => String(n);
+  // Reuse the dashboard's plain minor-unit formatter (no Intl currency-code
+  // lookup, which would throw on a malformed code); prefix the currency only
+  // where there's room (the run-rate line), not on the tiny per-bar labels.
+  const gMoney = (minor: number) => formatMinor(minor);
+  const gMoneyCur = (minor: number) => `${growthCurrency} ${formatMinor(minor)}`;
+  const gCreated = wowGrowth(weeklyBuckets(growthDaily("room_free"), 12, d.nowMs));
+  const gWac = wowGrowth(
+    weeklyActiveChannels(
+      d.cohortActive.map((b) => ({ dim: b.bucket, count: b.count })),
+      12,
+      d.nowMs,
+    ),
+  );
+  const gWacNote = `<div class="text-[11px] text-slate-600 pt-1">Distinct channels active that week — the accountless WAU analog. Undercounts channels older than 12 weeks; fills in from this feature's deploy.</div>`;
+  const gSecond = wowGrowth(weeklyBuckets(growthDaily("second_party_joined"), 12, d.nowMs));
+  const gMsgs = wowGrowth(weeklyBuckets(growthDaily("message_sent"), 12, d.nowMs));
+  const gRevWeeks = weeklyBuckets(d.growthRevenue, 12, d.nowMs);
+  const gRev = wowGrowth(gRevWeeks);
+  const gRR = runRate(d.growthRevenue, d.nowMs);
+  const gRRLine = `<div class="text-[11px] text-slate-500 pt-1">Run-rate · trailing 30d <span class="font-mono text-slate-300">${gMoneyCur(gRR.last30)}</span> · prior 30d <span class="font-mono text-slate-400">${gMoneyCur(gRR.prior30)}</span>${gRR.momPct === null ? "" : ` · <span class="font-mono ${gRR.momPct >= 0 ? "text-emerald-400" : "text-red-400"}">${gRR.momPct >= 0 ? "+" : ""}${Math.round(gRR.momPct)}% MoM</span>`} <span class="text-slate-600">— transaction volume, not MRR</span></div>`;
+  const growthPanel = `
+      <div class="glass-card p-6 sm:p-10 space-y-2">
+        ${sectionHeader("zap", "Growth · week-over-week", "The figure YC underwrites — rate of change, not size. With no accounts, channels created is the closest thing to a signup. Weeks are Monday-anchored (UTC); the faded current week is partial and excluded from the average. YC reads ~5–7% avg WoW as healthy. Fixed trailing 12 weeks, independent of the range above.")}
+        ${renderGrowthRow({ label: "Channels created", weeks: gCreated.weeks, avgWoW: gCreated.avgWoW, grade: gCreated.grade, fmt: gNum })}
+        ${renderGrowthRow({ label: "Active channels · WAC", weeks: gWac.weeks, avgWoW: gWac.avgWoW, grade: gWac.grade, fmt: gNum, extra: gWacNote })}
+        ${renderGrowthRow({ label: "Second parties joined · activation", weeks: gSecond.weeks, avgWoW: gSecond.avgWoW, grade: gSecond.grade, fmt: gNum })}
+        ${renderGrowthRow({ label: "Messages sent · engagement", weeks: gMsgs.weeks, avgWoW: gMsgs.avgWoW, grade: gMsgs.grade, fmt: gNum })}
+        ${renderGrowthRow({ label: "Revenue", weeks: gRevWeeks, avgWoW: gRev.avgWoW, grade: gRev.grade, fmt: gMoney, extra: gRRLine })}
+      </div>`;
+
+  // --- Channel retention cohorts (entity = channel; sizes = weekly room_free) ---
+  const cohortRows = buildCohortTriangle(
+    d.cohortActive.map((b) => ({ dim: b.bucket, count: b.count })),
+    gCreated.weeks,
+    d.nowMs,
+    8,
+  );
+  const cohortPanel = `
+      <div class="glass-card p-6 sm:p-10 space-y-6">
+        ${sectionHeader("users", "Channel retention cohorts", "Accountless app → the channel is the cohort entity. Rows = channels created that week; columns = the share still active (carried activity) N weeks later. Week 0 ≈ 100% by construction — read the flattening of each row, not its height. Forward-looking: cohorts fill in from this feature's deploy; blank = not observable yet.")}
+        ${renderCohortTable(cohortRows, 8)}
+      </div>`;
+
   return `<!DOCTYPE html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <html lang="en" data-theme="dark" style="scroll-behavior:smooth">
@@ -964,6 +1052,8 @@ function renderAdminHtml(d: {
             ${adminMetricCard("Empty Expiries", `${pct(expiredEmpty, expiredFree + expiredPaid)}%`, "Expired, never messaged", "alert_triangle")}
             ${adminMetricCard("Lockouts", lockouts, `${accessFailed} failed attempts`, "shield")}
           </div>
+          ${growthPanel}
+          ${cohortPanel}
           <div class="glass-card p-6 sm:p-10 space-y-6">
             ${sectionHeader("bar_chart_3", "Daily Trend", "New free / new paid channels and messages per UTC day across the selected range. Exact counts — no sampling.")}
             ${trendChart}
@@ -1147,6 +1237,101 @@ function adminMetricCard(
       </div>
     </div>
   `;
+}
+
+// Week-over-week growth panel — see src/lib/growth.ts. YC reads ~5–7% avg WoW
+// as healthy; the badge surfaces that grade automatically.
+const GROWTH_GRADE_STYLE: Record<GrowthGrade, { label: string; cls: string }> = {
+  exceptional: {
+    label: "Exceptional",
+    cls: "text-emerald-300 bg-emerald-400/10 border-emerald-400/40",
+  },
+  healthy: {
+    label: "Healthy · YC 5–7%",
+    cls: "text-emerald-300 bg-emerald-400/10 border-emerald-400/30",
+  },
+  positive: { label: "Below target", cls: "text-amber-400 bg-amber-400/10 border-amber-400/30" },
+  flat: { label: "Flat", cls: "text-red-400 bg-red-400/10 border-red-400/30" },
+  insufficient: { label: "Need ≥2 weeks", cls: "text-slate-400 bg-white/5 border-white/10" },
+};
+
+/** One growth metric: 12 weekly bars (values always visible — touch-safe) plus
+ *  the avg WoW% and the auto-graded YC badge. The final (current) week is faded
+ *  because it's partial and excluded from the average. */
+function renderGrowthRow(opts: {
+  label: string;
+  weeks: ReadonlyArray<{ weekStart: string; value: number }>;
+  avgWoW: number | null;
+  grade: GrowthGrade;
+  fmt: (n: number) => string;
+  extra?: string;
+}): string {
+  const max = Math.max(1, ...opts.weeks.map((w) => w.value));
+  const lastIdx = opts.weeks.length - 1;
+  const bars = opts.weeks
+    .map((w, i) => {
+      const h = Math.round((w.value / max) * 34) + 2;
+      const current = i === lastIdx;
+      return `<div class="flex flex-col items-center justify-end gap-1 w-9 shrink-0">
+            <div class="text-[8px] font-mono text-slate-400">${escapeAttr(opts.fmt(w.value))}</div>
+            <div class="w-3.5 rounded-sm ${current ? "bg-primary/30" : "bg-primary/70"}" style="height:${h}px"></div>
+            <div class="text-[7px] font-mono text-slate-600">${escapeAttr(w.weekStart.slice(5))}</div>
+          </div>`;
+    })
+    .join("");
+  const g = GROWTH_GRADE_STYLE[opts.grade];
+  const avg =
+    opts.avgWoW === null ? "—" : `${opts.avgWoW >= 0 ? "+" : ""}${opts.avgWoW.toFixed(1)}%`;
+  return `
+        <div class="space-y-3 py-4 border-b border-white/5 last:border-b-0">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="text-sm font-bold text-white">${escapeAttr(opts.label)}</div>
+            <div class="flex items-center gap-3">
+              <div class="text-xl font-mono font-black text-white">${avg}<span class="text-[9px] font-sans font-medium uppercase tracking-widest text-slate-500 ml-1.5">avg WoW</span></div>
+              <span class="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${g.cls}">${escapeAttr(g.label)}</span>
+            </div>
+          </div>
+          <div class="flex items-end gap-1.5 overflow-x-auto pb-1">${bars}</div>
+          ${opts.extra ?? ""}
+        </div>`;
+}
+
+/** Channel retention cohort triangle. Rows = creation week (+ channels made);
+ *  columns = retention % N weeks later. Heatmap alpha is capped at 40% so the
+ *  value text stays legible in both themes; value is shown as text too (a11y).
+ *  Blank cell = not observable yet. */
+function renderCohortTable(rows: CohortRow[], maxOffset: number): string {
+  // Only show cohorts captured from creation: a properly-tracked cohort has
+  // week-0 ≈ 100% (a beacon fires at creation). Cohorts that predate this
+  // feature's deploy were counted in room_free but emitted no cohort_active,
+  // so their week-0 reads ~0 — dropping them avoids a misleading fake-0% row
+  // and lets the triangle "grow in" cleanly from the deploy.
+  const visible = rows.filter((r) => r.size > 0 && (r.cells[0] ?? 0) >= 50);
+  if (visible.length === 0) {
+    return `<p class="text-xs text-slate-500 font-medium">No cohorts captured yet — channels created from here on populate this (week 0 onward). Read the <em>flattening</em> of each row, not its height.</p>`;
+  }
+  const head = `<tr>
+        <th class="text-left text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 py-1 sticky left-0 bg-slate-950">Cohort</th>
+        <th class="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 py-1">Channels</th>
+        ${Array.from({ length: maxOffset + 1 }, (_, k) => `<th class="text-[9px] font-mono text-slate-500 px-2 py-1">W${k}</th>`).join("")}
+      </tr>`;
+  const body = visible
+    .map((r) => {
+      const cells = r.cells
+        .map((c) => {
+          if (c === null) return `<td class="px-2 py-1 text-center text-slate-700">·</td>`;
+          const alpha = Math.min(0.4, (c / 100) * 0.4).toFixed(3);
+          return `<td class="px-2 py-1 text-center text-[11px] font-mono text-white" style="background:rgba(16,185,129,${alpha})">${c}%</td>`;
+        })
+        .join("");
+      return `<tr class="border-t border-white/5">
+        <td class="text-left text-[11px] font-mono text-slate-300 px-2 py-1 whitespace-nowrap sticky left-0 bg-slate-950">${escapeAttr(r.cohortWeek)}</td>
+        <td class="text-center text-[11px] font-mono text-slate-400 px-2 py-1">${r.size}</td>
+        ${cells}
+      </tr>`;
+    })
+    .join("");
+  return `<div class="overflow-x-auto"><table class="w-full border-collapse min-w-max">${head}${body}</table></div>`;
 }
 
 // ---------------------------------------------------------------------------
