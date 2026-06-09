@@ -605,12 +605,20 @@ export class RoomDO implements DurableObject {
     if (msg.id !== evt.data.message_id || msg.readAtMs !== null) {
       return;
     }
+    // A read receipt is the RECIPIENT confirming they saw the message. Ignore
+    // a sender read-receipting their own message — same senderHash means it's
+    // the author (or a party sharing the same phone+PIN, which the product
+    // discourages). Counting it would inflate message_read with no matching
+    // second-party join (read>0 yet activation=0), and wrongly latch readAtMs
+    // so the author could no longer edit/delete their own unread message.
+    const att = ws.deserializeAttachment() as WsAttachment | null;
+    if (att?.senderHash && att.senderHash === msg.senderHash) {
+      return;
+    }
     msg.readAtMs = Date.now();
     await this.persist();
     this.broadcastAll({ event: "message_read", data: { message_id: msg.id } });
-    // Global (no country): the read-receipt handler has no attachment in scope.
     enqueueMetric(this.env.METRICS_QUEUE, "message_read");
-    void ws;
   }
 
   private async handleEditMessage(
