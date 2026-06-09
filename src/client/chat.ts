@@ -1673,7 +1673,7 @@ function renderMessageBubble(msg: PlainMessage, senderHash: string): string {
 // rather than a dead-end "buffer is empty" message.
 function renderEmptyBuffer(phone: string): string {
   return `
-    <div class="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto animate-in space-y-5">
+    <div class="flex flex-col items-center justify-center min-h-full text-center max-w-sm mx-auto animate-in space-y-5">
       <div class="size-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
         ${icon("users", "size-7 text-primary")}
       </div>
