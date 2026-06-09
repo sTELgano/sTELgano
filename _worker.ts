@@ -1315,10 +1315,12 @@ function renderGrowthRow(opts: {
  *  value text stays legible in both themes; value is shown as text too (a11y).
  *  Blank cell = not observable yet. */
 function renderCohortTable(rows: CohortRow[], maxOffset: number): string {
-  // size = the cohort's own week-0 beacon count, so any size>0 row is a
-  // properly-captured cohort (week-0 = 100% by construction). Pre-deploy
-  // channels emit no beacon and so never appear.
-  const visible = rows.filter((r) => r.size > 0);
+  // Only show cohorts captured from creation: a properly-tracked cohort has
+  // week-0 ≈ 100% (a beacon fires at creation). Cohorts that predate this
+  // feature's deploy were counted in room_free but emitted no cohort_active,
+  // so their week-0 reads ~0 — dropping them avoids a misleading fake-0% row
+  // and lets the triangle "grow in" cleanly from the deploy.
+  const visible = rows.filter((r) => r.size > 0 && (r.cells[0] ?? 0) >= 50);
   if (visible.length === 0) {
     return `<p class="text-xs text-slate-500 font-medium">No cohorts captured yet — channels created from here on populate this (week 0 onward). Read the <em>flattening</em> of each row, not its height.</p>`;
   }
