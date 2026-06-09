@@ -1162,6 +1162,19 @@ const FUNNEL_LABELS: Record<string, string> = {
   extend_completed: "Extended",
 };
 
+// The funnel chart shows only the strictly-nested gates — each is a subset of
+// the previous within the same session (a /chat visit fires landing; opening a
+// channel requires /chat; an extension completes inside an open channel). So
+// step→step conversion is always ≤100% and the friction flag is meaningful.
+const FUNNEL_GATE_STEPS = ["landing", "chat_view", "channel_opened", "extend_completed"] as const;
+
+// steg_generated and extend_started are OPTIONAL / cross-session actions, not
+// gates: openers (the 2nd party, returning users, Paystack returners) skip the
+// generator, and "extend started" is the in-chat click whose completion lands
+// on the Paystack return — often a different session or reporting window. Shown
+// as side "intent" stats so they can't produce impossible >100% steps.
+const FUNNEL_INTENT_STEPS = ["steg_generated", "extend_started"] as const;
+
 function emptyFunnel(): Record<string, number> {
   const z: Record<string, number> = {};
   for (const s of FUNNEL_STEPS) z[s] = 0;
@@ -1247,7 +1260,7 @@ function renderCampaignsSection(
           <h4 class="text-[10px] font-black uppercase tracking-[0.4em]">Conversion Funnel</h4>
         </div>
         <p class="text-xs text-slate-500 font-medium leading-relaxed">
-          Every session flows through the funnel — Landing → /chat → number generated → channel opened → extend started → extended. The step with the steepest drop-off is flagged <span class="text-amber-400 font-bold uppercase">friction</span>. Counts are per-session over the selected range; aggregate only, no user data. <span class="text-slate-400">Activation</span> = reached an open channel; <span class="text-slate-400">paid</span> = extended a number (both relative to landings).
+          The funnel shows the strictly-nested gates — Landing → /chat → opened channel → extended — so each step is a subset of the one before it and the steepest drop is flagged <span class="text-amber-400 font-bold uppercase">friction</span>. <span class="text-slate-400">Generated #</span> and <span class="text-slate-400">Started extend</span> are shown as <span class="text-slate-400">intent</span> side-stats, not gates: openers can skip the generator (the 2nd party, returning users) and checkout completes on the Paystack return, so as gates they'd read &gt;100%. Counts are per-session client beacons over the range (approximate, aggregate only). For the exact number of channels created, use <span class="text-slate-400">Channels created</span> in Overview (server-side <span class="font-mono">room_free</span>) — the funnel is directional, not a ledger.
         </p>
 
         <!-- Platform-wide funnel (link-independent) -->
@@ -1301,13 +1314,16 @@ function renderFunnelCard(opts: {
   archiveId?: string;
   highlight?: boolean;
 }): string {
-  const counts = FUNNEL_STEPS.map((s) => opts.steps[s] ?? 0);
+  const counts = FUNNEL_GATE_STEPS.map((s) => opts.steps[s] ?? 0);
   const top = counts[0] ?? 0;
 
-  // Steepest consecutive percentage drop = the friction point.
+  // Steepest consecutive drop = friction — but only across the ACQUISITION
+  // gates (landing → /chat → opened). The final opened → extended drop is the
+  // paywall; paid conversion is expected to be low, so including it would let
+  // it monopolise the flag every time and hide the actionable acquisition leak.
   let worstIdx = -1;
   let worstDrop = 0;
-  for (let i = 1; i < counts.length; i++) {
+  for (let i = 1; i < counts.length - 1; i++) {
     const prev = counts[i - 1] ?? 0;
     const cur = counts[i] ?? 0;
     if (prev <= 0) continue;
@@ -1319,8 +1335,8 @@ function renderFunnelCard(opts: {
   }
 
   const cells: string[] = [];
-  for (let i = 0; i < FUNNEL_STEPS.length; i++) {
-    const step = FUNNEL_STEPS[i] ?? "";
+  for (let i = 0; i < FUNNEL_GATE_STEPS.length; i++) {
+    const step = FUNNEL_GATE_STEPS[i] ?? "";
     const count = counts[i] ?? 0;
     const pctTop = top > 0 ? Math.round((count / top) * 100) : 0;
     cells.push(`
@@ -1330,7 +1346,7 @@ function renderFunnelCard(opts: {
               <div class="text-[9px] font-mono text-slate-600">${pctTop}% of top</div>
             </div>`);
 
-    if (i < FUNNEL_STEPS.length - 1) {
+    if (i < FUNNEL_GATE_STEPS.length - 1) {
       const prev = counts[i] ?? 0;
       const next = counts[i + 1] ?? 0;
       const conv = prev > 0 ? Math.round((next / prev) * 100) : 0;
@@ -1344,6 +1360,15 @@ function renderFunnelCard(opts: {
             </div>`);
     }
   }
+
+  // Optional/cross-session actions shown beside the funnel, not as gates.
+  const intentRow = FUNNEL_INTENT_STEPS.map(
+    (s) =>
+      `<span class="inline-flex items-baseline gap-1.5">
+         <span class="font-mono font-bold text-slate-300">${opts.steps[s] ?? 0}</span>
+         <span class="text-[10px] uppercase tracking-widest text-slate-600">${escapeAttr(FUNNEL_LABELS[s] ?? s)}</span>
+       </span>`,
+  ).join(`<span class="text-slate-700">·</span>`);
 
   const linkRow = opts.link
     ? `<div class="flex items-center gap-2 text-[11px] font-mono text-primary/80 break-all">
@@ -1376,6 +1401,10 @@ function renderFunnelCard(opts: {
             <div class="flex items-stretch gap-1 min-w-max py-1">
               ${cells.join("")}
             </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-600">Intent (not gates)</span>
+            ${intentRow}
           </div>
         </div>`;
 }
