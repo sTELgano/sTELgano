@@ -141,9 +141,17 @@ describe("buildCohortTriangle", () => {
     expect(rows[1]).toEqual({ cohortWeek: "2026-06-08", size: 4, cells: [100, null, null] });
   });
 
-  it("nulls every cell for a zero-size cohort (no divide-by-zero)", () => {
+  it("nulls every cell for a cohort with no week-0 beacon (no divide-by-zero)", () => {
     const rows = buildCohortTriangle([], [{ weekStart: "2026-06-01", value: 0 }], now, 2);
     expect(rows[0]?.cells).toEqual([null, null, null]);
+  });
+
+  it("sizes by the week-0 beacon count, not room_free (robust to mid-week deploy)", () => {
+    // room_free says 5 channels that week, but only 1 emitted a week-0 beacon
+    // (the rest predate the feature). Size must be 1 → week-0 reads 100%, not 20%.
+    const active = [{ dim: "2026-06-08+0", count: 1 }];
+    const rows = buildCohortTriangle(active, [{ weekStart: "2026-06-08", value: 5 }], now, 1);
+    expect(rows[0]).toEqual({ cohortWeek: "2026-06-08", size: 1, cells: [100, null] });
   });
 
   it("ignores malformed dims", () => {
