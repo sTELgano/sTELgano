@@ -20,6 +20,8 @@ export type FunnelStep =
   | "landing"
   | "chat_view"
   | "steg_generated"
+  | "new_channel_view"
+  | "setup_confirmed"
   | "channel_opened"
   | "extend_started"
   | "extend_completed";

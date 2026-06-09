@@ -174,9 +174,13 @@ export type State = BaseState &
         /** 0–100; updated by the worker. */
         progress: number;
       }
-    /** Monetization-on case: room doesn't exist on the server yet, the
-     *  user has to pick a tier. Skipped when monetization is off (the
-     *  state machine auto-fires continueFree() in that path). */
+    /** Brand-new channel confirmation screen: the room doesn't exist on the
+     *  server yet. Shown for every new channel — it gates on confirm-PIN +
+     *  confirm-number (proof the creator saved the number). There is no
+     *  Free/Paid choice here: every room is created free; extending to paid
+     *  happens later from inside the chat (redeem_extension), only when
+     *  monetization is enabled. Skipped only for returning users and Paystack
+     *  handoff returns. */
     | {
         kind: "new_channel";
         phone: string;
@@ -185,24 +189,21 @@ export type State = BaseState &
         roomHash: string;
         accessHash: string;
         senderHash: string;
-        /** Confirmation PIN — only required for new channel creation. */
+        /** Which sub-step is showing: "save" (save the number to contacts)
+         *  → "confirm" (re-enter PIN, then create). The save step makes the
+         *  real save action prominent; we can't verify a save happened (no
+         *  contacts API), so there's no fake proof gate. */
+        step: "save" | "confirm";
+        /** Confirmation PIN — entered on the "confirm" sub-step. */
         confirmPin: string;
         /** Whether the terms have been accepted. */
         acceptedTerms: boolean;
-        /** Whether the user has confirmed they've saved their identity. */
-        confirmedSaved: boolean;
-        /** True while the paid-tier button is in flight (token
-         *  generation + POST /api/payment/initiate + redirect). */
-        paymentLoading: boolean;
-        /** Error banner copy after a failed payment init, null
-         *  otherwise. Cleared when the user clicks a tier again. */
-        paymentError: string | null;
-        /** Free TTL in days from server config — rendered in the Free button. */
+        /** Validation error banner copy (PIN mismatch / terms not accepted),
+         *  null otherwise. Nothing here touches payment. */
+        error: string | null;
+        /** Free TTL in days from server config — shown under the confirm
+         *  button ("channel defaults to N days"). */
         freeTtlDays: number;
-        /** Price in minor currency units (e.g. cents). */
-        priceCents: number;
-        /** ISO 4217 currency code (e.g. "USD"). */
-        currency: string;
       }
     /** Opening the WebSocket and joining. Brief — under a second
      *  typically. */
@@ -563,15 +564,16 @@ export class ChatState {
       return;
     }
 
-    // Phase 3: probe the room. If it exists (returning user) OR the
-    // caller is landing back from a Paystack checkout with
-    // handoff_tier=free stashed, connectAndJoin directly. Otherwise
-    // route through new_channel so the user picks a tier — only
-    // Free calls connectAndJoin next; Paid sends the user through
-    // Paystack first.
+    // Phase 3: probe the room. A returning user (room exists) or someone
+    // landing back from a Paystack checkout (handoff_tier=free stashed) joins
+    // directly — they already have the number. Every OTHER case is a brand-new
+    // channel and routes through new_channel for the confirm-number/PIN gate,
+    // REGARDLESS of monetization: that gate proves the creator saved the
+    // number, which has nothing to do with payment. The room is always created
+    // free here; extending to paid happens later from the chat UI.
     const exists = await probeRoomExists(roomHash);
     const handoffTier = readHandoffTier();
-    if (exists || handoffTier === "free" || !this.config.monetizationEnabled) {
+    if (exists || handoffTier === "free") {
       this.cachedPin = pin;
       await this.connectAndJoin(normalisedPhone, countryIso, roomHash, accessHash, senderHash);
     } else {
@@ -584,15 +586,16 @@ export class ChatState {
         roomHash,
         accessHash,
         senderHash,
+        step: "save",
         confirmPin: "",
         acceptedTerms: false,
-        confirmedSaved: false,
-        paymentLoading: false,
-        paymentError: null,
+        error: null,
         freeTtlDays: this.config.freeTtlDays,
-        priceCents: this.config.priceCents,
-        currency: this.config.currency,
       });
+      // Funnel: the session reached the new-channel setup screen. This is the
+      // friction-heavy confirm step; pairing it with setup_confirmed below
+      // measures drop-off here.
+      fireFunnel("new_channel_view");
     }
   }
 
@@ -611,98 +614,86 @@ export class ChatState {
   }
 
   // -------------------------------------------------------------------------
-  // Action: free-tier confirm on the new_channel screen
+  // Action: confirm + create the channel (new_channel screen)
   //
-  // Phase 7 (Paystack) will add `initiatePayment` for the paid path.
-  // For now the state machine treats new_channel as a one-button
-  // confirm — both v1 monetization-off and the "Continue Free" click
-  // route through here.
+  // The single creation path. Validates the confirm-PIN, the confirm-number
+  // (proof the creator saved it), and the terms, then opens the room. Every
+  // room is created free; paying is a later, separate in-chat extend action.
   // -------------------------------------------------------------------------
 
-  async continueFree(): Promise<void> {
+  async createChannel(): Promise<void> {
     const s = this.state;
     if (s.kind !== "new_channel") return;
     if (s.pin !== s.confirmPin) {
-      this.setState({ ...s, paymentError: "PINs do not match" });
+      this.setState({ ...s, error: "PINs do not match" });
       return;
     }
-    if (!s.acceptedTerms || !s.confirmedSaved) {
-      this.setState({
-        ...s,
-        paymentError: "Please accept terms and confirm you saved your number",
-      });
+    if (!s.acceptedTerms) {
+      this.setState({ ...s, error: "Please accept the terms to continue" });
       return;
     }
+    fireFunnel("setup_confirmed");
     const { phone, countryIso, roomHash, accessHash, senderHash } = s;
     await this.connectAndJoin(phone, countryIso, roomHash, accessHash, senderHash);
   }
 
+  /** new_channel: advance from the save step to the PIN-confirm step. */
+  newChannelContinueToPin(): void {
+    const s = this.state;
+    if (s.kind !== "new_channel") return;
+    this.setState({ ...s, step: "confirm", error: null });
+  }
+
+  /** new_channel: go back from PIN-confirm to the save step. */
+  newChannelBack(): void {
+    const s = this.state;
+    if (s.kind !== "new_channel") return;
+    this.setState({ ...s, step: "save", error: null });
+  }
+
   // -------------------------------------------------------------------------
-  // Action: paid-tier checkout (new_channel)
+  // Action: extend the current channel to paid (chat only)
   //
-  // Generates a fresh extension secret + its SHA-256 hash, stashes
-  // the secret + phone in sessionStorage so the client can redeem
-  // after returning from Paystack, POSTs the hash to the server to
-  // create the extension_tokens row, and redirects to the returned
-  // Paystack URL.
+  // Generates a fresh extension secret + its SHA-256 hash, stashes the secret
+  // + phone in sessionStorage so the client can redeem after returning from
+  // Paystack, POSTs the hash to the server to create the extension_tokens row,
+  // and redirects to the returned Paystack URL.
   //
-  // The server endpoint is /api/payment/initiate. Phase 7 wires the
-  // actual Paystack.initialize call; for now the endpoint returns
-  // 501 when monetization is on but Paystack isn't configured, and
-  // 503 when monetization is off entirely.
+  // Channels are ALWAYS created free; this is the only paid path, reached from
+  // the in-chat extend control. The server endpoint /api/payment/initiate
+  // returns 501 when monetization is on but Paystack isn't configured, and 503
+  // when monetization is off entirely.
   // -------------------------------------------------------------------------
 
   async initiatePayment(): Promise<void> {
     const s = this.state;
-    if (s.kind !== "new_channel" && s.kind !== "chat") return;
+    if (s.kind !== "chat") return;
     if (s.paymentLoading) return;
 
-    if (s.kind === "new_channel") {
-      if (s.pin !== s.confirmPin) {
-        this.setState({ ...s, paymentError: "PINs do not match" });
-        return;
-      }
-      if (!s.acceptedTerms || !s.confirmedSaved) {
-        this.setState({
-          ...s,
-          paymentError: "Please accept terms and confirm you saved your number",
-        });
-        return;
-      }
-    }
-
     const phone = s.phone;
-    if (s.kind === "new_channel") {
-      this.setState({ ...s, paymentLoading: true, paymentError: null });
-    } else {
-      this.setState({ ...s, paymentLoading: true, paymentError: null });
-    }
+    this.setState({ ...s, paymentLoading: true, paymentError: null });
 
     const { secret, tokenHash } = await generateExtensionToken();
 
     // Stash for post-Paystack return — the chat entry form reads
-    // stelegano_handoff_phone on mount and pre-fills the phone
-    // field, and the redeem flow reads stelegano_extension_secret
-    // when the channel joins.
+    // stelegano_handoff_phone on mount and pre-fills the phone field, and the
+    // redeem flow reads stelegano_extension_secret when the channel rejoins.
     try {
       sessionStorage.setItem("stelegano_extension_secret", secret);
       sessionStorage.setItem("stelegano_handoff_phone", phone);
       // Persist the country ISO so validation passes on return.
       sessionStorage.setItem("stelegano_handoff_country", s.countryIso);
-
       // Persist the PIN so we can auto-submit on return.
-      const pinToStash = s.kind === "new_channel" ? s.pin : this.cachedPin;
-      if (pinToStash) {
-        sessionStorage.setItem("stelegano_handoff_pin", pinToStash);
+      if (this.cachedPin) {
+        sessionStorage.setItem("stelegano_handoff_pin", this.cachedPin);
       }
-      // v1 also stashed handoff_tier=free so the return path
-      // auto-creates the room as free (the extension upgrades it
-      // on redeem). Match.
+      // Stash handoff_tier=free so the return path rejoins as free; the
+      // extension upgrades it on redeem.
       sessionStorage.setItem("stelegano_handoff_tier", "free");
     } catch {
-      // sessionStorage disabled — unlikely but not fatal. The
-      // redeem will silently fail later. Continue to checkout
-      // anyway so the user sees the flow.
+      // sessionStorage disabled — unlikely but not fatal. The redeem will
+      // silently fail later. Continue to checkout anyway so the user sees the
+      // flow.
     }
 
     let response: Response;
@@ -714,13 +705,7 @@ export class ChatState {
       });
     } catch {
       const cs = this.state;
-      if (cs.kind === "new_channel") {
-        this.setState({
-          ...cs,
-          paymentLoading: false,
-          paymentError: "Network error. Check your connection and try again.",
-        });
-      } else if (cs.kind === "chat") {
+      if (cs.kind === "chat") {
         this.setState({
           ...cs,
           paymentLoading: false,
@@ -736,13 +721,7 @@ export class ChatState {
       parsed = (await response.json()) as InitiateResponse;
     } catch {
       const cs = this.state;
-      if (cs.kind === "new_channel") {
-        this.setState({
-          ...cs,
-          paymentLoading: false,
-          paymentError: "Server returned an unparseable response.",
-        });
-      } else if (cs.kind === "chat") {
+      if (cs.kind === "chat") {
         this.setState({
           ...cs,
           paymentLoading: false,
@@ -766,9 +745,7 @@ export class ChatState {
     const errorKey = "error" in parsed ? parsed.error : "unknown_error";
     const copy = paymentErrorCopy(errorKey);
     const cs = this.state;
-    if (cs.kind === "new_channel") {
-      this.setState({ ...cs, paymentLoading: false, paymentError: copy });
-    } else if (cs.kind === "chat") {
+    if (cs.kind === "chat") {
       this.setState({ ...cs, paymentLoading: false, paymentError: copy });
     }
   }
@@ -1075,12 +1052,6 @@ export class ChatState {
     const s = this.state;
     if (s.kind !== "new_channel") return;
     this.setState({ ...s, acceptedTerms });
-  }
-
-  setNewChannelConfirmedSaved(confirmedSaved: boolean): void {
-    const s = this.state;
-    if (s.kind !== "new_channel") return;
-    this.setState({ ...s, confirmedSaved });
   }
 
   setOnboardingStep(onboardingStep: number | null): void {

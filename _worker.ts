@@ -1356,6 +1356,8 @@ const FUNNEL_LABELS: Record<string, string> = {
   landing: "Landing",
   chat_view: "Visited /chat",
   steg_generated: "Generated #",
+  new_channel_view: "Setup shown",
+  setup_confirmed: "Setup confirmed",
   channel_opened: "Opened channel",
   extend_started: "Started extend",
   extend_completed: "Extended",
@@ -1370,9 +1372,18 @@ const FUNNEL_GATE_STEPS = ["landing", "chat_view", "channel_opened", "extend_com
 // steg_generated and extend_started are OPTIONAL / cross-session actions, not
 // gates: openers (the 2nd party, returning users, Paystack returners) skip the
 // generator, and "extend started" is the in-chat click whose completion lands
-// on the Paystack return — often a different session or reporting window. Shown
-// as side "intent" stats so they can't produce impossible >100% steps.
-const FUNNEL_INTENT_STEPS = ["steg_generated", "extend_started"] as const;
+// on the Paystack return — often a different session or reporting window.
+// new_channel_view / setup_confirmed only occur for NEW channels (returning
+// users and Paystack returners reach channel_opened without them), so they
+// aren't gates of the linear funnel either — but their ratio to each other is
+// the drop-off at the setup screen. Shown as side "intent" stats so they can't
+// produce impossible >100% steps.
+const FUNNEL_INTENT_STEPS = [
+  "steg_generated",
+  "new_channel_view",
+  "setup_confirmed",
+  "extend_started",
+] as const;
 
 function emptyFunnel(): Record<string, number> {
   const z: Record<string, number> = {};

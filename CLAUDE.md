@@ -81,7 +81,7 @@ entry → deriving → [new_channel?] → connecting → chat
 
 - `entry` — phone + PIN form. Phone is read-only when a steg number was just generated (generator drawer) or when returning from Paystack checkout (`stelegano_handoff_phone` in sessionStorage). Manual entries remain editable.
 - `deriving` — three-dot loading while `room_hash`, `access_hash`, `sender_hash` are computed; hits `/api/room/:hash/exists` to decide whether to show `new_channel`.
-- `new_channel` — plan selection (free/paid) when monetization is enabled and the room doesn't exist yet. No DO has been created at this point — the room is created on join, not before.
+- `new_channel` — creation-confirmation flow shown for every new channel (room doesn't exist yet), regardless of monetization. There is **no** free/paid choice here — every room is created free; paying is a separate, later in-chat extend action. Two sub-steps (`step: "save" | "confirm"`): **save** surfaces the number with a "Save to contacts" (vCard) action — a web app can't verify a contact was saved (no contacts API), so the real save action is made prominent rather than faking a proof gate; **confirm** re-enters the PIN + accepts terms, then creates the room via `createChannel()`. No DO exists at this point — the room is created on join, not before. Emits the `new_channel_view` funnel beacon on show and `setup_confirmed` on create.
 - `connecting` — PBKDF2 key derivation (600 000 iterations, runs in a dedicated Web Worker to keep the UI responsive)
 - `chat` — active chat; turn-based input (can type when room is empty or last message is from the other party)
 - `locked` — PIN re-entry after auto-lock; re-derives the key without re-joining the WebSocket

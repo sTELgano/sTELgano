@@ -245,41 +245,37 @@ state.onStateChange((s) => {
     if (s.kind === "new_channel") {
       const ps = prevState as Extract<State, { kind: "new_channel" }>;
 
-      // Update Confirm PIN field
-      if (s.confirmPin !== ps.confirmPin) {
-        const input = root.querySelector<HTMLInputElement>("input[name='nc_key_confirm']");
-        if (input && input.value !== s.confirmPin) input.value = s.confirmPin;
-      }
+      // A step switch (save ⇄ confirm) is structural — let the slow path
+      // re-render. Same-step changes are handled surgically below.
+      if (s.step === ps.step) {
+        if (s.step === "confirm") {
+          // Confirm PIN field
+          if (s.confirmPin !== ps.confirmPin) {
+            const input = root.querySelector<HTMLInputElement>("input[name='nc_key_confirm']");
+            if (input && input.value !== s.confirmPin) input.value = s.confirmPin;
+          }
+          // Terms checkbox
+          if (s.acceptedTerms !== ps.acceptedTerms) {
+            const cb = root.querySelector<HTMLInputElement>("input[name='nc_accept_terms']");
+            if (cb) cb.checked = s.acceptedTerms;
+          }
+          // Submit button disabled status
+          const canSubmit = s.confirmPin.length >= 4 && s.pin === s.confirmPin && s.acceptedTerms;
+          const prevCanSubmit =
+            ps.confirmPin.length >= 4 && ps.pin === ps.confirmPin && ps.acceptedTerms;
+          if (canSubmit !== prevCanSubmit) {
+            const btn = root.querySelector(
+              "button[data-action='create-channel']",
+            ) as HTMLButtonElement | null;
+            if (btn) btn.disabled = !canSubmit;
+          }
+        }
 
-      // Update checkboxes
-      if (s.acceptedTerms !== ps.acceptedTerms) {
-        const cb = root.querySelector<HTMLInputElement>("input[name='nc_accept_terms']");
-        if (cb) cb.checked = s.acceptedTerms;
-      }
-      if (s.confirmedSaved !== ps.confirmedSaved) {
-        const cb = root.querySelector<HTMLInputElement>("input[name='nc_confirm_saved']");
-        if (cb) cb.checked = s.confirmedSaved;
-      }
-
-      // Update submit button disabled status
-      const canSubmit =
-        s.confirmPin.length >= 4 && s.pin === s.confirmPin && s.acceptedTerms && s.confirmedSaved;
-      const prevCanSubmit =
-        ps.confirmPin.length >= 4 &&
-        ps.pin === ps.confirmPin &&
-        ps.acceptedTerms &&
-        ps.confirmedSaved;
-      if (canSubmit !== prevCanSubmit) {
-        const btn = root.querySelector(
-          "button[data-action='continue-free']",
-        ) as HTMLButtonElement | null;
-        if (btn) btn.disabled = !canSubmit;
-      }
-
-      // Only re-render if major UI structural states changed
-      if (s.paymentError === ps.paymentError && s.paymentLoading === ps.paymentLoading) {
-        prevState = JSON.parse(JSON.stringify(s)) as State;
-        return;
+        // Only an error-banner change needs the full re-render.
+        if (s.error === ps.error) {
+          prevState = JSON.parse(JSON.stringify(s)) as State;
+          return;
+        }
       }
     }
 
@@ -510,8 +506,14 @@ root.addEventListener("click", (e) => {
   if (!action) return;
 
   switch (action) {
-    case "continue-free":
-      void state.continueFree();
+    case "create-channel":
+      void state.createChannel();
+      break;
+    case "continue-to-pin":
+      state.newChannelContinueToPin();
+      break;
+    case "nc-back":
+      state.newChannelBack();
       break;
     case "close-overlay":
       state.closeOverlay();
@@ -543,13 +545,19 @@ root.addEventListener("click", (e) => {
       }
       break;
     }
+    case "save-contact-nc": {
+      const s = state.getState();
+      if (s.kind !== "new_channel") break;
+      downloadVcard(s.phone);
+      break;
+    }
     case "copy-phone-nc": {
       const s = state.getState();
       if (s.kind === "new_channel") {
-        void navigator.clipboard.writeText(s.phone);
-        target.innerHTML = icon("check", "size-6 text-primary");
+        void navigator.clipboard.writeText(`+${s.phone}`);
+        target.innerHTML = icon("check", "size-5 text-primary");
         setTimeout(() => {
-          target.innerHTML = icon("copy", "size-6");
+          target.innerHTML = icon("copy", "size-5");
         }, 2000);
       }
       break;
@@ -568,16 +576,8 @@ root.addEventListener("click", (e) => {
     case "save-contact": {
       const s = state.getState();
       if (s.kind !== "chat") break;
-      // User-initiated download (not auto) so the .vcf isn't a surprise
-      // Downloads trace; neutral filename keeps the app out of the file system.
-      const blobUrl = URL.createObjectURL(new Blob([buildVcard(s.phone)], { type: "text/vcard" }));
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = "contact.vcf";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      // User-initiated (not auto) so the .vcf isn't a surprise Downloads trace.
+      downloadVcard(s.phone);
       break;
     }
     case "whatsapp-invite": {
@@ -665,9 +665,6 @@ root.addEventListener("click", (e) => {
     case "open-spec":
       void state.openOverlay("/spec");
       break;
-    case "initiate-payment":
-      void state.initiatePayment();
-      break;
     case "send-message": {
       const ta = root.querySelector<HTMLTextAreaElement>("#chat-textarea");
       if (ta?.value.trim()) {
@@ -732,8 +729,6 @@ root.addEventListener(
       state.setNewChannelConfirmPin(target.value);
     } else if (target instanceof HTMLInputElement && target.name === "nc_accept_terms") {
       state.setNewChannelAcceptedTerms(target.checked);
-    } else if (target instanceof HTMLInputElement && target.name === "nc_confirm_saved") {
-      state.setNewChannelConfirmedSaved(target.checked);
     } else if (target instanceof HTMLInputElement && target.id === "country-search-trigger") {
       state.setSearchQuery(target.value);
     }
@@ -845,6 +840,19 @@ function getAdjustedCursor(oldVal: string, newVal: string, cursor: number): numb
 function buildVcard(num: string): string {
   const tel = `+${num}`;
   return `BEGIN:VCARD\r\nVERSION:3.0\r\nFN:${tel}\r\nTEL;TYPE=CELL:${tel}\r\nEND:VCARD\r\n`;
+}
+
+// Triggers a user-initiated .vcf download for the steg number. Neutral
+// filename so the file system reveals nothing about the app.
+function downloadVcard(num: string): void {
+  const blobUrl = URL.createObjectURL(new Blob([buildVcard(num)], { type: "text/vcard" }));
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = "contact.vcf";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 function escapeHtml(s: string): string {
@@ -1301,16 +1309,14 @@ function renderDeriving(s: Extract<State, { kind: "deriving" }>, animate = true)
 // ----------------------------- :new_channel -----------------------------
 
 function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
-  const canSubmit =
-    s.confirmPin.length >= 4 && s.pin === s.confirmPin && s.acceptedTerms && s.confirmedSaved;
-
-  const errorBanner = s.paymentError
-    ? `
-      <div class="p-4 rounded-2xl bg-danger/5 border border-danger/20 flex gap-3 items-start animate-in mb-6">
-        ${icon("alert_circle", "size-5 text-danger shrink-0 mt-0.5")}
-        <p class="text-sm font-medium text-danger">${escapeHtml(s.paymentError)}</p>
-      </div>`
-    : "";
+  const heading =
+    s.step === "save"
+      ? `Save your <span class="text-gradient">number.</span>`
+      : `Confirm your <span class="text-gradient">PIN.</span>`;
+  const subhead =
+    s.step === "save"
+      ? "This number is your channel. Save it in your contacts now — it's the only way back in, and the person you invite needs it too."
+      : "Re-enter your PIN to open the channel.";
 
   return `
     <div class="flex flex-col h-full w-full overflow-hidden">
@@ -1328,86 +1334,128 @@ function renderNewChannel(s: Extract<State, { kind: "new_channel" }>): string {
               ${icon("sparkles", "size-3")} New Channel Detected
             </div>
             <h2 class="text-4xl sm:text-6xl font-extrabold text-white font-display tracking-tight leading-[0.9]">
-              This is a <span class="text-gradient">new channel.</span>
+              ${heading}
             </h2>
             <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed max-w-sm mx-auto">
-              Please finalize setup to initialize your connection.
+              ${subhead}
             </p>
           </div>
 
           <div class="glass-card-premium p-6 sm:p-10">
-            ${errorBanner}
-
-            <!-- PIN Confirmation + Checkboxes -->
-            <div class="space-y-8 sm:space-y-10">
-              <div class="space-y-4">
-                <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
-                  Confirm PIN
-                </label>
-                <input
-                  name="nc_key_confirm"
-                  type="password"
-                  inputmode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="Repeat PIN to confirm"
-                  autocomplete="new-password"
-                  class="pin-field glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
-                  value="${escapeHtml(s.confirmPin)}"
-                  data-autofocus
-                >
-              </div>
-
-              <!-- Display Generated Number Prominently -->
-              <div class="p-6 rounded-2xl bg-slate-950/60 border border-white/5 space-y-3 text-center mb-4">
-                <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                  Your Secure Number
-                </label>
-                <div class="flex items-center justify-center gap-4">
-                  <div class="text-3xl sm:text-4xl font-mono font-black text-white tracking-tight">
-                    ${escapeHtml(s.phone)}
-                  </div>
-                  <button
-                    type="button"
-                    data-action="copy-phone-nc"
-                    class="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/5"
-                    title="Copy number"
-                  >
-                    ${icon("copy", "size-6")}
-                  </button>
-                </div>
-              </div>
-
-              <div class="space-y-4 pt-4 border-t border-white/5">
-                <label class="flex items-start gap-3 cursor-pointer group">
-                  <input type="checkbox" name="nc_accept_terms" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.acceptedTerms ? "checked" : ""}>
-                  <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
-                    I accept the <a data-action="open-terms" class="cursor-pointer text-primary hover:underline">Terms of Service</a> and Privacy Protocol.
-                  </span>
-                </label>
-                <label class="flex items-start gap-3 cursor-pointer group text-left">
-                  <input type="checkbox" name="nc_confirm_saved" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.confirmedSaved ? "checked" : ""}>
-                  <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
-                    I confirm that I have <span class="text-white font-bold underline decoration-primary/40">saved my number</span>. Access cannot be recovered later.
-                  </span>
-                </label>
-              </div>
-
-              <div class="space-y-4">
-                <button
-                  type="button"
-                  data-action="continue-free"
-                  class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
-                  ${!canSubmit ? "disabled" : ""}
-                >
-                  Initialize Secure Channel
-                  ${icon("arrow_right", "size-6 group-hover:translate-x-1 transition-transform")}
-                </button>
-                <p class="text-center text-slate-500 text-[10px] uppercase tracking-widest font-bold">
-                  Channel defaults to ${s.freeTtlDays} days limit
-                </p>
-              </div>
-            </div>
+            ${s.step === "save" ? renderNewChannelSave(s) : renderNewChannelConfirm(s)}
           </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// new_channel step 1 — save the number to contacts. A web app can't verify a
+// contact was saved (no contacts API), so there's no fake proof gate; instead
+// the real save action (vCard) is the prominent thing, then the user proceeds.
+function renderNewChannelSave(s: Extract<State, { kind: "new_channel" }>): string {
+  return `
+    <div class="space-y-8">
+      <div class="p-6 rounded-2xl bg-slate-950/60 border border-white/5 space-y-3 text-center">
+        <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">
+          Your Secure Number
+        </label>
+        <div class="flex items-center justify-center gap-3">
+          <div class="text-3xl sm:text-4xl font-mono font-black text-white tracking-tight break-all">+${escapeHtml(s.phone)}</div>
+          <button
+            type="button"
+            data-action="copy-phone-nc"
+            class="shrink-0 flex items-center justify-center size-10 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/10"
+            title="Copy number"
+          >
+            ${icon("copy", "size-5")}
+          </button>
+        </div>
+        <p class="text-[11px] text-amber-400/80 font-medium leading-relaxed pt-1">
+          No history, no recovery. If you lose this number, the channel is gone.
+        </p>
+      </div>
+
+      <div class="space-y-3">
+        <button
+          type="button"
+          data-action="save-contact-nc"
+          class="btn-primary w-full py-4 text-base flex items-center justify-center gap-2"
+        >
+          ${icon("contact", "size-5")} Save to contacts
+        </button>
+        <p class="text-center text-[11px] text-slate-500 font-medium leading-relaxed px-2">
+          Save it under a name you'll recognise. The person you invite must save it too.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        data-action="continue-to-pin"
+        class="btn-secondary w-full py-4 text-base group flex items-center justify-center gap-2"
+      >
+        Continue ${icon("arrow_right", "size-5 group-hover:translate-x-1 transition-transform")}
+      </button>
+    </div>
+  `;
+}
+
+// new_channel step 2 — confirm PIN + accept terms, then create the room.
+function renderNewChannelConfirm(s: Extract<State, { kind: "new_channel" }>): string {
+  const canSubmit = s.confirmPin.length >= 4 && s.pin === s.confirmPin && s.acceptedTerms;
+  const errorBanner = s.error
+    ? `
+      <div class="p-4 rounded-2xl bg-danger/5 border border-danger/20 flex gap-3 items-start animate-in mb-6">
+        ${icon("alert_circle", "size-5 text-danger shrink-0 mt-0.5")}
+        <p class="text-sm font-medium text-danger">${escapeHtml(s.error)}</p>
+      </div>`
+    : "";
+  return `
+    ${errorBanner}
+    <div class="space-y-8 sm:space-y-10">
+      <div class="space-y-4">
+        <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
+          Confirm PIN
+        </label>
+        <input
+          name="nc_key_confirm"
+          type="password"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          placeholder="Repeat PIN to confirm"
+          autocomplete="new-password"
+          class="pin-field glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
+          value="${escapeHtml(s.confirmPin)}"
+          data-autofocus
+        >
+      </div>
+
+      <div class="space-y-4 pt-4 border-t border-white/5">
+        <label class="flex items-start gap-3 cursor-pointer group">
+          <input type="checkbox" name="nc_accept_terms" class="mt-1 size-4 rounded bg-slate-950 border-white/10 text-primary focus:ring-primary/40 ring-offset-slate-900" ${s.acceptedTerms ? "checked" : ""}>
+          <span class="text-xs text-slate-400 leading-relaxed font-medium group-hover:text-slate-300 transition-colors">
+            I accept the <a data-action="open-terms" class="cursor-pointer text-primary hover:underline">Terms of Service</a> and Privacy Protocol. <span class="text-white font-bold">Access cannot be recovered later.</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="space-y-4">
+        <button
+          type="button"
+          data-action="create-channel"
+          class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+          ${!canSubmit ? "disabled" : ""}
+        >
+          Initialize Secure Channel
+          ${icon("arrow_right", "size-6 group-hover:translate-x-1 transition-transform")}
+        </button>
+        <div class="flex items-center justify-between gap-3">
+          <button type="button" data-action="nc-back" class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-white transition-colors">
+            ${icon("arrow_left", "size-3")} Back
+          </button>
+          <p class="text-slate-500 text-[10px] uppercase tracking-widest font-bold">
+            Channel defaults to ${s.freeTtlDays} days limit
+          </p>
         </div>
       </div>
     </div>
