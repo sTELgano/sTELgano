@@ -225,8 +225,10 @@ state.onStateChange((s) => {
         ) as HTMLButtonElement | null;
         if (genBtn) {
           genBtn.disabled = s.generating;
-          genBtn.innerHTML = icon("refresh_cw", `size-5 ${s.generating ? "animate-spin" : ""}`);
-          genBtn.classList.toggle("opacity-20", s.generating);
+          // Keep the "Generate" label — the button is now labelled, not icon-only,
+          // so a bare-icon innerHTML swap would wipe the text.
+          genBtn.innerHTML = `${icon("refresh_cw", `size-4 ${s.generating ? "animate-spin" : ""}`)} Generate`;
+          genBtn.classList.toggle("opacity-40", s.generating);
         }
       }
 
@@ -555,12 +557,27 @@ root.addEventListener("click", (e) => {
     case "copy-phone-chat": {
       const s = state.getState();
       if (s.kind === "chat") {
-        void navigator.clipboard.writeText(s.phone);
+        void navigator.clipboard.writeText(`+${s.phone}`);
         target.innerHTML = `${icon("check", "size-4 text-primary")} Copied`;
         setTimeout(() => {
           target.innerHTML = `${icon("copy", "size-4")} Copy`;
         }, 2000);
       }
+      break;
+    }
+    case "save-contact": {
+      const s = state.getState();
+      if (s.kind !== "chat") break;
+      // User-initiated download (not auto) so the .vcf isn't a surprise
+      // Downloads trace; neutral filename keeps the app out of the file system.
+      const blobUrl = URL.createObjectURL(new Blob([buildVcard(s.phone)], { type: "text/vcard" }));
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = "contact.vcf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
       break;
     }
     case "whatsapp-invite": {
@@ -570,7 +587,7 @@ root.addEventListener("click", (e) => {
       // wa.me wants an international number with no +/spaces/dashes; empty is
       // fine — WhatsApp then opens its contact picker for the pre-filled text.
       const digits = (input?.value ?? "").replace(/\D/g, "");
-      const msg = `Let's talk privately on sTELgano. Save this number in your contacts, then open ${location.origin}/chat and enter it with your own PIN: ${s.phone}`;
+      const msg = `Let's talk privately on sTELgano. Save this number in your phone under my contact, then open ${location.origin}/chat and unlock it with your own PIN to message me: +${s.phone}`;
       const url = `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
       window.open(url, "_blank", "noopener,noreferrer");
       break;
@@ -582,11 +599,21 @@ root.addEventListener("click", (e) => {
       // The recipient needs the number + how to use it; the intended reader is
       // the trusted second party, so instructing them here is correct (the
       // discretion concern is third parties, not the person you're inviting).
-      const msg = `Let's talk privately. Save this number in your contacts, then open ${location.origin} and enter it with your own PIN:\n${number}`;
-      if (typeof navigator.share === "function") {
-        void navigator.share({ title: "Private channel", text: msg }).catch(() => {});
+      const msg = `Let's talk privately on sTELgano. Save this number in your phone under my contact, then open ${location.origin}/chat and unlock it with your own PIN to message me:\n+${number}`;
+      const file = new File([buildVcard(number)], "contact.vcf", { type: "text/vcard" });
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+      // Feature-detect with the exact payload — some platforms accept files
+      // alone but reject files+text, so test what we actually send.
+      const filePayload: ShareData = { files: [file], title: "Private channel", text: msg };
+      if (typeof nav.share === "function" && nav.canShare?.(filePayload)) {
+        // Prefer sharing the contact card itself — WhatsApp/Signal/iMessage
+        // receive it as a tappable "Add contact", not just text.
+        void nav.share(filePayload).catch(() => {});
+      } else if (typeof nav.share === "function") {
+        void nav.share({ title: "Private channel", text: msg }).catch(() => {});
       } else {
-        void navigator.clipboard.writeText(number);
+        // Desktop, no Web Share: copy the full instructions, not just digits.
+        void navigator.clipboard.writeText(msg);
         target.innerHTML = `${icon("check", "size-4 text-primary")} Copied`;
         setTimeout(() => {
           target.innerHTML = `${icon("arrow_up_right", "size-4")} Share`;
@@ -808,6 +835,16 @@ function getAdjustedCursor(oldVal: string, newVal: string, cursor: number): numb
     newCursor++;
   }
   return newCursor;
+}
+
+// A minimal vCard 3.0 for the steg number. A phone opening this offers
+// "Add contact" — the discreet, intended storage. FN is the number itself
+// (the user renames on save) so neither the file nor its name reveals the app.
+// `num` is the digits-only normalised form; prefix "+" so the saved contact
+// reads as a real international number (the re-entry path strips it anyway).
+function buildVcard(num: string): string {
+  const tel = `+${num}`;
+  return `BEGIN:VCARD\r\nVERSION:3.0\r\nFN:${tel}\r\nTEL;TYPE=CELL:${tel}\r\nEND:VCARD\r\n`;
 }
 
 function escapeHtml(s: string): string {
@@ -1055,69 +1092,61 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                     </div>
                   </div>
 
-                  <!-- Integrated Phone Input -->
-                  <div class="space-y-2">
-                    <div class="relative flex-1 group">
-                      <input
-                        id="phone-input"
-                        name="s_num"
-                        type="${phoneType}"
-                        class="glass-input w-full !pr-32 font-mono !text-lg font-bold bg-slate-950/40 ${phoneLockedOpacity} !h-full ${s.phoneValid ? "border-primary/50 ring-1 ring-primary/20" : ""}"
-                        value="${escapeHtml(s.phone)}"
-                        ${phoneReadonly}
-                        placeholder="Enter number..."
-                        inputmode="tel"
-                        ${phoneAutofocus}
+                  <!-- Phone Input — full-width field, actions stacked below -->
+                  <div class="space-y-3">
+                    <input
+                      id="phone-input"
+                      name="s_num"
+                      type="${phoneType}"
+                      class="glass-input w-full font-mono !text-lg font-bold bg-slate-950/40 ${phoneLockedOpacity} !h-full ${s.phoneValid ? "border-primary/50 ring-1 ring-primary/20" : ""}"
+                      value="${escapeHtml(s.phone)}"
+                      ${phoneReadonly}
+                      placeholder="Enter number..."
+                      inputmode="tel"
+                      ${phoneAutofocus}
+                    >
+                    <!-- Actions below the field so the number is never crowded on mobile -->
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                      ${
+                        s.phoneLocked
+                          ? `
+                      <button
+                        type="button"
+                        data-action="clear-session"
+                        class="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl text-red-400 hover:text-red-300 focus:outline-none transition-all bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 text-xs font-semibold whitespace-nowrap"
+                        title="Cancel Handoff and Start Over"
                       >
-                      <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-20">
-                        ${
-                          s.phoneLocked
-                            ? `
-                        <button
-                          type="button"
-                          data-action="clear-session"
-                          class="p-2 rounded-xl text-red-500 hover:text-red-400 focus:outline-none transition-all hover:bg-red-500/10"
-                          title="Cancel Handoff and Start Over"
-                        >
-                          ${icon("x", "size-5")}
-                        </button>
-                        <button
-                          type="button"
-                          data-action="copy-phone"
-                          class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
-                          title="Copy number"
-                        >
-                          ${icon("copy", "size-5")}
-                        </button>
-                        `
-                            : `
-                        <button
-                          type="button"
-                          data-action="generate-new"
-                          ${s.generating ? "disabled" : ""}
-                          class="p-2 rounded-xl text-slate-500 hover:text-primary transition-all ${s.generating ? "opacity-20" : ""}"
-                          title="Generate regional identity"
-                        >
-                          ${icon("refresh_cw", `size-5 ${s.generating ? "animate-spin" : ""}`)}
-                        </button>
-                        <button
-                          type="button"
-                          data-action="copy-phone"
-                          class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
-                          title="Copy number"
-                        >
-                          ${icon("copy", "size-5")}
-                        </button>
-                        `
-                        }
-                        <button
-                          type="button"
-                          data-action="toggle-phone-visibility"
-                          class="p-2 rounded-xl text-slate-500 hover:text-white transition-all"
-                        >
-                          ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5")}
-                        </button>
-                      </div>
+                        ${icon("x", "size-4")} Start over
+                      </button>
+                      `
+                          : `
+                      <button
+                        type="button"
+                        data-action="generate-new"
+                        ${s.generating ? "disabled" : ""}
+                        class="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl text-slate-300 hover:text-primary transition-all bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold whitespace-nowrap ${s.generating ? "opacity-40" : ""}"
+                        title="Generate regional identity"
+                      >
+                        ${icon("refresh_cw", `size-4 ${s.generating ? "animate-spin" : ""}`)} Generate
+                      </button>
+                      `
+                      }
+                      <button
+                        type="button"
+                        data-action="copy-phone"
+                        class="flex items-center justify-center size-10 rounded-xl text-slate-400 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10"
+                        title="Copy number"
+                      >
+                        ${icon("copy", "size-5")}
+                      </button>
+                      <button
+                        type="button"
+                        data-action="toggle-phone-visibility"
+                        class="flex items-center justify-center size-10 rounded-xl text-slate-400 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10"
+                        title="Show or hide number"
+                      >
+                        ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5")}
+                      </button>
                     </div>
                     ${
                       s.phoneLocked
@@ -1607,14 +1636,18 @@ function renderEmptyBuffer(phone: string): string {
         </p>
       </div>
 
-      <div class="w-full glass-panel p-4 rounded-2xl space-y-2">
+      <div class="w-full glass-panel p-4 rounded-2xl space-y-3">
         <div class="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Your channel number</div>
-        <div class="flex items-center justify-between gap-3">
-          <span class="font-mono text-lg text-white tracking-wider break-all">${escapeHtml(phone)}</span>
-          <button data-action="copy-phone-chat" title="Copy number" class="shrink-0 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all">
-            ${icon("copy", "size-5")}
+        <span class="block w-full font-mono text-lg text-white tracking-wider break-all">+${escapeHtml(phone)}</span>
+        <div class="flex gap-2">
+          <button data-action="save-contact" title="Save to contacts" class="flex-1 flex items-center justify-center gap-1.5 h-10 px-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all text-xs font-semibold whitespace-nowrap">
+            ${icon("contact", "size-4")} Save contact
+          </button>
+          <button data-action="copy-phone-chat" title="Copy number" class="flex-1 flex items-center justify-center gap-1.5 h-10 px-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all text-xs font-semibold whitespace-nowrap">
+            ${icon("copy", "size-4")} Copy
           </button>
         </div>
+        <p class="text-[10px] text-amber-400/80 font-medium leading-snug">No history here — save this number before you leave, or the channel is lost.</p>
       </div>
 
       <div class="w-full space-y-2">
