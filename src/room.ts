@@ -25,9 +25,11 @@ import {
   type MetricKey,
   priceLabel,
   ttfmBucket,
+  utcDay,
   utcHour,
 } from "./lib/daily_metrics";
 import { deleteToken, findByTokenHash, markPaid, markRedeemed } from "./lib/extension_tokens";
+import { mondayUtcMs } from "./lib/growth";
 import {
   convertActiveToPaid,
   decrementActiveRooms,
@@ -101,6 +103,11 @@ type RoomState = {
    *  free→paid; 2 = first renewal; …). Tracked in room state, never by hash,
    *  so the `extension` ordinal metric is a population distribution. */
   extensionCount: number;
+  /** ISO-week Monday (YYYY-MM-DD, UTC) for which a cohort_active retention
+   *  beacon was last emitted. Dedupes to once per week per channel so the
+   *  cohort metric counts distinct active channels. Lives only in DO storage
+   *  (never in D1) — the emitted beacon is an anonymous aggregate. */
+  lastCohortWeek?: string;
   /** Up to 2 records, one per party. */
   accessRecords: AccessRecord[];
   /** N=1 invariant — at most one current message. */
@@ -427,6 +434,7 @@ export class RoomDO implements DurableObject {
         accessRecords: [{ accessHash, failedAttempts: 0, lockedUntilMs: null }],
         currentMessage: null,
       };
+      this.emitCohortActive(); // cohort week 0 (creation) ≈ 100% by construction
       await this.persist();
       await this.state.storage.setAlarm(ttlMs);
       void incrementActiveRooms(this.env.DB, "free");
@@ -483,6 +491,7 @@ export class RoomDO implements DurableObject {
     const recordsBefore = this.room.accessRecords.length;
     const result = this.checkAccess(accessHash);
     if (result.kind === "ok") {
+      this.emitCohortActive(); // a join is channel activity this week, too
       await this.persist();
       const secondPartyJoined = recordsBefore === 1 && this.room.accessRecords.length === 2;
       enqueueMetric(
@@ -561,6 +570,7 @@ export class RoomDO implements DurableObject {
     const isFirstMessage = !this.room.everMessaged;
     this.room.currentMessage = message;
     if (isFirstMessage) this.room.everMessaged = true;
+    this.emitCohortActive(); // channel active this week → its retention cohort
     await this.persist();
 
     enqueueMetric(this.env.METRICS_QUEUE, "message_sent", {
@@ -909,6 +919,28 @@ export class RoomDO implements DurableObject {
     if (this.room) {
       await this.state.storage.put(STATE_KEY, this.room);
     }
+  }
+
+  /** Channel retention cohorts. Once per ISO week per channel, enqueue an
+   *  anonymous cohort_active beacon carrying only the channel's creation-week
+   *  Monday and how many weeks later "now" is (offset). Aggregate-only — no
+   *  room id leaves the DO; the per-week dedup uses lastCohortWeek in the DO's
+   *  own storage. Offset is capped at 12 weeks to bound metric cardinality.
+   *  Mutates room.lastCohortWeek; callers persist alongside their own writes.
+   *  Fail-open: enqueue is fire-and-forget and never blocks the chat path. */
+  private emitCohortActive(): void {
+    const room = this.room;
+    if (!room) return;
+    const cohortMonday = mondayUtcMs(room.createdAtMs);
+    const currentMonday = mondayUtcMs(Date.now());
+    const offset = Math.round((currentMonday - cohortMonday) / (7 * 86_400_000));
+    if (offset < 0 || offset > 12) return;
+    const weekStr = utcDay(currentMonday);
+    if (room.lastCohortWeek === weekStr) return;
+    room.lastCohortWeek = weekStr;
+    enqueueMetric(this.env.METRICS_QUEUE, "cohort_active", {
+      dim: `${utcDay(cohortMonday)}+${offset}`,
+    });
   }
 
   /** Pads the join handler's wall-clock duration to the JOIN_TIME_FLOOR_MS

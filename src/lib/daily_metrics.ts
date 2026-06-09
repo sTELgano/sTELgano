@@ -80,6 +80,7 @@ export type CoreMetric =
   | "room_expired_empty" // expired having never carried a message
   | "room_expired_solo" // expired having never gained a second party
   | "room_lifespan" // sum_value = hours; dim = lifespan bucket
+  | "cohort_active" // dim = "<creationWeekMonday>+<offsetWeeks>"; channel retention cohorts
   // Engagement.
   | "message_sent"
   | "message_edited"
@@ -487,6 +488,26 @@ export async function queryDailyTrend(
     metric: r.metric,
     count: Number(r.count ?? 0),
   }));
+}
+
+/** Daily summed `sum_value` for one metric over [from, to] (e.g. paid_sale
+ *  revenue in minor units), oldest first. Used by the growth panel's revenue
+ *  WoW + run-rate. */
+export async function queryDailySum(
+  db: D1Database,
+  from: string,
+  to: string,
+  metric: MetricKey,
+): Promise<Array<{ day: string; value: number }>> {
+  const { results } = await db
+    .prepare(
+      `SELECT day, SUM(sum_value) AS s FROM daily_metrics
+       WHERE day >= ? AND day <= ? AND metric = ?
+       GROUP BY day ORDER BY day ASC`,
+    )
+    .bind(from, to, metric)
+    .all<{ day: string; s: number }>();
+  return (results ?? []).map((r) => ({ day: r.day, value: Number(r.s ?? 0) }));
 }
 
 function assembleCountryRows(
