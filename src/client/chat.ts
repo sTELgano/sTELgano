@@ -301,7 +301,7 @@ state.onStateChange((s) => {
         if (buffer) {
           buffer.innerHTML = s.current
             ? renderMessageBubble(s.current, s.senderHash)
-            : renderEmptyBuffer();
+            : renderEmptyBuffer(s.phone);
           // Scroll to bottom if it's a new message
           if (!ps.current || s.current?.id !== ps.current.id) {
             requestAnimationFrame(() => {
@@ -548,6 +548,48 @@ root.addEventListener("click", (e) => {
         target.innerHTML = icon("check", "size-6 text-primary");
         setTimeout(() => {
           target.innerHTML = icon("copy", "size-6");
+        }, 2000);
+      }
+      break;
+    }
+    case "copy-phone-chat": {
+      const s = state.getState();
+      if (s.kind === "chat") {
+        void navigator.clipboard.writeText(s.phone);
+        target.innerHTML = `${icon("check", "size-4 text-primary")} Copied`;
+        setTimeout(() => {
+          target.innerHTML = `${icon("copy", "size-4")} Copy`;
+        }, 2000);
+      }
+      break;
+    }
+    case "whatsapp-invite": {
+      const s = state.getState();
+      if (s.kind !== "chat") break;
+      const input = document.getElementById("wa-num") as HTMLInputElement | null;
+      // wa.me wants an international number with no +/spaces/dashes; empty is
+      // fine — WhatsApp then opens its contact picker for the pre-filled text.
+      const digits = (input?.value ?? "").replace(/\D/g, "");
+      const msg = `Let's talk privately on sTELgano. Save this number in your contacts, then open ${location.origin}/chat and enter it with your own PIN: ${s.phone}`;
+      const url = `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      break;
+    }
+    case "share-number": {
+      const s = state.getState();
+      if (s.kind !== "chat") break;
+      const number = s.phone;
+      // The recipient needs the number + how to use it; the intended reader is
+      // the trusted second party, so instructing them here is correct (the
+      // discretion concern is third parties, not the person you're inviting).
+      const msg = `Let's talk privately. Save this number in your contacts, then open ${location.origin} and enter it with your own PIN:\n${number}`;
+      if (typeof navigator.share === "function") {
+        void navigator.share({ title: "Private channel", text: msg }).catch(() => {});
+      } else {
+        void navigator.clipboard.writeText(number);
+        target.innerHTML = `${icon("check", "size-4 text-primary")} Copied`;
+        setTimeout(() => {
+          target.innerHTML = `${icon("arrow_up_right", "size-4")} Share`;
         }, 2000);
       }
       break;
@@ -1410,7 +1452,9 @@ function renderTtlWarning(
 
 function renderChat(s: Extract<State, { kind: "chat" }>): string {
   const canType = !s.current || s.current.senderHash !== s.senderHash;
-  const msgArea = s.current ? renderMessageBubble(s.current, s.senderHash) : renderEmptyBuffer();
+  const msgArea = s.current
+    ? renderMessageBubble(s.current, s.senderHash)
+    : renderEmptyBuffer(s.phone);
 
   const interactionZone = s.editing
     ? renderInputArea({ editing: true, value: s.current?.plaintext ?? "" })
@@ -1545,22 +1589,52 @@ function renderMessageBubble(msg: PlainMessage, senderHash: string): string {
   `;
 }
 
-function renderEmptyBuffer(): string {
+// The empty buffer is the "I'm in — now what?" moment, and the highest-leverage
+// point for activation: a channel needs a SECOND party, and the only way they
+// learn the number is if this user shares it. So the empty state surfaces the
+// channel number with Share/Copy affordances and explains the two-PIN model —
+// rather than a dead-end "buffer is empty" message.
+function renderEmptyBuffer(phone: string): string {
   return `
-    <div class="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto animate-in space-y-8">
-      <div class="relative size-24">
-        <div class="absolute inset-0 rounded-3xl bg-white/2 border border-white/5 rotate-6"></div>
-        <div class="absolute inset-0 rounded-3xl bg-white/2 border border-white/5 -rotate-3"></div>
-        <div class="absolute inset-0 rounded-3xl bg-slate-900 border border-white/10 flex items-center justify-center">
-          ${icon("shield_check", "size-12 text-slate-700")}
-        </div>
+    <div class="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto animate-in space-y-5">
+      <div class="size-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+        ${icon("users", "size-7 text-primary")}
       </div>
-      <div class="space-y-3">
-        <h4 class="text-2xl font-bold text-white font-display">Zero Trace Channel</h4>
-        <p class="text-slate-500 font-medium leading-relaxed">
-          The buffer is currently empty. This workspace adheres to a strict single-message protocol for maximum plausible deniability.
+      <div class="space-y-2">
+        <h4 class="text-2xl font-bold text-white font-display">Bring your person in</h4>
+        <p class="text-slate-400 font-medium leading-relaxed text-sm">
+          A channel needs two people. Send them this number — they save it in their contacts and open it here with their <span class="text-white font-semibold">own PIN</span>.
         </p>
       </div>
+
+      <div class="w-full glass-panel p-4 rounded-2xl space-y-2">
+        <div class="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Your channel number</div>
+        <div class="flex items-center justify-between gap-3">
+          <span class="font-mono text-lg text-white tracking-wider break-all">${escapeHtml(phone)}</span>
+          <button data-action="copy-phone-chat" title="Copy number" class="shrink-0 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all">
+            ${icon("copy", "size-5")}
+          </button>
+        </div>
+      </div>
+
+      <div class="w-full space-y-2">
+        <input
+          id="wa-num"
+          type="tel"
+          inputmode="tel"
+          autocomplete="off"
+          placeholder="Their WhatsApp number (incl. country code)"
+          class="glass-input w-full text-center text-sm"
+        />
+        <button data-action="whatsapp-invite" class="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2">
+          ${icon("arrow_up_right", "size-4")} Send invite on WhatsApp
+        </button>
+        <button data-action="share-number" class="text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-white transition-colors pt-1">
+          or share another way
+        </button>
+      </div>
+
+      <p class="text-[10px] text-slate-600 uppercase tracking-widest leading-relaxed">Each of you uses a different PIN · nothing is stored</p>
     </div>
   `;
 }
