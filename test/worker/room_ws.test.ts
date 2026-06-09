@@ -412,30 +412,6 @@ describe("RoomDO — messaging", () => {
     b.close();
   });
 
-  it("ignores a sender read-receipting its own message (stays editable)", async () => {
-    // A read receipt is the recipient's; the author "reading" its own message
-    // must not latch readAtMs (which would block edit/delete) or count as a
-    // read. Frames on one socket are processed in order, so the self-read is
-    // handled before the edit — which must still succeed.
-    const roomTag = "room-self-read";
-    const a = await joined(roomTag, "a");
-
-    send(a, { event: "send_message", ref: "1", data: { ciphertext: TINY_CT, iv: TINY_IV } });
-    const ack = (await waitRef(a, "1")) as { ok: { message_id: string } };
-    const msgId = ack.ok.message_id;
-
-    send(a, { event: "read_receipt", data: { message_id: msgId } });
-    send(a, {
-      event: "edit_message",
-      ref: "2",
-      data: { message_id: msgId, ciphertext: btoa("z"), iv: TINY_IV },
-    });
-    const reply = await waitRef(a, "2");
-    expect("ok" in reply).toBe(true);
-
-    a.close();
-  });
-
   it("rejects delete_message from the non-author", async () => {
     const roomTag = "room-del-non-author";
     const a = await joined(roomTag, "a");

@@ -149,14 +149,12 @@ export interface CohortRow {
 
 /**
  * Build the cohort retention triangle from aggregate cohort_active counts
- * (dim = "<cohortMonday>+<offset>"). `cohortWeeks` supplies only the row axis
- * (which weeks to render — its `.value` is ignored); each cohort's size is its
- * own week-0 beacon count, so the triangle is self-consistent and independent
- * of room_free. Pure — caller supplies `nowMs`.
+ * (dim = "<cohortMonday>+<offset>") and the per-week channel-creation sizes.
+ * Pure — caller supplies `nowMs`.
  */
 export function buildCohortTriangle(
   active: ReadonlyArray<{ dim: string; count: number }>,
-  cohortWeeks: ReadonlyArray<WeekBucket>,
+  weeklySizes: ReadonlyArray<WeekBucket>,
   nowMs: number,
   maxOffset: number,
 ): CohortRow[] {
@@ -174,27 +172,21 @@ export function buildCohortTriangle(
     byCohort.set(cw, m);
   }
 
-  return cohortWeeks.map((wk) => {
+  return weeklySizes.map((wk) => {
     const cohortMs = Date.parse(`${wk.weekStart}T00:00:00Z`);
     const offsets = byCohort.get(wk.weekStart);
-    // Cohort size = channels that emitted a week-0 beacon (captured at
-    // creation), NOT room_free. This makes the row self-consistent — cell[0]
-    // is always 100% for size>0 — and cleanly excludes channels created before
-    // this feature deployed (no beacon → not in the cohort), so a mid-week
-    // deploy doesn't drag the current week's week-0 below 100%.
-    const size = offsets?.get(0) ?? 0;
     const cells: Array<number | null> = [];
     for (let off = 0; off <= maxOffset; off++) {
       const offWeek = utcDay(cohortMs + off * WEEK_MS);
       const observable = offWeek <= currentMonday;
-      if (!observable || size === 0) {
+      if (!observable || wk.value === 0) {
         cells.push(null);
         continue;
       }
       const act = offsets?.get(off) ?? 0;
-      cells.push(Math.round((act / size) * 100));
+      cells.push(Math.round((act / wk.value) * 100));
     }
-    return { cohortWeek: wk.weekStart, size, cells };
+    return { cohortWeek: wk.weekStart, size: wk.value, cells };
   });
 }
 
