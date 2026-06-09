@@ -813,6 +813,10 @@ function renderAdminHtml(d: {
   const edited = metricCount(d.totals, "message_edited");
   const deleted = metricCount(d.totals, "message_deleted");
   const reads = metricCount(d.totals, "message_read");
+  // Messages sent that a recipient never read (read requires the other party
+  // to open the channel). A high unread count = messages sent into the void —
+  // the activation/second-party gap, seen from the message side.
+  const unread = Math.max(0, messages - reads);
   const rejoins = metricCount(d.totals, "room_rejoin");
 
   // --- Monetization ---
@@ -1044,12 +1048,12 @@ function renderAdminHtml(d: {
             ${adminMetricCard("Active Channels", d.activeRooms.total, `${d.activeRooms.free} free · ${d.activeRooms.paid} paid`, "radio", true)}
             ${adminMetricCard("Channels Created", created, `${stillFree} free · ${paid} paid`, "check_circle")}
             ${adminMetricCard("Messages Sent", messages, "Encrypted, over range", "message_circle")}
-            ${adminMetricCard("Activation", `${pct(secondParty, created)}%`, "Two-party channels", "users")}
+            ${adminMetricCard("Activation", `${pct(secondParty, created)}%`, "channels with a 2nd party", "users", false, `${secondParty} of ${created}`)}
           </div>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            ${adminMetricCard("Paid Conversion", `${pct(paid, created)}%`, "Paid of all created", "sparkles")}
+            ${adminMetricCard("Paid Conversion", `${pct(paid, created)}%`, "paid of all created", "sparkles", false, `${paid} of ${created}`)}
             ${adminMetricCard("Extensions", extended, "Repeat paid renewals", "calendar")}
-            ${adminMetricCard("Empty Expiries", `${pct(expiredEmpty, expiredFree + expiredPaid)}%`, "Expired, never messaged", "alert_triangle")}
+            ${adminMetricCard("Empty Expiries", `${pct(expiredEmpty, expiredFree + expiredPaid)}%`, "expired, never messaged", "alert_triangle", false, `${expiredEmpty} of ${expiredFree + expiredPaid}`)}
             ${adminMetricCard("Lockouts", lockouts, `${accessFailed} failed attempts`, "shield")}
           </div>
           ${growthPanel}
@@ -1115,11 +1119,11 @@ function renderAdminHtml(d: {
             </div>
           </div>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            ${adminMetricCard("Messages Read", reads, "Read receipts fired", "check_circle")}
+            ${adminMetricCard("Messages Read", reads, `of ${messages} sent · ${unread} never read`, "check_circle")}
             ${adminMetricCard("Messages Edited", edited, "Edited before read", "message_circle")}
             ${adminMetricCard("Messages Deleted", deleted, "Deleted before read", "message_circle")}
             ${adminMetricCard("Rejoins", rejoins, "Returning party re-entries", "radio")}
-            ${adminMetricCard("Solo Expiries", `${pct(expiredSolo, expiredFree + expiredPaid)}%`, "Expired, never a 2nd party", "users")}
+            ${adminMetricCard("Solo Expiries", `${pct(expiredSolo, expiredFree + expiredPaid)}%`, "expired, never a 2nd party", "users", false, `${expiredSolo} of ${expiredFree + expiredPaid}`)}
           </div>
         </section>
 
@@ -1209,9 +1213,16 @@ function adminMetricCard(
   note: string,
   icon: string,
   active = false,
+  sub = "",
 ): string {
   const activeDot = active
     ? '<div class="size-2 shrink-0 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]"></div>'
+    : "";
+  // Optional `sub` is a smaller figure shown inline next to the big value —
+  // e.g. the raw count beside a percentage ("3%  1 of 33"), so a rate is never
+  // read without its absolute numbers.
+  const subFigure = sub
+    ? `<div class="text-sm sm:text-base font-mono font-bold text-primary/60 whitespace-nowrap">${escapeAttr(sub)}</div>`
     : "";
   // Icon sits alone on the top row (with the optional live dot). The note is
   // a full-width line BELOW the value/label — never crammed beside the icon,
@@ -1225,8 +1236,11 @@ function adminMetricCard(
         ${activeDot}
       </div>
       <div class="space-y-1.5">
-        <div class="text-3xl sm:text-5xl font-mono font-black text-white tracking-tighter break-words">
-          ${escapeAttr(String(value))}
+        <div class="flex items-baseline gap-2 flex-wrap">
+          <div class="text-3xl sm:text-5xl font-mono font-black text-white tracking-tighter break-words">
+            ${escapeAttr(String(value))}
+          </div>
+          ${subFigure}
         </div>
         <div class="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
           ${escapeAttr(label)}
