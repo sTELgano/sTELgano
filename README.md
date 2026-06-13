@@ -63,7 +63,7 @@ Encryption: AES-256-GCM, 96-bit random nonce per message, 128-bit auth tag.
 - **Metrics queue** — analytics telemetry (`room_free`, `room_paid`, `room_expired_*`, `message_sent`, engagement + security signals). Handlers fire-and-forget enqueue to `METRICS_QUEUE`; the Worker's `queue()` consumer coalesces each batch and applies one transactional `db.batch()` UPSERT into `daily_metrics`. Exact (no sampling), permanent (no retention cap), never stored alongside a room hash. The admin dashboard reads aggregate counts straight from D1.
 - **Static assets** (`public/`) — HTML pages, bundled JS, CSS, fonts. Uploaded to Cloudflare's asset store on deploy.
 
-**Real-time:** WebSocket connections upgrade to the room's Durable Object. The client sends `join`, `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, and `redeem_extension` events.
+**Real-time:** WebSocket connections upgrade to the room's Durable Object. The client sends `join`, `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, `redeem_extension`, and `reset_pairing` events. Joining a channel someone created requires a one-time pairing code (its hash carried on `join`) — the second seat is bound to whoever the creator invited, then sealed.
 
 ---
 

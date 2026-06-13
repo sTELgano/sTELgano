@@ -308,6 +308,10 @@ async function dispatch(
         paid_ttl_days: parseInt(env.PAID_TTL_DAYS ?? "365", 10) || 365,
         price_cents: price.cents,
         currency: price.currency,
+        // Visitor's CF-IPCountry (alpha-2, or ""). The sign-up generator seeds
+        // its default country from this so a first number matches the user's
+        // locale. Aggregate/transient — never stored against any room.
+        cf_country: ((request.cf?.country ?? "") as string).toUpperCase(),
       },
       200,
       "no-store",
@@ -1183,10 +1187,11 @@ function renderAdminHtml(d: {
         <!-- Security -->
         <section id="security" class="scroll-mt-6 space-y-8">
           <div class="glass-card p-6 sm:p-10 space-y-6">
-            ${sectionHeader("shield", "Access & Abuse", "Wrong-PIN attempts, 30-minute lockouts, and per-IP join rate-limit rejections over the range — your signal for credential-stuffing, slot-squatting, or targeted access attempts. Global counts, no country or room linkage.")}
+            ${sectionHeader("shield", "Access & Abuse", "Wrong-PIN attempts, 30-minute lockouts, wrong/absent pairing codes, and per-IP join rate-limit rejections over the range — your signal for credential-stuffing, slot-squatting, or targeted access attempts. Global counts, no country or room linkage.")}
             <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               ${adminMetricCard("Failed Attempts", accessFailed, "Wrong PIN on a full room", "alert_triangle")}
               ${adminMetricCard("Lockouts", lockouts, "10 fails → 30-min lock", "shield")}
+              ${adminMetricCard("Failed Pairings", metricCount(d.totals, "pair_failed"), "Wrong/absent pairing code", "alert_triangle")}
               ${adminMetricCard("Rate-Limited Joins", metricCount(d.totals, "join_rate_limited"), "Per-IP create/slot blocks", "shield")}
             </div>
           </div>
@@ -1359,6 +1364,8 @@ const FUNNEL_LABELS: Record<string, string> = {
   new_channel_view: "Setup shown",
   setup_confirmed: "Setup confirmed",
   channel_opened: "Opened channel",
+  pair_view: "Pairing shown",
+  paired: "Paired",
   extend_started: "Started extend",
   extend_completed: "Extended",
 };
@@ -1382,6 +1389,8 @@ const FUNNEL_INTENT_STEPS = [
   "steg_generated",
   "new_channel_view",
   "setup_confirmed",
+  "pair_view",
+  "paired",
   "extend_started",
 ] as const;
 

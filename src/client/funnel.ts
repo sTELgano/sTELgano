@@ -23,6 +23,9 @@ export type FunnelStep =
   | "new_channel_view"
   | "setup_confirmed"
   | "channel_opened"
+  // Second-party pairing funnel (OTP channel-binding).
+  | "pair_view"
+  | "paired"
   | "extend_started"
   | "extend_completed";
 

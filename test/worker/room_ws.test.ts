@@ -446,6 +446,227 @@ describe("RoomDO — messaging", () => {
   });
 });
 
+describe("RoomDO — pairing OTP", () => {
+  // The creator sets a pairing hash on the first join; the second slot can
+  // then only be claimed by presenting a matching hash. Tests below use raw
+  // hex64 tokens as the "hash" — the DO compares hashes, it never sees the OTP.
+  const OTP = hex64("otp-correct");
+  const WRONG = hex64("otp-wrong");
+
+  async function createWithOtp(roomTag: string): Promise<WebSocket> {
+    const ws = await openSocket(hex64(roomTag));
+    send(ws, {
+      event: "join",
+      ref: "c",
+      data: { sender_hash: hex64("creator"), access_hash: hex64("creator-pin"), otp_hash: OTP },
+    });
+    return ws;
+  }
+
+  it("creator's first join reports awaiting_party=true", async () => {
+    const ws = await createWithOtp("pair-awaiting");
+    const reply = (await waitRef(ws, "c")) as { ok: { awaiting_party?: boolean } };
+    expect(reply.ok.awaiting_party).toBe(true);
+    ws.close();
+  });
+
+  it("rejects a second party with no OTP (otp_required) and registers nothing", async () => {
+    const a = await createWithOtp("pair-required");
+    await waitRef(a, "c");
+
+    const b = await openSocket(hex64("pair-required"));
+    send(b, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin") },
+    });
+    const reply = await waitRef(b, "1");
+    expect("error" in reply && reply.error?.reason).toBe("otp_required");
+
+    // The slot must still be open — a correct OTP now claims it.
+    send(b, {
+      event: "join",
+      ref: "2",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: OTP },
+    });
+    const claim = (await waitRef(b, "2")) as { ok?: { awaiting_party?: boolean } };
+    expect("ok" in claim).toBe(true);
+    expect(claim.ok?.awaiting_party).toBe(false);
+    a.close();
+    b.close();
+  });
+
+  it("rejects a wrong OTP with otp_invalid", async () => {
+    const a = await createWithOtp("pair-wrong");
+    await waitRef(a, "c");
+
+    const b = await openSocket(hex64("pair-wrong"));
+    send(b, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: WRONG },
+    });
+    const reply = await waitRef(b, "1");
+    expect("error" in reply && reply.error?.reason).toBe("otp_invalid");
+    a.close();
+    b.close();
+  });
+
+  it("admits the second party on a correct OTP and broadcasts party_paired", async () => {
+    const a = await createWithOtp("pair-success");
+    await waitRef(a, "c");
+
+    const b = await openSocket(hex64("pair-success"));
+    // Start listening on the creator's socket BEFORE the claim — the
+    // party_paired broadcast fires during b's join, so a late listener would
+    // miss it.
+    const pairedPromise = waitEvent(a, "party_paired");
+    send(b, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: OTP },
+    });
+    const claim = await waitRef(b, "1");
+    expect("ok" in claim && claim.ok).toBeTruthy();
+
+    // The creator's socket sees the pairing notification.
+    expect(await pairedPromise).toBeTruthy();
+    a.close();
+    b.close();
+  });
+
+  it("a paired second party rejoins later without an OTP", async () => {
+    const a = await createWithOtp("pair-rejoin");
+    await waitRef(a, "c");
+
+    const b = await openSocket(hex64("pair-rejoin"));
+    send(b, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: OTP },
+    });
+    await waitRef(b, "1");
+    a.close();
+    b.close();
+
+    // Returning second party: access_hash now matches a record → no OTP needed.
+    const c = await openSocket(hex64("pair-rejoin"));
+    send(c, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin") },
+    });
+    const reply = await waitRef(c, "1");
+    expect("ok" in reply && reply.ok).toBeTruthy();
+    c.close();
+  });
+
+  it("locks the slot after MAX_ACCESS_ATTEMPTS wrong OTPs", async () => {
+    const a = await createWithOtp("pair-lockout");
+    await waitRef(a, "c");
+
+    const b = await openSocket(hex64("pair-lockout"));
+    let sawLocked = false;
+    for (let i = 0; i < 10; i++) {
+      send(b, {
+        event: "join",
+        ref: String(i),
+        data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: WRONG },
+      });
+      const reply = await waitRef(b, String(i));
+      const reason = "error" in reply ? reply.error?.reason : undefined;
+      if (reason === "locked") sawLocked = true;
+    }
+    expect(sawLocked).toBe(true);
+
+    // Even a correct OTP is refused while locked.
+    send(b, {
+      event: "join",
+      ref: "final",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: OTP },
+    });
+    const reply = await waitRef(b, "final");
+    expect("error" in reply && reply.error?.reason).toBe("locked");
+    a.close();
+    b.close();
+    // 11 sequential joins, each padded to the join-time floor (~0.5–0.6s),
+    // comfortably exceed the default 5s test budget.
+  }, 25_000);
+
+  it("legacy rooms (no OTP set at creation) still admit a second party without one", async () => {
+    // Back-compat: a room created before pairing existed has pairingOtpHash
+    // null, so its second party joins the old open-slot way.
+    const a = await openSocket(hex64("pair-legacy"));
+    send(a, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("creator"), access_hash: hex64("creator-pin") },
+    });
+    await waitRef(a, "1");
+
+    const b = await openSocket(hex64("pair-legacy"));
+    send(b, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin") },
+    });
+    const reply = await waitRef(b, "1");
+    expect("ok" in reply && reply.ok).toBeTruthy();
+    a.close();
+    b.close();
+  });
+
+  it("reset_pairing re-issues the gate — the old code stops working, the new one claims", async () => {
+    const a = await createWithOtp("pair-reset");
+    await waitRef(a, "c");
+
+    const RESET = hex64("otp-reset");
+    send(a, { event: "reset_pairing", ref: "r", data: { otp_hash: RESET } });
+    expect("ok" in (await waitRef(a, "r"))).toBe(true);
+
+    // The old OTP is now invalid.
+    const bad = await openSocket(hex64("pair-reset"));
+    send(bad, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: OTP },
+    });
+    const badReply = await waitRef(bad, "1");
+    expect("error" in badReply && badReply.error?.reason).toBe("otp_invalid");
+    bad.close();
+
+    // The new OTP claims the slot.
+    const c = await openSocket(hex64("pair-reset"));
+    send(c, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: RESET },
+    });
+    const good = await waitRef(c, "1");
+    expect("ok" in good && good.ok).toBeTruthy();
+    a.close();
+    c.close();
+  });
+
+  it("reset_pairing is refused once the channel is paired", async () => {
+    const a = await createWithOtp("pair-reset-late");
+    await waitRef(a, "c");
+    const b = await openSocket(hex64("pair-reset-late"));
+    send(b, {
+      event: "join",
+      ref: "1",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: OTP },
+    });
+    await waitRef(b, "1");
+
+    send(a, { event: "reset_pairing", ref: "r", data: { otp_hash: hex64("otp-late") } });
+    const reply = await waitRef(a, "r");
+    expect("error" in reply && reply.error?.reason).toBe("not_found");
+    a.close();
+    b.close();
+  });
+});
+
 describe("RoomDO — unjoined events", () => {
   it("returns not_joined when a non-join event arrives first", async () => {
     const ws = await openSocket(hex64("room-not-joined"));
