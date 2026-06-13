@@ -195,6 +195,63 @@ describe("RoomDO analytics emission", () => {
     expect(has(rows, "access_lockout")).toBe(true);
     expectSecurityGlobal(rows);
   }, 40_000);
+
+  it("emits pair_failed on a wrong pairing OTP and second_party_joined on a valid claim", async () => {
+    const room = hex64("metrics-pairing");
+    const OTP = hex64("otp-correct");
+    const WRONG = hex64("otp-wrong");
+
+    // Creator sets the pairing gate on the first join.
+    const a = await openSocket(room);
+    send(a, {
+      event: "join",
+      ref: "j",
+      data: {
+        sender_hash: hex64("creator"),
+        access_hash: hex64("creator-pin"),
+        country_iso: "KE",
+        otp_hash: OTP,
+      },
+    });
+    await waitRef(a, "j");
+
+    // Wrong OTP → pair_failed, no access record registered.
+    const bad = await openSocket(room);
+    send(bad, {
+      event: "join",
+      ref: "j",
+      data: { sender_hash: hex64("second"), access_hash: hex64("second-pin"), otp_hash: WRONG },
+    });
+    await waitRef(bad, "j");
+    bad.close();
+
+    // Correct OTP → claims the slot → second_party_joined.
+    const b = await openSocket(room);
+    send(b, {
+      event: "join",
+      ref: "j",
+      data: {
+        sender_hash: hex64("second"),
+        access_hash: hex64("second-pin"),
+        country_iso: "KE",
+        otp_hash: OTP,
+      },
+    });
+    await waitRef(b, "j");
+
+    const rows = await pollMetrics((r) => has(r, "second_party_joined") && has(r, "pair_failed"));
+    expect(has(rows, "room_free")).toBe(true);
+    expect(has(rows, "pair_failed")).toBe(true);
+    expect(has(rows, "second_party_joined")).toBe(true);
+    // pair_failed is global security telemetry: no country linkage, dim = reason.
+    for (const r of rows.filter((x) => x.metric === "pair_failed")) {
+      expect(r.stegCountry).toBe("");
+      expect(r.cfCountry).toBe("");
+      expect(["invalid", "locked"]).toContain(r.dim);
+    }
+    a.close();
+    b.close();
+  }, 20_000);
 });
 
 describe("RoomDO monetization analytics", () => {

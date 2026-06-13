@@ -17,6 +17,7 @@
 // elixir/lib/stelgano_web/live/chat_live.ex so that nothing in the
 // shipped HTML drifts from what designers signed off on in v1.
 
+import { formatOtp } from "./crypto/anon";
 import { captureCampaign, fireFunnel } from "./funnel";
 import { ChatState, COUNTRY_DATA, type Config, type PlainMessage, type State } from "./state";
 
@@ -50,6 +51,7 @@ let serverConfig: Config = {
   paidTtlDays: 365,
   priceCents: 200,
   currency: "USD",
+  cfCountry: "",
 };
 fetch("/api/config")
   .then((r) => r.json())
@@ -61,6 +63,7 @@ fetch("/api/config")
       paidTtlDays: typeof raw.paid_ttl_days === "number" ? raw.paid_ttl_days : 365,
       priceCents: typeof raw.price_cents === "number" ? raw.price_cents : 200,
       currency: typeof raw.currency === "string" ? raw.currency : "USD",
+      cfCountry: typeof raw.cf_country === "string" ? raw.cf_country : "",
     };
     state.updateConfig(serverConfig);
   })
@@ -134,7 +137,11 @@ state.onStateChange((s) => {
       }
 
       // Update Error container
-      if (s.error !== ps.error || s.attemptsRemaining !== ps.attemptsRemaining) {
+      if (
+        s.error !== ps.error ||
+        s.attemptsRemaining !== ps.attemptsRemaining ||
+        s.offerCreate !== ps.offerCreate
+      ) {
         const container = document.getElementById("entry-error-container");
         if (container) {
           container.innerHTML = s.error ? renderEntryErrorBlock(s) : "";
@@ -171,6 +178,14 @@ state.onStateChange((s) => {
           if (flagEl && flagEl.innerHTML !== currentCountry.flag) {
             flagEl.innerHTML = currentCountry.flag;
           }
+        }
+
+        // Sign-in has no country selector — its flag follows the country
+        // detected from the typed +number.
+        const signinFlag = document.getElementById("signin-country-flag");
+        if (signinFlag) {
+          const cc = COUNTRY_DATA.find((c) => c.iso === s.countryIso) ?? COUNTRY_DATA[0]!;
+          if (signinFlag.innerHTML !== cc.flag) signinFlag.innerHTML = cc.flag;
         }
       }
 
@@ -233,7 +248,10 @@ state.onStateChange((s) => {
       }
 
       const entriesMatch =
-        s.phoneLocked === ps.phoneLocked && s.onboardingStep === ps.onboardingStep;
+        s.phoneLocked === ps.phoneLocked &&
+        s.onboardingStep === ps.onboardingStep &&
+        // A sign-in ⇄ sign-up flip is structural — fall through to re-render.
+        s.mode === ps.mode;
 
       if (entriesMatch) {
         prevState = JSON.parse(JSON.stringify(s)) as State;
@@ -337,7 +355,12 @@ state.onStateChange((s) => {
       const needsSlowPath =
         s.paymentError !== ps.paymentError ||
         s.paymentLoading !== ps.paymentLoading ||
-        s.ttlExpiresAt !== ps.ttlExpiresAt;
+        s.ttlExpiresAt !== ps.ttlExpiresAt ||
+        // Pairing banner appears/disappears (party_paired) — re-render to add
+        // or drop it.
+        s.awaitingParty !== ps.awaitingParty ||
+        s.pairingOtp !== ps.pairingOtp ||
+        s.pairingError !== ps.pairingError;
 
       // Surgical modal toggling
       if (s.confirmExpire !== ps.confirmExpire) {
@@ -391,14 +414,12 @@ state.onStateChange((s) => {
     if (s.searchQuery !== oldPrevState.searchQuery) {
       const listContainer = root.querySelector("#country-list-container");
       if (listContainer) {
-        console.log("[UI] Fast-path update: country-list");
         listContainer.innerHTML = renderCountryListItems(s);
         return;
       }
     }
   }
 
-  console.log("[UI] Slow-path: Full render");
   root.innerHTML = render(s, kindsChanged);
 
   let focusRestored = false;
@@ -476,6 +497,8 @@ root.addEventListener("submit", (e) => {
 
   if (action === "submit-entry") {
     void state.submit();
+  } else if (action === "submit-pair") {
+    void state.submitPair();
   } else if (action === "submit-locked") {
     const pin = String(form.get("s_key") ?? "");
     void state.reauthenticate(pin);
@@ -519,21 +542,22 @@ root.addEventListener("click", (e) => {
       state.closeOverlay();
       break;
     case "generate-new":
-      console.log("[UI] Generate new number");
       void state.generateNewNumber();
       break;
-    case "use-custom-number": {
+    case "show-signup":
+      state.showSignup();
+      break;
+    case "show-signin":
+      state.showSignin();
+      break;
+    case "save-contact-signup": {
       const s = state.getState();
-      state.setPhone("");
-      if (s.kind === "entry" && !s.phoneVisible) {
-        state.togglePhoneVisible();
-      }
-      requestAnimationFrame(() => {
-        const input = document.getElementById("phone-input") as HTMLInputElement | null;
-        input?.focus();
-      });
+      if (s.kind === "entry" && s.phone) downloadVcard(s.phone);
       break;
     }
+    case "pair-back":
+      state.pairBack();
+      break;
     case "copy-phone": {
       const input = document.getElementById("phone-input") as HTMLInputElement;
       if (input) {
@@ -573,6 +597,20 @@ root.addEventListener("click", (e) => {
       }
       break;
     }
+    case "copy-pairing-otp": {
+      const s = state.getState();
+      if (s.kind === "chat" && s.pairingOtp) {
+        void navigator.clipboard.writeText(formatOtp(s.pairingOtp));
+        target.innerHTML = icon("check", "size-4 text-primary");
+        setTimeout(() => {
+          target.innerHTML = icon("copy", "size-4");
+        }, 2000);
+      }
+      break;
+    }
+    case "regenerate-pairing-otp":
+      void state.regeneratePairingOtp();
+      break;
     case "save-contact": {
       const s = state.getState();
       if (s.kind !== "chat") break;
@@ -622,16 +660,13 @@ root.addEventListener("click", (e) => {
       break;
     }
     case "clear-session":
-      console.log("[UI] Clear session");
       state.clearSession();
       break;
     case "toggle-countries":
-      console.log("[UI] Toggle countries picker");
       state.toggleCountries();
       break;
     case "select-country": {
       const iso = target.dataset.iso;
-      console.log("[UI] Select country:", iso);
       if (iso) state.setCountry(iso);
       break;
     }
@@ -729,6 +764,10 @@ root.addEventListener(
       state.setNewChannelConfirmPin(target.value);
     } else if (target instanceof HTMLInputElement && target.name === "nc_accept_terms") {
       state.setNewChannelAcceptedTerms(target.checked);
+    } else if (target instanceof HTMLInputElement && target.name === "pair_otp") {
+      state.setPairOtp(target.value);
+    } else if (target instanceof HTMLInputElement && target.name === "pair_pin") {
+      state.setPairConfirmPin(target.value);
     } else if (target instanceof HTMLInputElement && target.id === "country-search-trigger") {
       state.setSearchQuery(target.value);
     }
@@ -818,15 +857,21 @@ function focusFirstField() {
   });
 }
 
+// Maps a caret position across a reformat by counting DIGITS only. The "+"
+// and separator spaces are structural, so counting them (as an earlier version
+// did) made an auto-prepended "+" swallow a position and kick the caret to the
+// left of the digit just typed ("+|2" instead of "+2|"). Digits are the stable
+// anchor in both national and international formatting.
 function getAdjustedCursor(oldVal: string, newVal: string, cursor: number): number {
-  let charsBefore = 0;
+  let digitsBefore = 0;
   for (let i = 0; i < cursor; i++) {
-    if (/\d|\+/.test(oldVal.charAt(i))) charsBefore++;
+    if (/\d/.test(oldVal.charAt(i))) digitsBefore++;
   }
+  if (digitsBefore === 0) return 0;
   let newCursor = 0;
   let seen = 0;
-  while (newCursor < newVal.length && seen < charsBefore) {
-    if (/\d|\+/.test(newVal.charAt(newCursor))) seen++;
+  while (newCursor < newVal.length && seen < digitsBefore) {
+    if (/\d/.test(newVal.charAt(newCursor))) seen++;
     newCursor++;
   }
   return newCursor;
@@ -901,6 +946,9 @@ function render(s: State, animate: boolean): string {
       break;
     case "new_channel":
       html = renderNewChannel(s);
+      break;
+    case "pair":
+      html = renderPair(s);
       break;
     case "connecting":
       html = renderConnecting();
@@ -1023,13 +1071,91 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
     return renderOnboarding(s.onboardingStep);
   }
 
+  const isSignup = s.mode === "signup";
   const phoneType = s.phoneVisible ? "text" : "password";
   const phoneLockedOpacity = s.phoneLocked ? "opacity-60" : "";
-  const phoneReadonly = s.phoneLocked ? "readonly" : "";
-  const phoneAutofocus = s.phoneLocked ? "" : "data-autofocus";
-  const pinAutofocus = s.phoneLocked ? "data-autofocus" : "";
+  // No custom numbers: the sign-up field shows a generated number and the
+  // handoff field a fixed one — both read-only. Only sign-in is hand-editable.
+  const phoneReadonly = s.phoneLocked || isSignup ? "readonly" : "";
+  const phoneAutofocus = s.phoneLocked || isSignup ? "" : "data-autofocus";
+  const pinAutofocus = s.phoneLocked || isSignup ? "data-autofocus" : "";
 
   const currentCountry = COUNTRY_DATA.find((c) => c.iso === s.countryIso) ?? COUNTRY_DATA[0]!;
+
+  const badge = isSignup
+    ? `${icon("sparkles", "size-3")} Create channel`
+    : `${icon("lock", "size-3")} Join channel`;
+  const heading = isSignup
+    ? `Create <span class="text-gradient">channel.</span>`
+    : `Join <span class="text-gradient">channel.</span>`;
+  const subhead = isSignup
+    ? "Generate a fresh number, set a PIN, then share the number and one-time code with the person you're inviting."
+    : "Enter the number saved in your contacts and your PIN to join the channel.";
+
+  // Action buttons under the number. Sign-up gets Generate + Save-to-contacts;
+  // both surfaces get copy + mask. Handoff (phoneLocked) gets Start-over only.
+  const numberActions = s.phoneLocked
+    ? `
+      <button
+        type="button"
+        data-action="clear-session"
+        class="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl text-red-400 hover:text-red-300 focus:outline-none transition-all bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 text-xs font-semibold whitespace-nowrap"
+        title="Cancel Handoff and Start Over"
+      >
+        ${icon("x", "size-4")} Start over
+      </button>`
+    : `
+      ${
+        isSignup
+          ? `
+      <button
+        type="button"
+        data-action="generate-new"
+        ${s.generating ? "disabled" : ""}
+        class="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl text-slate-300 hover:text-primary transition-all bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold whitespace-nowrap ${s.generating ? "opacity-40" : ""}"
+        title="Generate another number"
+      >
+        ${icon("refresh_cw", `size-4 ${s.generating ? "animate-spin" : ""}`)} Generate
+      </button>
+      <button
+        type="button"
+        data-action="save-contact-signup"
+        class="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl text-slate-300 hover:text-primary transition-all bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold whitespace-nowrap"
+        title="Save number to contacts"
+      >
+        ${icon("contact", "size-4")} Save
+      </button>`
+          : ""
+      }
+      <button
+        type="button"
+        data-action="copy-phone"
+        class="flex items-center justify-center size-10 rounded-xl text-slate-400 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10"
+        title="Copy number"
+      >
+        ${icon("copy", "size-5")}
+      </button>
+      <button
+        type="button"
+        data-action="toggle-phone-visibility"
+        class="flex items-center justify-center size-10 rounded-xl text-slate-400 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10"
+        title="Show or hide number"
+      >
+        ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5")}
+      </button>`;
+
+  // Cross-link between the two surfaces.
+  const switchLink = s.phoneLocked
+    ? ""
+    : `<div class="flex items-center justify-center gap-1.5 px-1 pt-1 text-[11px] font-medium text-slate-500">
+        ${
+          isSignup
+            ? `Already have a number?
+            <button type="button" data-action="show-signin" class="text-primary/80 hover:text-primary transition-colors font-bold uppercase tracking-widest text-[10px]">Join channel</button>`
+            : `Need a new number?
+            <button type="button" data-action="show-signup" class="text-primary/80 hover:text-primary transition-colors font-bold uppercase tracking-widest text-[10px]">Create channel</button>`
+        }
+      </div>`;
 
   return `
     <div class="flex flex-col h-full w-full overflow-hidden">
@@ -1039,7 +1165,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
           ${renderWordmark()}
         </a>
         <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">
-          ${icon("lock", "size-3")} Secure Link
+          ${badge}
         </div>
       </div>
 
@@ -1051,10 +1177,10 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
               ${icon("ban", "size-3")} Private Instance
             </div>
             <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tighter text-white font-display leading-[0.9]">
-              Open <span class="text-gradient">Channel.</span>
+              ${heading}
             </h1>
             <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed">
-              Derive a one-time identity and join your private channel.
+              ${subhead}
             </p>
           </div>
 
@@ -1069,15 +1195,20 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
               <div class="space-y-4">
                 <div class="flex items-center justify-between px-1">
                   <label class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
-                    One-Time Identifier
+                    ${isSignup ? "Your New Number" : "Steg Number"}
                   </label>
                   <button type="button" data-action="onboarding-next" class="text-[9px] text-primary/60 hover:text-primary transition-colors font-bold uppercase tracking-widest">
                     Quick Start &rsaquo;
                   </button>
                 </div>
-                
+
                 <div class="flex flex-col gap-3">
-                  <!-- Searchable Country Selector -->
+                  ${
+                    isSignup
+                      ? `
+                  <!-- Searchable Country Selector — sign-up only: pick the
+                       region to generate a number for. Sign-in detects the
+                       country from the typed +number instead. -->
                   <div class="relative w-full group" id="country-picker-container" style="z-index: 50;">
                     <div id="country-picker-flag" class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-lg">
                       ${currentCountry.flag}
@@ -1085,11 +1216,10 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                     <input
                       type="text"
                       id="country-search-trigger"
-                      class="glass-input w-full !pl-12 !pr-10 font-bold bg-slate-950/40 !text-sm transition-all focus:bg-slate-900/60 !h-full ${phoneLockedOpacity}"
+                      class="glass-input w-full !pl-12 !pr-10 font-bold bg-slate-950/40 !text-sm transition-all focus:bg-slate-900/60 !h-full"
                       value="${s.showCountries ? s.searchQuery : currentCountry.name}"
                       placeholder="Select Region..."
                       autocomplete="off"
-                      ${phoneReadonly}
                     />
                     <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-primary transition-colors">
                       ${icon("chevron_down", "size-4")}
@@ -1098,80 +1228,42 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                     <div id="country-dropdown-wrapper" class="absolute w-full mt-2 z-[100]">
                       ${renderCountryPicker(s)}
                     </div>
-                  </div>
+                  </div>`
+                      : ""
+                  }
 
                   <!-- Phone Input — full-width field, actions stacked below -->
                   <div class="space-y-3">
-                    <input
-                      id="phone-input"
-                      name="s_num"
-                      type="${phoneType}"
-                      class="glass-input w-full font-mono !text-lg font-bold bg-slate-950/40 ${phoneLockedOpacity} !h-full ${s.phoneValid ? "border-primary/50 ring-1 ring-primary/20" : ""}"
-                      value="${escapeHtml(s.phone)}"
-                      ${phoneReadonly}
-                      placeholder="Enter number..."
-                      inputmode="tel"
-                      ${phoneAutofocus}
-                    >
-                    <!-- Actions below the field so the number is never crowded on mobile -->
-                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                    <div class="relative">
                       ${
-                        s.phoneLocked
-                          ? `
-                      <button
-                        type="button"
-                        data-action="clear-session"
-                        class="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl text-red-400 hover:text-red-300 focus:outline-none transition-all bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 text-xs font-semibold whitespace-nowrap"
-                        title="Cancel Handoff and Start Over"
-                      >
-                        ${icon("x", "size-4")} Start over
-                      </button>
-                      `
-                          : `
-                      <button
-                        type="button"
-                        data-action="generate-new"
-                        ${s.generating ? "disabled" : ""}
-                        class="flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl text-slate-300 hover:text-primary transition-all bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold whitespace-nowrap ${s.generating ? "opacity-40" : ""}"
-                        title="Generate regional identity"
-                      >
-                        ${icon("refresh_cw", `size-4 ${s.generating ? "animate-spin" : ""}`)} Generate
-                      </button>
-                      `
+                        isSignup
+                          ? ""
+                          : `<div id="signin-country-flag" class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-lg z-10">${currentCountry.flag}</div>`
                       }
-                      <button
-                        type="button"
-                        data-action="copy-phone"
-                        class="flex items-center justify-center size-10 rounded-xl text-slate-400 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10"
-                        title="Copy number"
+                      <input
+                        id="phone-input"
+                        name="s_num"
+                        type="${phoneType}"
+                        class="glass-input w-full font-mono !text-lg font-bold bg-slate-950/40 ${phoneLockedOpacity} !h-full ${isSignup ? "" : "!pl-12"} ${s.phoneValid ? "border-primary/50 ring-1 ring-primary/20" : ""}"
+                        value="${escapeHtml(s.phone)}"
+                        ${phoneReadonly}
+                        placeholder="${isSignup ? "Generating…" : "Enter phone number"}"
+                        inputmode="tel"
+                        ${phoneAutofocus}
                       >
-                        ${icon("copy", "size-5")}
-                      </button>
-                      <button
-                        type="button"
-                        data-action="toggle-phone-visibility"
-                        class="flex items-center justify-center size-10 rounded-xl text-slate-400 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10"
-                        title="Show or hide number"
-                      >
-                        ${icon(s.phoneVisible ? "eye_off" : "eye", "size-5")}
-                      </button>
                     </div>
                     ${
-                      s.phoneLocked
+                      isSignup
                         ? ""
-                        : `<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
-                            <p class="text-[11px] text-slate-500 font-medium leading-relaxed">
-                              Use the generated number or bring your own.
-                            </p>
-                            <button
-                              type="button"
-                              data-action="use-custom-number"
-                              class="self-start text-[10px] text-primary/70 hover:text-primary transition-colors font-bold uppercase tracking-widest"
-                            >
-                              Use your own number
-                            </button>
-                          </div>`
+                        : `<p class="text-[11px] text-slate-500 font-medium px-1 leading-relaxed">
+                            International format — start with <span class="font-mono text-slate-400">+</span> and your country code. The flag and spacing follow as you type.
+                          </p>`
                     }
+                    <!-- Actions below the field so the number is never crowded on mobile -->
+                    <div class="flex flex-wrap items-center justify-end gap-1.5">
+                      ${numberActions}
+                    </div>
+                    ${switchLink}
                   </div>
                 </div>
               </div>
@@ -1183,11 +1275,15 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                 </label>
                 <input
                   name="s_key"
-                  type="password"
+                  type="text"
                   inputmode="numeric"
                   pattern="[0-9]*"
                   placeholder="Enter 4-6 digits"
-                  autocomplete="current-password"
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  style="-webkit-text-security: disc;"
                   class="pin-field glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
                   value="${escapeHtml(s.pin)}"
                   ${pinAutofocus}
@@ -1202,7 +1298,7 @@ function renderEntry(s: Extract<State, { kind: "entry" }>): string {
                 class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
                 ${!(s.phoneValid && s.pin.length >= 4) ? "disabled" : ""}
               >
-                Open Secure Channel
+                ${isSignup ? "Create channel" : "Join channel"}
                 ${icon("zap", "size-6 group-hover:scale-125 transition-transform")}
               </button>
             </form>
@@ -1419,11 +1515,15 @@ function renderNewChannelConfirm(s: Extract<State, { kind: "new_channel" }>): st
         </label>
         <input
           name="nc_key_confirm"
-          type="password"
+          type="text"
           inputmode="numeric"
           pattern="[0-9]*"
           placeholder="Repeat PIN to confirm"
-          autocomplete="new-password"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          style="-webkit-text-security: disc;"
           class="pin-field glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
           value="${escapeHtml(s.confirmPin)}"
           data-autofocus
@@ -1446,7 +1546,7 @@ function renderNewChannelConfirm(s: Extract<State, { kind: "new_channel" }>): st
           class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
           ${!canSubmit ? "disabled" : ""}
         >
-          Initialize Secure Channel
+          Create channel
           ${icon("arrow_right", "size-6 group-hover:translate-x-1 transition-transform")}
         </button>
         <div class="flex items-center justify-between gap-3">
@@ -1456,6 +1556,111 @@ function renderNewChannelConfirm(s: Extract<State, { kind: "new_channel" }>): st
           <p class="text-slate-500 text-[10px] uppercase tracking-widest font-bold">
             Channel defaults to ${s.freeTtlDays} days limit
           </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// -------------------------------- :pair ---------------------------------
+
+// Second party claiming an OTP-gated slot. The number + PIN are already
+// derived; this collects the one-time pairing code the creator shared plus a
+// PIN re-confirmation, then claims the slot.
+function renderPair(s: Extract<State, { kind: "pair" }>): string {
+  const canSubmit = s.otp.trim().length > 0 && s.confirmPin.length >= 4 && !s.submitting;
+  const errorBanner = s.error
+    ? `
+      <div class="p-4 rounded-2xl bg-danger/5 border border-danger/20 flex gap-3 items-start animate-in mb-6">
+        ${icon("alert_circle", "size-5 text-danger shrink-0 mt-0.5")}
+        <p class="text-sm font-medium text-danger">${escapeHtml(s.error)}</p>
+      </div>`
+    : "";
+
+  return `
+    <div class="flex flex-col h-full w-full overflow-hidden">
+      <div class="px-4 sm:px-6 py-3 sm:py-5 flex items-center justify-between border-b border-white/10 bg-slate-900/80 backdrop-blur-3xl shrink-0">
+        <a href="/" data-action="go-home" class="group transition-transform active:scale-95">
+          ${renderWordmark()}
+        </a>
+        <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">
+          ${icon("key", "size-3")} Pairing
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-6 py-8 sm:py-16 animate-in">
+        <div class="w-full max-w-xl mx-auto space-y-10 sm:space-y-12">
+          <div class="text-center space-y-4">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-[0.2em] shadow-[0_0_15px_rgba(0,255,163,0.1)] mb-4">
+              ${icon("sparkles", "size-3")} First-time join
+            </div>
+            <h2 class="text-4xl sm:text-6xl font-extrabold text-white font-display tracking-tight leading-[0.9]">
+              Pairing <span class="text-gradient">code.</span>
+            </h2>
+            <p class="text-slate-500 font-medium text-base sm:text-lg leading-relaxed max-w-sm mx-auto">
+              This channel exists. Enter the one-time code its creator shared with you to claim your place — once you join, no one else can.
+            </p>
+          </div>
+
+          <div class="glass-card-premium p-6 sm:p-10">
+            ${errorBanner}
+            <form data-action="submit-pair" autocomplete="off" class="space-y-8 sm:space-y-10">
+              <div class="space-y-3">
+                <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
+                  Pairing Code
+                </label>
+                <input
+                  name="pair_otp"
+                  type="text"
+                  inputmode="text"
+                  autocapitalize="characters"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="XXXX-XXXX"
+                  class="glass-input w-full text-center !text-2xl tracking-[0.3em] font-mono uppercase !py-4 bg-slate-950/40"
+                  value="${escapeHtml(s.otp)}"
+                  data-autofocus
+                >
+                <p class="text-[10px] text-slate-500 text-center font-medium leading-relaxed px-2 italic">
+                  Shared out of band by the person who created the channel.
+                </p>
+              </div>
+
+              <div class="space-y-3">
+                <label class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
+                  Confirm your PIN
+                </label>
+                <input
+                  name="pair_pin"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Repeat your PIN"
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  style="-webkit-text-security: disc;"
+                  class="pin-field glass-input w-full text-center !text-xl tracking-[0.4em] font-mono !py-4 bg-slate-950/40"
+                  value="${escapeHtml(s.confirmPin)}"
+                >
+              </div>
+
+              <div class="space-y-4">
+                <button
+                  type="submit"
+                  class="btn-primary w-full py-5 text-xl group shadow-[0_20px_40px_-10px_rgba(0,255,163,0.3)]"
+                  ${!canSubmit ? "disabled" : ""}
+                >
+                  ${s.submitting ? "Joining…" : "Join Channel"}
+                  ${icon("arrow_right", "size-6 group-hover:translate-x-1 transition-transform")}
+                </button>
+                <button type="button" data-action="pair-back" class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-white transition-colors mx-auto">
+                  ${icon("arrow_left", "size-3")} Back to sign in
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -1590,6 +1795,9 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
         ></div>
       </div>
 
+      <!-- Pairing code (creator only, until the second party joins) -->
+      ${renderPairingBanner(s)}
+
       <!-- TTL expiry warning -->
       ${renderTtlWarning(s.ttlExpiresAt, serverConfig.monetizationEnabled, s.paymentLoading)}
 
@@ -1619,6 +1827,72 @@ function renderChat(s: Extract<State, { kind: "chat" }>): string {
       </div>
 
       ${destructionModal}
+    </div>
+  `;
+}
+
+// Shown to the creator while the second slot is still open. Surfaces the
+// one-time pairing code they must relay (alongside the number) so only the
+// intended counterparty can claim the slot. Disappears on `party_paired`.
+function renderPairingBanner(s: Extract<State, { kind: "chat" }>): string {
+  if (!s.awaitingParty) return "";
+
+  const codeBlock = s.pairingOtp
+    ? `
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3 mt-2">
+        <code class="font-mono text-xl sm:text-3xl font-black tracking-[0.2em] text-primary select-all break-all">${escapeHtml(formatOtp(s.pairingOtp))}</code>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            data-action="copy-pairing-otp"
+            class="flex items-center justify-center size-11 rounded-xl text-slate-300 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10"
+            title="Copy pairing code"
+            aria-label="Copy pairing code"
+          >
+            ${icon("copy", "size-4")}
+          </button>
+          <button
+            type="button"
+            data-action="regenerate-pairing-otp"
+            class="flex items-center justify-center size-11 rounded-xl text-slate-300 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10"
+            title="Issue a new code (invalidates the old one)"
+            aria-label="Issue a new pairing code"
+          >
+            ${icon("refresh_cw", "size-4")}
+          </button>
+        </div>
+      </div>`
+    : `
+      <div class="mt-2 space-y-2">
+        <p class="text-[11px] text-amber-400/80 font-medium leading-relaxed">
+          Your pairing code isn't available on this device. Issue a new one to invite your contact.
+        </p>
+        <button
+          type="button"
+          data-action="regenerate-pairing-otp"
+          class="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl text-slate-200 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold"
+        >
+          ${icon("refresh_cw", "size-4")} Generate a code
+        </button>
+      </div>`;
+
+  return `
+    <div id="pairing-banner" class="px-4 sm:px-6 py-3 bg-primary/5 border-b border-primary/20">
+      <div class="flex items-start gap-3">
+        ${icon("key", "size-4 text-primary shrink-0 mt-1")}
+        <div class="min-w-0">
+          <p class="text-xs font-bold text-primary uppercase tracking-wider">Waiting for the other person</p>
+          <p class="text-[11px] text-slate-400 font-medium leading-relaxed mt-0.5">
+            Share the number <span class="font-bold text-slate-200">and</span> this one-time code with them. They enter both to join — after that the channel is sealed.
+          </p>
+          ${codeBlock}
+          ${
+            s.pairingError
+              ? `<p class="text-[11px] text-danger font-medium leading-relaxed mt-2 flex items-center gap-1.5">${icon("alert_circle", "size-3.5 shrink-0")} ${escapeHtml(s.pairingError)}</p>`
+              : ""
+          }
+        </div>
+      </div>
     </div>
   `;
 }
@@ -1919,7 +2193,7 @@ function renderLocked(s: Extract<State, { kind: "locked" }>): string {
               inputmode="numeric"
               pattern="[0-9]*"
               placeholder="Secret PIN"
-              autocomplete="one-time-code"
+              autocomplete="off"
               autocorrect="off"
               autocapitalize="off"
               spellcheck="false"
@@ -1954,13 +2228,24 @@ function renderEntryErrorBlock(s: Extract<State, { kind: "entry" }>): string {
   return `
     <div class="p-5 rounded-2xl bg-danger/5 border border-danger/20 flex gap-4 animate-in">
       ${icon("alert_circle", "size-6 text-danger shrink-0")}
-      <div class="space-y-1">
+      <div class="space-y-2 min-w-0">
         <p class="text-sm font-bold text-danger">${escapeHtml(s.error)}</p>
         ${
           s.attemptsRemaining !== null && s.attemptsRemaining !== undefined
             ? `<p class="text-[10px] text-danger/60 font-mono uppercase tracking-widest font-black">
                  Security Lock: ${s.attemptsRemaining} ${s.attemptsRemaining === 1 ? "attempt" : "attempts"} remaining
                </p>`
+            : ""
+        }
+        ${
+          s.offerCreate
+            ? `<button
+                 type="button"
+                 data-action="show-signup"
+                 class="inline-flex items-center gap-1.5 mt-1 h-9 px-3.5 rounded-xl text-slate-100 hover:text-white transition-all bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold"
+               >
+                 ${icon("sparkles", "size-4 text-primary")} Create channel
+               </button>`
             : ""
         }
       </div>

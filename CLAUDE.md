@@ -54,36 +54,39 @@ One instance per `room_hash`. Single-threaded execution enforces the N=1 invaria
 - `ttlExpiresAtMs` — epoch ms; DO alarm fires here and self-destructs the room
 - `accessRecords` — up to 2 entries (one per party), each with `accessHash`, `failedAttempts`, `lockedUntilMs`
 - `currentMessage` — N=1; at most one `StoredMessage` at any time
+- `pairingOtpHash` — SHA-256 of the second-party pairing OTP, set by the creator on the first join; `null` on legacy rooms (open-slot fallback). Consumed (set `null`) once the second seat is claimed
+- `pairingFailedAttempts` / `pairingLockedUntilMs` — wrong-OTP counter + lock for the open second seat (same 10-attempt / 30-min thresholds as access lockout)
 
 **Join flow:**
-1. First join initialises the room (rate-limited by `RATE_LIMITER_ROOM_CREATE`, 3/IP/min). **Every number starts `"free"` (weekly TTL)** — any `extension_secret` in the join payload is ignored at creation. A paid (yearly) number is reached only via the `redeem_extension` event the client sends right after joining; that single path (with its proactive Paystack verification) handles both brand-new paid numbers and extensions, so the server never races the webhook at creation time.
-2. Second-party slot registration is also rate-limited by `RATE_LIMITER_ROOM_CREATE` to prevent slot exhaustion attacks.
-3. Subsequent joins check `accessHash` against stored records; 10 failed attempts → 30-min lockout.
+1. First join initialises the room (rate-limited by `RATE_LIMITER_ROOM_CREATE`, 3/IP/min). **Every number starts `"free"` (weekly TTL)** — any `extension_secret` in the join payload is ignored at creation. A paid (yearly) number is reached only via the `redeem_extension` event the client sends right after joining; that single path (with its proactive Paystack verification) handles both brand-new paid numbers and extensions, so the server never races the webhook at creation time. The creator's first join also sets `pairingOtpHash` from the join's `otp_hash` field, arming the second-seat gate.
+2. **Second-party pairing gate:** a new `accessHash` claiming the open seat must present an `otp_hash` matching `pairingOtpHash`. A missing one replies `otp_required`, a wrong one `otp_invalid` — neither registers an access record; 10 wrong attempts lock the seat. Only the bare no-OTP probe avoids spending a `RATE_LIMITER_ROOM_CREATE` token; the real claim is rate-limited. A valid claim consumes the hash and broadcasts `party_paired` to the creator. Legacy rooms (`pairingOtpHash === null`) skip the gate. The join reply carries `awaiting_party` (true while the seat is open).
+3. Subsequent joins check `accessHash` against stored records; 10 failed attempts → 30-min lockout. A creator who lost the code can re-issue it via `reset_pairing` while still awaiting the second party.
 
-**Events handled:** `join`, `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, `redeem_extension`
+**Events handled:** `join`, `send_message`, `read_receipt`, `edit_message`, `delete_message`, `typing`, `expire_room`, `redeem_extension`, `reset_pairing`
 
 **Timing floor:** `JOIN_TIME_FLOOR_MS = 500` — every join reply is padded to at least 500 ms with jitter so reply timing cannot classify `room_hash` values as existing vs. non-existing.
 
 ### Protocol constants: `src/protocol.ts`
 
-Single source of truth for all values shared between the Worker and the client WebSocket protocol: event type unions, `HEX64_RE`, `MAX_CIPHERTEXT_BYTES` (8 192), `MAX_ACCESS_ATTEMPTS` (10), `LOCKOUT_MINUTES` (30), `JOIN_TIME_FLOOR_MS` (500), `FREE_TTL_DAYS`, `PAID_TTL_DAYS`.
+Single source of truth for all values shared between the Worker and the client WebSocket protocol: event type unions, `HEX64_RE`, `MAX_CIPHERTEXT_BYTES` (8 192), `MAX_ACCESS_ATTEMPTS` (10), `LOCKOUT_MINUTES` (30), `JOIN_TIME_FLOOR_MS` (500), `FREE_TTL_DAYS`, `PAID_TTL_DAYS`. The pairing layer lives here too: the `join` event's `otp_hash` field, the `awaiting_party` join-reply field, the `party_paired` broadcast, the `reset_pairing` client event, and the `otp_required` / `otp_invalid` error reasons.
 
 ### Client-side state machine: `src/client/state.ts`
 
 `ChatState` drives the entire browser-side UI as a pure TypeScript state machine. States:
 
 ```
-entry → deriving → [new_channel?] → connecting → chat
-                                              ↓
-                                           locked
-                                           expired (terminal)
+entry → deriving → [new_channel? | pair? | bounce] → connecting → chat
+                                                              ↓
+                                                           locked
+                                                           expired (terminal)
 ```
 
-- `entry` — phone + PIN form. Phone is read-only when a steg number was just generated (generator drawer) or when returning from Paystack checkout (`stelegano_handoff_phone` in sessionStorage). Manual entries remain editable.
-- `deriving` — three-dot loading while `room_hash`, `access_hash`, `sender_hash` are computed; hits `/api/room/:hash/exists` to decide whether to show `new_channel`.
+- `entry` — phone + PIN form with a `mode: "signin" | "signup"` discriminant (the default is blank **signin** — "Join channel"; **signup** is the "Create channel" generator). Sign-in detects the country from the typed `+number` (no dropdown) and a not-found number *bounces* (back to `entry` with `offerCreate: true`); sign-up has the country dropdown + generator. Phone is read-only in signup (generated) and on Paystack handoff (`stelegano_handoff_phone`).
+- `deriving` — three-dot loading while `room_hash`, `access_hash`, `sender_hash` are computed; hits `/api/room/:hash/exists` to route (signin→join-or-bounce, signup→new_channel).
+- `pair` — second-party pairing screen, reached when a sign-in join returns `otp_required`. Collects the one-time pairing code + a PIN re-confirmation, then re-joins with the OTP hash to claim the seat (reuses the in-memory key — no PBKDF2 re-run).
 - `new_channel` — creation-confirmation flow shown for every new channel (room doesn't exist yet), regardless of monetization. There is **no** free/paid choice here — every room is created free; paying is a separate, later in-chat extend action. Two sub-steps (`step: "save" | "confirm"`): **save** surfaces the number with a "Save to contacts" (vCard) action — a web app can't verify a contact was saved (no contacts API), so the real save action is made prominent rather than faking a proof gate; **confirm** re-enters the PIN + accepts terms, then creates the room via `createChannel()`. No DO exists at this point — the room is created on join, not before. Emits the `new_channel_view` funnel beacon on show and `setup_confirmed` on create.
 - `connecting` — PBKDF2 key derivation (600 000 iterations, runs in a dedicated Web Worker to keep the UI responsive)
-- `chat` — active chat; turn-based input (can type when room is empty or last message is from the other party)
+- `chat` — active chat; turn-based input (can type when room is empty or last message is from the other party). Carries `awaitingParty` + `pairingOtp` + `pairingError`: while the creator awaits the second party it shows the pairing-code banner (copy / re-issue), dropped on the `party_paired` broadcast.
 - `locked` — PIN re-entry after auto-lock; re-derives the key without re-joining the WebSocket
 - `expired` — terminal; room was destroyed server-side
 
@@ -129,8 +132,8 @@ Analytics live entirely in D1 — exact and permanent (no sampling, no 90-day ca
   - **engagement**: `message_sent`, `message_edited`, `message_deleted`, `message_read`, `second_party_joined`, `time_to_first_message` (dim = bucket), `activity_hour` (dim = UTC hour `00`–`23`, global — intra-day activity)
   - **monetization**: `extension` (dim = ordinal `x1`,`x2`,…`x10+` — the Nth paid extension of a number, tracked in DO state never by hash), `paid_sale` (dim = price label e.g. `USD_200`, `sum_value` = revenue in minor units), `time_to_paid` (`sum_value` = hours, dim = bucket — free→paid conversion latency), `payment_initiated` / `payment_paid` (dim = price label — server-side payment funnel), `redeem_failed` (dim = reason)
   - **acquisition**: `page_view` (dim = normalized route), `referrer` (dim = `search`|`social`|`other`|`direct`; internal navigation not counted)
-  - **security/abuse/reliability**: `access_failed`, `access_lockout`, `join_rate_limited` (dim = `create`|`slot`), `ws_rate_limited`, `admin_rate_limited`, `cron_sweep` (count = cron runs, `sum_value` = tokens swept)
-  - **funnel**: one `funnel_<step>` per `FunnelStep` (dim = campaign slug)
+  - **security/abuse/reliability**: `access_failed`, `access_lockout`, `pair_failed` (dim = `invalid`|`locked` — wrong/absent pairing OTP on a second-seat claim), `join_rate_limited` (dim = `create`|`slot`), `ws_rate_limited`, `admin_rate_limited`, `cron_sweep` (count = cron runs, `sum_value` = tokens swept)
+  - **funnel**: one `funnel_<step>` per `FunnelStep` (dim = campaign slug); the `FunnelStep` union includes the second-party pairing steps `pair_view` and `paired`
 
 Active-room counts are split by tier in `live_counters` (`free_active` / `paid_active`, migration `0007`): the DO increments by tier at creation, moves free→paid on conversion, and decrements the right tier at expiry — so the dashboard shows live weekly vs. yearly numbers, not just a total.
 - `steg_country` / `cf_country` — ISO-3166 alpha-2 (client-derived steg country / server-side CF-IPCountry), or `""`
@@ -182,6 +185,7 @@ Fully optional (disabled by default). When enabled, steg numbers have a free TTL
 - `/admin` — admin dashboard (HTTP Basic Auth)
 - `/payment/callback` — post-payment redirect from Paystack
 - `/api/room/:hash/exists` — room existence probe (GET, used by the client to route first-time vs. returning joins)
+- `/api/config` — non-sensitive client config (GET): monetization/TTL/price + the visitor's `cf_country` (seeds the sign-up generator's default country); `no-store`
 - `/api/payment/initiate` — start payment flow (POST)
 - `/api/webhooks/paystack` — Paystack webhook (HMAC-SHA512 verified)
 - `/.well-known/security.txt` — security disclosure info
@@ -271,7 +275,7 @@ Dark-first glassmorphism UI. All surfaces use `backdrop-filter: blur(16px)` with
 
 **SessionStorage keys** (cleared on panic/room-expiry/logout):
 - Persistent session state (4 keys, survive lock/re-auth): `stelegano_phone`, `stelegano_room_hash`, `stelegano_sender_hash`, `stelegano_access_hash`
-- Transient (read-once, in `STORAGE_KEYS` so cleared with the rest on expiry/panic): `stelegano_handoff_phone`, `stelegano_handoff_tier` — set before Paystack redirect, read & deleted on return from `/payment/callback`; `stelegano_extension_secret` — set before Paystack redirect, deleted immediately before join on return
+- Transient (read-once, in `STORAGE_KEYS` so cleared with the rest on expiry/panic): `stelegano_handoff_phone`, `stelegano_handoff_tier` — set before Paystack redirect, read & deleted on return from `/payment/callback`; `stelegano_extension_secret` — set before Paystack redirect, deleted immediately before join on return; `stelegano_pairing_otp` — plaintext pairing code the creator must relay, shown in-chat until the counterparty joins (dropped on `party_paired`); `stelegano_intent` — one-shot homepage-CTA deep-link (`"signup"`), read once and cleared by the chat client on load
 - UX preference (persists across sessions *except panic*): `stelgano_selected_country` — last-picked country in the generator drawer.
 
 **Panic clear (`/x`)** redirects to `/?p=1`. The inline bootstrap script detects `?p=1`, calls `sessionStorage.clear()`, and strips the flag from the URL via `history.replaceState` before the user sees the address bar.
