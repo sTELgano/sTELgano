@@ -29,8 +29,8 @@
       </p>
 
       <div class="flex flex-col sm:flex-row gap-4 pt-4">
-        <a href="/chat" class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto">
-          Open Channel
+        <a href="/chat" data-intent="signup" class="btn-primary px-10 py-4 text-xl group w-full sm:w-auto">
+          Create channel
           <svg class="size-6 group-hover:rotate-12 transition-transform" aria-hidden="true"><use href="/icons.svg#sparkles"/></svg>
         </a>
         <a href="/private#see-the-trick" class="inline-flex items-center justify-center gap-2.5 px-10 py-4 text-xl font-bold rounded-2xl bg-amber-400 text-slate-950 hover:bg-amber-300 transition-all shadow-[0_0_28px_rgba(251,191,36,0.3)] group w-full sm:w-auto">
@@ -38,6 +38,10 @@
           <svg class="size-6 group-hover:scale-110 transition-transform" aria-hidden="true"><use href="/icons.svg#lightbulb"/></svg>
         </a>
       </div>
+      <p class="text-sm text-slate-400 font-medium">
+        Already have a number?
+        <a href="/chat" class="text-primary hover:underline font-bold">Join channel</a>
+      </p>
       <p class="text-[10px] text-slate-500 font-medium flex items-center gap-2 px-1">
         <svg class="size-3 text-primary" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
         Incognito Mode recommended for maximum discretion.
@@ -260,8 +264,8 @@
           <div class="flex items-start gap-5">
             <div class="size-12 rounded-2xl bg-primary/10 flex shrink-0 items-center justify-center text-primary font-black text-xl shadow-inner ring-1 ring-primary/20">1</div>
             <div>
-              <h4 class="text-lg font-bold text-white mb-2 font-display">Generate a Steg Number</h4>
-              <p class="text-slate-400 leading-relaxed font-medium text-sm">Use our generator to create a random phone number for any country. Save it in your partner's phone as a normal contact. That's your secret handshake.</p>
+              <h4 class="text-lg font-bold text-white mb-2 font-display">Create a channel</h4>
+              <p class="text-slate-400 leading-relaxed font-medium text-sm">Generate a random phone number for any country and save it in your partner's phone as a normal contact. sTELgano also shows you a one-time pairing code &mdash; send both the number and the code to the one person you're inviting. That's your secret handshake.</p>
             </div>
           </div>
         </div>
@@ -280,8 +284,8 @@
           <div class="flex items-start gap-5">
             <div class="size-12 rounded-2xl bg-primary/10 flex shrink-0 items-center justify-center text-primary font-black text-xl shadow-inner ring-1 ring-primary/20">3</div>
             <div>
-              <h4 class="text-lg font-bold text-white mb-2 font-display">Open the Channel</h4>
-              <p class="text-slate-400 leading-relaxed font-medium text-sm">Enter the steg number and your PIN. Your browser derives the encryption key, connects to the room, and you're connected with end-to-end encryption.</p>
+              <h4 class="text-lg font-bold text-white mb-2 font-display">Join the Channel</h4>
+              <p class="text-slate-400 leading-relaxed font-medium text-sm">The person you invite enters the number, the one-time pairing code, and their own PIN. Their browser derives the encryption key and connects them, end-to-end encrypted. Once they're in, the channel seals &mdash; no one else can take the second seat.</p>
             </div>
           </div>
         </div>
@@ -473,7 +477,7 @@
       </div>
       <div class="glass-card p-8">
         <h4 class="text-lg font-bold text-white mb-3">If there's no account, how do I log in?</h4>
-        <p class="text-slate-400 text-sm leading-relaxed">Your identity is ephemeral. You access a room by knowing the shared Steg Number and your private PIN. When you enter them, your browser mathematically derives the access hashes required to connect. No email, no password, no 2FA.</p>
+        <p class="text-slate-400 text-sm leading-relaxed">Your identity is ephemeral. Returning to a channel you've already joined needs only the shared Steg Number and your private PIN. The very first time you join a channel someone created, you also enter the one-time pairing code they shared with you. No email, no password, no 2FA.</p>
       </div>
       <div class="glass-card p-8">
         <h4 class="text-lg font-bold text-white mb-3">What happens if I forget my PIN?</h4>
@@ -547,11 +551,14 @@
   <div class="orb orb-1 opacity-20 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-75! h-75! sm:w-150! sm:h-150!"></div>
   <div class="relative z-10 animate-in">
     <h3 class="text-3xl sm:text-5xl md:text-6xl font-extrabold text-white font-display mb-6 tracking-tighter">Ready to connect <span class="text-gradient">privately?</span></h3>
-    <p class="text-slate-400 text-lg mb-10 max-w-lg mx-auto">Generate a steg number, share it with someone you trust, and open a channel that only the two of you can access.</p>
+    <p class="text-slate-400 text-lg mb-10 max-w-lg mx-auto">Generate a steg number, share it and your one-time pairing code with someone you trust, and open a channel that only the two of you can access.</p>
     <div class="flex flex-col md:flex-row gap-4 justify-center px-4">
-      <a href="/chat" class="btn-primary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl">Open Secure Channel</a>
-      <a href="/blog" class="btn-secondary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl">Read the Blog</a>
+      <a href="/chat" data-intent="signup" class="btn-primary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl">Create channel</a>
+      <a href="/chat" class="btn-secondary px-8 sm:px-12 py-4 sm:py-5 text-lg sm:text-xl">Join channel</a>
     </div>
+    <p class="text-sm text-slate-500 font-medium mt-5">
+      Curious how it works? <a href="/blog" class="text-slate-300 hover:text-white underline underline-offset-4">Read the blog</a>
+    </p>
     <p class="text-xs text-slate-500 font-medium mt-6 flex items-center justify-center gap-2">
       <svg class="size-4 text-primary" aria-hidden="true"><use href="/icons.svg#eye_off"/></svg>
       Pro Tip: Use Incognito/Private Mode to ensure no local traces remain.

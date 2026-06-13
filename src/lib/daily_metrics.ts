@@ -38,6 +38,11 @@ export const FUNNEL_STEPS = [
   "new_channel_view",
   "setup_confirmed",
   "channel_opened",
+  // Second-party pairing funnel (OTP channel-binding): reached the OTP
+  // screen / completed the pairing. Collected but not part of the dashboard
+  // gate row (which stays Landing → /chat → opened → extended).
+  "pair_view",
+  "paired",
   "extend_started",
   "extend_completed",
 ] as const;
@@ -104,6 +109,7 @@ export type CoreMetric =
   // Security / abuse / reliability.
   | "access_failed"
   | "access_lockout"
+  | "pair_failed" // wrong/absent pairing OTP on a 2nd-party slot claim (dim = reason)
   | "join_rate_limited" // dim = "create" | "slot"
   | "ws_rate_limited" // WebSocket-upgrade rate-limit rejection (edge)
   | "admin_rate_limited" // /admin rate-limit rejection

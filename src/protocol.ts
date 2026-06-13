@@ -68,6 +68,17 @@ export type ClientEvent =
          *  redeemed, skipping the separate redeem_extension round-trip.
          *  Ignored when the room already exists or the token is not paid. */
         extension_secret?: string;
+        /** SHA-256 (hex) of the pairing OTP. Two roles, same field:
+         *  - On the FIRST join (room creation) the creator SETS the room's
+         *    pairing hash so the second slot can only be claimed by someone
+         *    who knows the OTP.
+         *  - On a second party's FIRST join it CLAIMS the slot: the server
+         *    compares this hash to the stored one. Omitted/mismatched →
+         *    `otp_required` / `otp_invalid` and NO access record is created.
+         *  Optional at the wire layer (legacy/test clients, pre-OTP rooms);
+         *  the official client always sends it on creation. The server never
+         *  sees the plaintext OTP — only this hash. */
+        otp_hash?: string;
       };
     }
   | { event: "send_message"; ref: string; data: { ciphertext: string; iv: string } }
@@ -80,6 +91,10 @@ export type ClientEvent =
   | { event: "delete_message"; ref: string; data: { message_id: string } }
   | { event: "typing"; ref?: string; data: Record<string, never> }
   | { event: "expire_room"; ref: string; data: Record<string, never> }
+  /** Creator re-issues the pairing OTP while the second slot is still open
+   *  (e.g. they lost the original code). Replaces the stored hash and resets
+   *  the wrong-OTP lockout. Only the lone creator can call it. */
+  | { event: "reset_pairing"; ref: string; data: { otp_hash: string } }
   | {
       event: "redeem_extension";
       ref: string;
@@ -107,7 +122,11 @@ export type ServerBroadcast =
   | { event: "message_deleted"; data: { message_id: string } }
   | { event: "counterparty_typing"; data: Record<string, never> }
   | { event: "room_expired"; data: Record<string, never> }
-  | { event: "ttl_extended"; data: { ttl_expires_at: string } };
+  | { event: "ttl_extended"; data: { ttl_expires_at: string } }
+  /** Sent to the creator when the second party successfully claims the
+   *  slot with a valid OTP. Flips the creator's UI from "share pairing
+   *  code" to "paired". Carries nothing — its arrival is the signal. */
+  | { event: "party_paired"; data: Record<string, never> };
 
 // ---------------------------------------------------------------------------
 // Payloads
@@ -127,6 +146,11 @@ export type JoinReply = {
   current_message?: MessagePayload;
   /** ISO 8601 timestamp when the room TTL expires. Present on all joins. */
   ttl_expires_at?: string;
+  /** True while the second party slot is still open — i.e. this joiner is
+   *  alone in the channel. The creator uses it to keep showing the pairing
+   *  code until the counterparty joins. Absent/false once both slots are
+   *  filled. */
+  awaiting_party?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -152,6 +176,11 @@ export type ErrorReason =
   | "invalid_token"
   | "payment_pending"
   | "monetization_disabled"
+  /** A second party tried to claim the slot without a (valid) pairing OTP.
+   *  `otp_required` = none supplied; `otp_invalid` = supplied but wrong.
+   *  Neither registers an access record — the client prompts for the OTP. */
+  | "otp_required"
+  | "otp_invalid"
   | "invalid_topic"
   | "internal_error"
   | "rate_limited";

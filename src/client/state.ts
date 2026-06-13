@@ -39,6 +39,9 @@ import {
   encrypt,
   fromBase64,
   generateExtensionToken,
+  generatePairingOtp,
+  hashOtp,
+  normaliseOtp,
   type ProgressCallback,
   toBase64,
 } from "./crypto/anon";
@@ -96,6 +99,9 @@ export type Config = {
   paidTtlDays: number;
   priceCents: number;
   currency: string;
+  /** Visitor's CF-IPCountry (alpha-2) — seeds the sign-up generator's default
+   *  country. "" when unknown. */
+  cfCountry: string;
 };
 
 const DEFAULT_CONFIG: Config = {
@@ -104,6 +110,7 @@ const DEFAULT_CONFIG: Config = {
   paidTtlDays: 365,
   priceCents: 200,
   currency: "USD",
+  cfCountry: "",
 };
 
 /** Generator drawer state — orthogonal to the main flow but only
@@ -137,6 +144,14 @@ export type State = BaseState &
   (
     | {
         kind: "entry";
+        /** Which surface this is:
+         *  - "signin" (default): blank, manual steg-number entry for a number
+         *    already in the system. No generator. A number not found bounces
+         *    the user to "signup".
+         *  - "signup": the generator. A fresh, guaranteed-unused number is
+         *    minted (default country from CF-IPCountry), regenerated on
+         *    country change. Creation-only path — no custom numbers. */
+        mode: "signin" | "signup";
         /** Pre-populated phone, or "" when blank. */
         phone: string;
         /** Typed PIN. masked in UI. */
@@ -164,6 +179,9 @@ export type State = BaseState &
         searchQuery: string;
         /** True if the phone number is valid according to libphonenumber-js. */
         phoneValid: boolean;
+        /** Set after a sign-in to a non-existent number — the error block then
+         *  offers a "Create channel" button so the bounce is actionable. */
+        offerCreate: boolean;
       }
     /** PBKDF2 in flight. The 600k iterations take ~1.5–2.5s. */
     | {
@@ -205,6 +223,25 @@ export type State = BaseState &
          *  button ("channel defaults to N days"). */
         freeTtlDays: number;
       }
+    /** Second-party pairing gate. Reached when a sign-in to an existing
+     *  channel comes back `otp_required` — i.e. the server sees a brand-new
+     *  access credential claiming the open slot. The number + PIN are already
+     *  derived (held in cachedHashes/key); this screen collects the pairing
+     *  OTP shared by the creator plus a PIN re-confirmation, then re-joins
+     *  with the OTP hash to claim the slot. */
+    | {
+        kind: "pair";
+        phone: string;
+        countryIso: string;
+        /** The pairing code as typed (Crockford base32, dashes ignored). */
+        otp: string;
+        /** PIN re-entry — must match the PIN used on sign-in. */
+        confirmPin: string;
+        /** Error banner (wrong code, locked, PIN mismatch), or null. */
+        error: string | null;
+        /** True while the claim join is in flight. */
+        submitting: boolean;
+      }
     /** Opening the WebSocket and joining. Brief — under a second
      *  typically. */
     | { kind: "connecting"; phone: string; countryIso: string }
@@ -233,6 +270,15 @@ export type State = BaseState &
         paymentLoading: boolean;
         /** Error copy after a failed extend attempt. */
         paymentError: string | null;
+        /** True while the second slot is still open (this party is alone).
+         *  The creator shows the pairing code while this holds. */
+        awaitingParty: boolean;
+        /** The pairing OTP (plaintext) to display to the creator until the
+         *  counterparty joins. null for the second party / once paired. */
+        pairingOtp: string | null;
+        /** Error surfaced in the pairing banner (e.g. a failed re-issue), or
+         *  null. Separate from paymentError so the two never clobber. */
+        pairingError: string | null;
       }
     /** Wrong PIN OR 30-min lockout. PIN re-entry only — phone stays
      *  the same. Splits from v1 into two sub-flows keyed by `reason`. */
@@ -271,6 +317,12 @@ const STORAGE_KEYS = [
   "stelegano_handoff_country",
   "stelegano_handoff_tier",
   "stelegano_campaign",
+  // Plaintext pairing OTP the creator must relay; shown in-chat until the
+  // counterparty joins. Cleared on panic/expiry like everything else.
+  "stelegano_pairing_otp",
+  // One-shot "open the sign-up generator on load" intent (set by homepage
+  // CTAs before navigating to /chat, since /chat takes no URL params).
+  "stelegano_intent",
 ] as const;
 
 function clearSession() {
@@ -305,6 +357,24 @@ function readHandoffPhone(): string {
     return sessionStorage.getItem("stelegano_handoff_phone") ?? "";
   } catch {
     return "";
+  }
+}
+
+/** Reads the one-shot "stelegano_intent" key (set by homepage CTAs to deep-
+ *  link into a surface without a URL param). Currently only "signup". */
+function readIntent(): string | null {
+  try {
+    return sessionStorage.getItem("stelegano_intent");
+  } catch {
+    return null;
+  }
+}
+
+function clearIntent(): void {
+  try {
+    sessionStorage.removeItem("stelegano_intent");
+  } catch {
+    // ignore
   }
 }
 
@@ -385,6 +455,13 @@ export class ChatState {
   /** Caches the PIN internally to survive payment redirects (extending a channel). */
   private cachedPin: string | null = null;
   private config: Config = DEFAULT_CONFIG;
+  /** True while a deep-linked sign-up (homepage "Create channel") is holding
+   *  its first number generation until /api/config lands, so the number uses
+   *  the visitor's CF country rather than the US fallback. */
+  private awaitingConfigForSignup = false;
+  /** Handle for the deep-linked-signup fallback generation, so updateConfig can
+   *  cancel it the moment config lands and avoid a US-then-CF double-generate. */
+  private signupSeedTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     const handoffPhone = readHandoffPhone();
@@ -398,6 +475,21 @@ export class ChatState {
       this.state.pin = handoffPin;
       // Defer submission to the next tick so the state machine is ready.
       setTimeout(() => this.submit(), 0);
+    } else if (!handoffPhone && readIntent() === "signup") {
+      // Homepage "Create channel" CTA: open straight into the generator.
+      clearIntent();
+      this.state = this.initialEntry("", handoffCountry, false, true, "signup");
+      // Hold the first number until /api/config lands so it uses the visitor's
+      // CF country (updateConfig fires it). Fallback-generate if config is slow
+      // or fails, so the generator is never left empty.
+      this.awaitingConfigForSignup = true;
+      this.signupSeedTimer = setTimeout(() => {
+        this.signupSeedTimer = null;
+        if (this.awaitingConfigForSignup) {
+          this.awaitingConfigForSignup = false;
+          void this.generateNewNumber();
+        }
+      }, 1200);
     } else {
       this.state = this.initialEntry(handoffPhone, handoffCountry, !!handoffPhone, true);
     }
@@ -408,6 +500,7 @@ export class ChatState {
     countryIso = "US",
     phoneLocked = false,
     phoneVisible = true,
+    mode: "signin" | "signup" = "signin",
   ): Extract<State, { kind: "entry" }> {
     const p = phone || readHandoffPhone();
     const c = (countryIso || readHandoffCountry()) as CountryCode;
@@ -418,6 +511,7 @@ export class ChatState {
 
     return {
       kind: "entry",
+      mode,
       phone: p,
       pin: "",
       countryIso: c,
@@ -430,12 +524,57 @@ export class ChatState {
       showCountries: false,
       searchQuery: "",
       phoneValid,
+      offerCreate: false,
     };
   }
 
-  /** Apply server-side configuration fetched from /api/config. */
+  /** Apply server-side configuration fetched from /api/config. Also seeds the
+   *  default country (and its flag) from the visitor's CF-IPCountry once known,
+   *  while the entry surface is still pristine — so the flag reflects where the
+   *  user actually is instead of the US fallback. */
   updateConfig(c: Config): void {
     this.config = c;
+
+    // Config landed — cancel the deep-linked-signup fallback so it can't fire a
+    // US number on top of the CF-seeded one we're about to generate below.
+    if (this.signupSeedTimer !== null) {
+      clearTimeout(this.signupSeedTimer);
+      this.signupSeedTimer = null;
+    }
+
+    const iso = (c.cfCountry || "").toUpperCase();
+    const usable = iso !== "" && COUNTRY_DATA.some((cd) => cd.iso === iso);
+
+    // No usable CF country — release any held sign-up generation with the
+    // current fallback country so the generator isn't left blank.
+    if (!usable) {
+      if (this.awaitingConfigForSignup) {
+        this.awaitingConfigForSignup = false;
+        void this.generateNewNumber();
+      }
+      return;
+    }
+
+    const s = this.state;
+    if (s.kind !== "entry" || s.phoneLocked) return;
+
+    if (s.mode === "signin") {
+      // Default the flag to the visitor's country while the field is untouched.
+      if (s.phone === "" && s.countryIso !== iso) {
+        this.setState({ ...s, countryIso: iso });
+      }
+    } else if (s.mode === "signup") {
+      // Seed the generator country from CF and mint the first number (or, for a
+      // pristine generator, re-seed) — but never disturb one already in hand.
+      if (this.awaitingConfigForSignup) {
+        this.awaitingConfigForSignup = false;
+        this.setState({ ...s, countryIso: iso });
+        void this.generateNewNumber();
+      } else if (s.phone === "" && !s.generating && s.countryIso !== iso) {
+        this.setState({ ...s, countryIso: iso });
+        void this.generateNewNumber();
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -484,18 +623,22 @@ export class ChatState {
 
     // Validation
     if (!phone) {
-      if (s.kind === "entry") this.setState({ ...s, error: "phone number required" });
+      if (s.kind === "entry")
+        this.setState({ ...s, error: "phone number required", offerCreate: false });
       return;
     }
 
     if (!pin) {
-      if (s.kind === "entry") this.setState({ ...s, error: "PIN required" });
+      if (s.kind === "entry") this.setState({ ...s, error: "PIN required", offerCreate: false });
       else this.setState({ ...s, lockError: "PIN required" });
       return;
     }
 
     // Normalise based on current country if not already international
     const countryIso = s.countryIso;
+    // Capture the surface intent before deriving drops us out of `entry`.
+    // A locked re-auth always behaves like sign-in (rejoining a known room).
+    const intent: "signin" | "signup" = s.kind === "entry" ? s.mode : "signin";
     let fullPhone = phone;
 
     if (!phone.startsWith("+")) {
@@ -518,7 +661,8 @@ export class ChatState {
     const parsed = parsePhoneNumberFromString(fullPhone);
 
     if (!parsed?.isValid()) {
-      if (s.kind === "entry") this.setState({ ...s, error: `invalid ${countryIso} phone number` });
+      if (s.kind === "entry")
+        this.setState({ ...s, error: `invalid ${countryIso} phone number`, offerCreate: false });
       else this.setState({ ...s, lockError: `invalid phone number` });
       return;
     }
@@ -573,10 +717,19 @@ export class ChatState {
     // free here; extending to paid happens later from the chat UI.
     const exists = await probeRoomExists(roomHash);
     const handoffTier = readHandoffTier();
-    if (exists || handoffTier === "free") {
-      this.cachedPin = pin;
-      await this.connectAndJoin(normalisedPhone, countryIso, roomHash, accessHash, senderHash);
-    } else {
+
+    if (intent === "signup") {
+      // Generator flow — we expect a brand-new room. If the freshly generated
+      // number is somehow already taken (astronomically unlikely with random
+      // E.164), regenerate rather than colliding into someone else's channel
+      // (which would land us on their pairing gate, not a create).
+      if (exists) {
+        const fresh = this.initialEntry("", countryIso, false, true, "signup");
+        fresh.error = "That number was just taken — minted a fresh one. Confirm to continue.";
+        this.setState(fresh);
+        void this.generateNewNumber();
+        return;
+      }
       this.cachedPin = pin;
       this.setState({
         kind: "new_channel",
@@ -596,7 +749,26 @@ export class ChatState {
       // friction-heavy confirm step; pairing it with setup_confirmed below
       // measures drop-off here.
       fireFunnel("new_channel_view");
+      return;
     }
+
+    // Sign-in (or locked re-auth, or Paystack handoff return).
+    if (exists || handoffTier === "free") {
+      this.cachedPin = pin;
+      await this.connectAndJoin(normalisedPhone, countryIso, roomHash, accessHash, senderHash);
+      return;
+    }
+
+    // Sign-in to a number that isn't in the system → bounce. No custom
+    // numbers: a channel can only be created through the generator, so we
+    // keep the user on the sign-in surface with guidance (the surface offers
+    // a "create one" switch to the generator).
+    // Keep the number the user typed, formatted (with +), so the field stays
+    // readable instead of repainting as bare digits.
+    const bounce = this.initialEntry(phone, countryIso, false, true, "signin");
+    bounce.error = "No channel for that number yet.";
+    bounce.offerCreate = true;
+    this.setState(bounce);
   }
 
   /** Normalises a phone number to digits only. */
@@ -634,7 +806,18 @@ export class ChatState {
     }
     fireFunnel("setup_confirmed");
     const { phone, countryIso, roomHash, accessHash, senderHash } = s;
-    await this.connectAndJoin(phone, countryIso, roomHash, accessHash, senderHash);
+    // Mint the pairing OTP: its hash gates the second slot server-side; the
+    // plaintext is shown to the creator in-chat (and stashed so it survives a
+    // lock/refresh) until the counterparty joins. The server only ever sees
+    // the hash.
+    const { otp, otpHash } = await generatePairingOtp();
+    try {
+      sessionStorage.setItem("stelegano_pairing_otp", otp);
+    } catch {
+      // sessionStorage disabled — the OTP still rides in chat state for this
+      // session; it just won't survive a refresh (the creator can regenerate).
+    }
+    await this.connectAndJoin(phone, countryIso, roomHash, accessHash, senderHash, otpHash);
   }
 
   /** new_channel: advance from the save step to the PIN-confirm step. */
@@ -902,27 +1085,143 @@ export class ChatState {
   // New Integrated Identity Actions
   // -------------------------------------------------------------------------
 
+  /** Switch the entry surface to the sign-up generator and mint a first
+   *  number (seeded from the visitor's CF country when known). */
+  showSignup(): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+    const defaultIso = this.config.cfCountry || s.countryIso || "US";
+    this.setState({
+      ...this.initialEntry("", defaultIso, false, true, "signup"),
+    });
+    void this.generateNewNumber();
+  }
+
+  /** Switch the entry surface back to blank sign-in (manual number entry). */
+  showSignin(): void {
+    const s = this.state;
+    if (s.kind !== "entry") return;
+    this.setState(this.initialEntry("", s.countryIso, false, true, "signin"));
+  }
+
+  // -------------------------------------------------------------------------
+  // Pair screen (second party claiming an OTP-gated slot)
+  // -------------------------------------------------------------------------
+
+  setPairOtp(otp: string): void {
+    const s = this.state;
+    if (s.kind !== "pair") return;
+    this.setState({ ...s, otp, error: null });
+  }
+
+  setPairConfirmPin(confirmPin: string): void {
+    const s = this.state;
+    if (s.kind !== "pair") return;
+    this.setState({ ...s, confirmPin, error: null });
+  }
+
+  /** Abandon pairing and return to a blank sign-in. */
+  pairBack(): void {
+    if (this.state.kind !== "pair") return;
+    this.setState(this.initialEntry("", this.state.countryIso, false, true, "signin"));
+  }
+
+  /** Submit the pairing code: re-confirms the PIN, then re-joins with the OTP
+   *  hash to claim the slot. The number/PIN were already derived on sign-in
+   *  (cachedHashes + key in memory), so this needs no PBKDF2 re-run. */
+  async submitPair(): Promise<void> {
+    const s = this.state;
+    if (s.kind !== "pair") return;
+    if (s.submitting) return;
+
+    const otp = normaliseOtp(s.otp);
+    if (otp.length === 0) {
+      this.setState({ ...s, error: "Enter the pairing code your contact shared." });
+      return;
+    }
+    // The PIN typed on sign-in is authoritative (it derived the access hash);
+    // the confirm field just guards a typo before we commit the slot.
+    if (this.cachedPin !== null && s.confirmPin !== this.cachedPin) {
+      this.setState({ ...s, error: "PINs do not match." });
+      return;
+    }
+    const h = this.cachedHashes;
+    if (!h) {
+      this.setState({ ...s, error: "Session expired. Sign in again." });
+      return;
+    }
+
+    this.setState({ ...s, submitting: true, error: null });
+    const otpHash = await hashOtp(otp);
+    // connectAndJoin routes the result: success → chat; otp_invalid/locked →
+    // back to this pair screen with an error.
+    await this.connectAndJoin(
+      h.phone,
+      s.countryIso,
+      h.roomHash,
+      h.accessHash,
+      h.senderHash,
+      otpHash,
+    );
+  }
+
+  /** Re-issue the pairing code (creator only, while still awaiting the second
+   *  party). Used when the original was lost — e.g. the tab was closed before
+   *  it could be relayed. Generates a fresh OTP, replaces the server-side gate,
+   *  and re-stashes + displays the new code. */
+  async regeneratePairingOtp(): Promise<void> {
+    const s = this.state;
+    if (s.kind !== "chat" || !this.client || !s.awaitingParty) return;
+    const { otp, otpHash } = await generatePairingOtp();
+    try {
+      await this.client.resetPairing(otpHash);
+    } catch {
+      // Leave the existing gate/code untouched, but tell the creator so they
+      // don't relay a code that was never registered.
+      if (this.state.kind === "chat") {
+        this.setState({
+          ...this.state,
+          pairingError: "Couldn't issue a new code. Check your connection and try again.",
+        });
+      }
+      return;
+    }
+    try {
+      sessionStorage.setItem("stelegano_pairing_otp", otp);
+    } catch {
+      // ignore
+    }
+    if (this.state.kind === "chat") {
+      this.setState({ ...this.state, pairingOtp: otp, pairingError: null });
+    }
+  }
+
+  /** The second party joined — drop the pairing code from the creator's UI. */
+  private onPartyPaired(): void {
+    if (this.state.kind !== "chat") return;
+    try {
+      sessionStorage.removeItem("stelegano_pairing_otp");
+    } catch {
+      // ignore
+    }
+    this.setState({ ...this.state, awaitingParty: false, pairingOtp: null, pairingError: null });
+  }
+
   setPhone(phone: string): void {
     const s = this.state;
-    if (s.kind !== "entry" || s.phoneLocked) return;
+    if (s.kind !== "entry" || s.mode !== "signin" || s.phoneLocked) return;
 
-    // Strip non-digits except leading plus to avoid double-formatting confusion
-    const digits = phone.startsWith("+")
-      ? `+${phone.slice(1).replace(/\D/g, "")}`
-      : phone.replace(/\D/g, "");
+    // Join channel always works in international format. The user types only
+    // digits; we prepend a single leading + so they never have to. An empty
+    // field stays empty so the placeholder shows.
+    const digitsOnly = phone.replace(/\D/g, "");
+    const e164 = digitsOnly ? `+${digitsOnly}` : "";
+    const formatted = e164 ? new AsYouType().input(e164) : "";
+    const parsed = e164 ? parsePhoneNumberFromString(formatted) : undefined;
 
-    // Use AsYouType for real-time formatting
-    const formatter = digits.startsWith("+")
-      ? new AsYouType()
-      : new AsYouType(s.countryIso as CountryCode);
-    const formatted = formatter.input(digits);
-    const parsed = parsePhoneNumberFromString(formatted, s.countryIso as CountryCode);
-
-    // Smart country detection
+    // The flag follows the country detected from the international number.
     let countryIso = s.countryIso;
-    if (digits.startsWith("+") && parsed?.country) {
-      countryIso = parsed.country;
-    }
+    if (parsed?.country) countryIso = parsed.country;
 
     const isValid = parsed ? parsed.isValid() : false;
     let error = s.error;
@@ -930,15 +1229,27 @@ export class ChatState {
     if (isValid && error?.toLowerCase().includes("invalid")) {
       error = null;
     }
+    // Editing the number invalidates a prior "no channel" bounce — clear both
+    // the banner and the Create-channel offer.
+    if (s.offerCreate) error = null;
 
-    this.setState({ ...s, phone: formatted, countryIso, phoneValid: isValid, error });
+    this.setState({
+      ...s,
+      phone: formatted,
+      countryIso,
+      phoneValid: isValid,
+      error,
+      offerCreate: false,
+    });
   }
 
   setCountry(iso: string): void {
     const s = this.state;
     if (s.kind !== "entry" || s.phoneLocked) return;
     this.setState({ ...s, countryIso: iso, showCountries: false, searchQuery: "", error: null });
-    void this.generateNewNumber();
+    // Only the generator regenerates on a country change; on sign-in the
+    // country just informs formatting of a manually-typed number.
+    if (s.mode === "signup") void this.generateNewNumber();
   }
 
   toggleCountries(): void {
@@ -967,13 +1278,14 @@ export class ChatState {
 
   async generateNewNumber(): Promise<void> {
     const s = this.state;
-    if (s.kind !== "entry" || s.phoneLocked || s.generating) return;
+    // Generation is the sign-up surface's job — never on sign-in (no custom
+    // numbers means no client-side minting there either).
+    if (s.kind !== "entry" || s.mode !== "signup" || s.generating) return;
 
     this.setState({ ...s, generating: true });
 
     try {
       const countryName = COUNTRY_LIST.find((c) => c.iso === s.countryIso)?.name ?? "United States";
-      console.log(`[State] Generating number for: ${countryName} (${s.countryIso})`);
 
       // v1 has a 600ms cosmetic delay for "calculating" feel.
       await new Promise((r) => setTimeout(r, 600));
@@ -981,26 +1293,19 @@ export class ChatState {
       let num = "";
       try {
         num = await generatePhoneNumber({ countryName: countryName as CountryNames });
-      } catch (err) {
-        console.warn(
-          `[State] Generation failed for ${countryName}, trying dial-code fallback...`,
-          err,
-        );
+      } catch {
         // Fallback: find another country with the same dial code (e.g. AX -> Finland)
         const dialCode = COUNTRY_DATA.find((c) => c.iso === s.countryIso)?.dialCode;
         const alternative = COUNTRY_DATA.find(
           (c) => c.dialCode === dialCode && c.iso !== s.countryIso,
         );
         if (alternative) {
-          console.log(`[State] Using fallback country: ${alternative.name}`);
           num = await generatePhoneNumber({ countryName: alternative.name as CountryNames });
         } else {
           // Final fallback to US to ensure we never stay "unresponsive"
           num = await generatePhoneNumber({ countryName: "United States" as CountryNames });
         }
       }
-
-      console.log("[State] Generated:", num);
 
       const formatter = num.startsWith("+")
         ? new AsYouType()
@@ -1009,7 +1314,9 @@ export class ChatState {
       const parsed = parsePhoneNumberFromString(formatted, s.countryIso as CountryCode);
       const isValid = parsed ? parsed.isValid() : false;
 
-      if (this.state.kind === "entry") {
+      // Re-check the surface: if the user flipped to sign-in while generation
+      // was in flight, don't clobber the sign-in field with a generated number.
+      if (this.state.kind === "entry" && this.state.mode === "signup") {
         this.setState({
           ...this.state,
           phone: formatted,
@@ -1019,9 +1326,12 @@ export class ChatState {
         });
         // Funnel: a steg number was successfully generated.
         fireFunnel("steg_generated");
+      } else if (this.state.kind === "entry") {
+        // Switched away — just clear the generating flag.
+        this.setState({ ...this.state, generating: false });
       }
-    } catch (err) {
-      console.error("[State] Generation failed:", err);
+    } catch {
+      // Generation failed entirely — clear the spinner so the UI isn't stuck.
       if (this.state.kind === "entry") {
         this.setState({ ...this.state, generating: false });
       }
@@ -1113,6 +1423,7 @@ export class ChatState {
     roomHash: string,
     accessHash: string,
     senderHash: string,
+    otpHash?: string,
   ): Promise<void> {
     this.setState({ kind: "connecting", phone, countryIso });
 
@@ -1126,6 +1437,7 @@ export class ChatState {
       onCounterpartyTyping: () => this.onCounterpartyTyping(),
       onRoomExpired: () => this.onRoomExpired(),
       onTtlExtended: (ttl) => this.onTtlExtended(ttl),
+      onPartyPaired: () => this.onPartyPaired(),
       onClose: (code) => this.onSocketClose(code),
     });
 
@@ -1156,9 +1468,52 @@ export class ChatState {
 
     let joinReply: JoinReply | undefined;
     try {
-      joinReply = await this.client.join(senderHash, accessHash, countryIso);
+      joinReply = await this.client.join(senderHash, accessHash, countryIso, otpHash);
     } catch (err) {
       const e = err as RoomClientError;
+      if (e.reason === "otp_required") {
+        // Second party's first connection: the open slot is OTP-gated and we
+        // didn't supply one. Collect the pairing code, then re-join to claim.
+        this.client?.close();
+        this.client = null;
+        this.setState({
+          kind: "pair",
+          phone,
+          countryIso,
+          otp: "",
+          confirmPin: "",
+          error: null,
+          submitting: false,
+        });
+        fireFunnel("pair_view");
+        return;
+      }
+      if (
+        otpHash !== undefined &&
+        (e.reason === "otp_invalid" || e.reason === "locked" || e.reason === "unauthorized")
+      ) {
+        // A pairing claim that failed — keep the user on the pair screen with a
+        // contextual message. `unauthorized` here means the open slot was taken
+        // by someone else between our probe and this claim (a lost race).
+        this.client?.close();
+        this.client = null;
+        const error =
+          e.reason === "locked"
+            ? "Too many attempts. This channel is locked for 30 minutes."
+            : e.reason === "unauthorized"
+              ? "This channel was just claimed by someone else."
+              : "Incorrect pairing code. Check it with your contact and try again.";
+        this.setState({
+          kind: "pair",
+          phone,
+          countryIso,
+          otp: "",
+          confirmPin: "",
+          error,
+          submitting: false,
+        });
+        return;
+      }
       if (e.reason === "locked" || e.reason === "unauthorized") {
         // If we came from :locked state already, preserve
         // lockAttempts + bump it. Otherwise start at 1.
@@ -1205,6 +1560,26 @@ export class ChatState {
       current = await this.tryDecrypt(joinReply.current_message);
     }
 
+    // Pairing state. The creator is alone (awaiting_party) until the second
+    // party claims the slot — show them the pairing code (stashed at create).
+    // Anyone not awaiting (the second party, or a returning paired user) holds
+    // no code, so drop any stale one.
+    const awaitingParty = joinReply.awaiting_party === true;
+    let pairingOtp: string | null = null;
+    if (awaitingParty) {
+      try {
+        pairingOtp = sessionStorage.getItem("stelegano_pairing_otp");
+      } catch {
+        pairingOtp = null;
+      }
+    } else {
+      try {
+        sessionStorage.removeItem("stelegano_pairing_otp");
+      } catch {
+        // ignore
+      }
+    }
+
     this.setState({
       kind: "chat",
       phone,
@@ -1217,7 +1592,16 @@ export class ChatState {
       ttlExpiresAt: joinReply.ttl_expires_at ?? null,
       paymentLoading: false,
       paymentError: null,
+      awaitingParty,
+      pairingOtp,
+      pairingError: null,
     });
+
+    // Funnel: a second party that supplied an OTP and is no longer awaiting
+    // just completed pairing.
+    if (otpHash !== undefined && !awaitingParty) {
+      fireFunnel("paired");
+    }
 
     // Funnel: the session reached an open channel. If we arrived back
     // from a paid checkout (pendingSecret present), this is also the

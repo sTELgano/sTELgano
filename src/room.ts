@@ -112,6 +112,18 @@ type RoomState = {
   accessRecords: AccessRecord[];
   /** N=1 invariant — at most one current message. */
   currentMessage: StoredMessage | null;
+  /** SHA-256 (hex) of the pairing OTP the creator minted at room creation.
+   *  The second party must present a matching hash to claim the open slot.
+   *  Cleared (set null) once the slot is claimed — the OTP is one-time.
+   *  null on legacy rooms created before pairing existed: those fall back to
+   *  the old open-slot behavior so their second party can still join. */
+  pairingOtpHash: string | null;
+  /** Wrong-OTP attempts against the open slot. Bounds brute force
+   *  independently of the per-IP rate limiter (which a distributed attacker
+   *  could sidestep). Reset to 0 on a correct OTP. */
+  pairingFailedAttempts: number;
+  /** epoch ms; non-null after too many wrong OTPs lock the slot. */
+  pairingLockedUntilMs: number | null;
 };
 
 const STATE_KEY = "state";
@@ -178,6 +190,16 @@ export class RoomDO implements DurableObject {
         this.room.everMessaged = this.room.currentMessage != null;
         // A legacy paid room had at least one purchase; free rooms zero.
         this.room.extensionCount = this.room.tier === "paid" ? 1 : 0;
+        await this.persist();
+      }
+      // Pairing fields were added after createdAtMs, so a room can have a
+      // defined createdAtMs but no pairing state. Backfill independently:
+      // null hash → legacy open-slot behavior (the second party can still
+      // join without an OTP, since none was ever set).
+      if (this.room && this.room.pairingOtpHash === undefined) {
+        this.room.pairingOtpHash = null;
+        this.room.pairingFailedAttempts = 0;
+        this.room.pairingLockedUntilMs = null;
         await this.persist();
       }
     });
@@ -281,6 +303,9 @@ export class RoomDO implements DurableObject {
         break;
       case "redeem_extension":
         await this.handleRedeemExtension(ws, evt);
+        break;
+      case "reset_pairing":
+        await this.handleResetPairing(ws, evt);
         break;
       default: {
         // Unknown event — ignore (matches v1's Logger.warning + noreply).
@@ -423,6 +448,11 @@ export class RoomDO implements DurableObject {
       }
 
       const ttlMs = Date.now() + FREE_TTL_DAYS * 86_400_000;
+      // The creator sets the pairing hash now so the second slot can only be
+      // claimed by someone who knows the OTP. Stored only if well-formed;
+      // a missing/garbage value leaves it null (legacy open-slot behavior).
+      const otpHash =
+        evt.data.otp_hash && HEX64_RE.test(evt.data.otp_hash) ? evt.data.otp_hash : null;
       this.room = {
         isInitialized: true,
         roomId: crypto.randomUUID(),
@@ -433,6 +463,9 @@ export class RoomDO implements DurableObject {
         extensionCount: 0,
         accessRecords: [{ accessHash, failedAttempts: 0, lockedUntilMs: null }],
         currentMessage: null,
+        pairingOtpHash: otpHash,
+        pairingFailedAttempts: 0,
+        pairingLockedUntilMs: null,
       };
       this.emitCohortActive(); // cohort week 0 (creation) ≈ 100% by construction
       await this.persist();
@@ -458,21 +491,43 @@ export class RoomDO implements DurableObject {
         ok: {
           room_id: this.room.roomId,
           ttl_expires_at: new Date(this.room.ttlExpiresAtMs).toISOString(),
+          // The creator is alone — surface the pairing code until the
+          // second party claims the slot.
+          awaiting_party: true,
         },
       });
       return;
     }
 
     // Existing room — check access.
-    // Guard second-slot registration: if the room has only one access record
-    // and this access_hash is new, the caller is claiming the second-party
-    // slot. Rate-limit this the same way we rate-limit room creation to
-    // prevent an attacker who knows the room_hash from pre-empting the slot
-    // before the legitimate second party joins.
-    if (
+    //
+    // A new access_hash while the second slot is still open is a second-party
+    // claim. Gate it on the pairing OTP BEFORE the open-slot logic registers
+    // anything: the slot can only be claimed by someone who presents a hash
+    // matching the one the creator stored at room creation. This is the
+    // channel-binding that stops an intimate-access attacker who merely knows
+    // the steg number from racing into the open slot. Legacy rooms
+    // (pairingOtpHash === null) skip the gate so their second party can still
+    // join the old way.
+    const isSlot2Claim =
       this.room.accessRecords.length < 2 &&
-      !this.room.accessRecords.find((r) => r.accessHash === accessHash)
-    ) {
+      !this.room.accessRecords.find((r) => r.accessHash === accessHash);
+
+    if (isSlot2Claim && this.room.pairingOtpHash) {
+      const gate = this.checkPairingOtp(evt.data.otp_hash);
+      if (gate.kind === "error") {
+        await this.persist(); // failure counter / lockout may have changed
+        await this.padJoin(start);
+        this.send(ws, { ref: evt.ref, error: { reason: gate.reason } });
+        return;
+      }
+    }
+
+    if (isSlot2Claim) {
+      // Rate-limit the actual slot claim (valid OTP, or a legacy open slot)
+      // the same way we rate-limit room creation. The bare no-OTP probe above
+      // returns before reaching here, so a legitimate pairing only spends a
+      // token on the real attempt — a fumbled OTP won't exhaust the limit.
       const rl = await this.env.RATE_LIMITER_ROOM_CREATE.limit({ key: this.clientIp }).catch(
         () => ({ success: true }),
       );
@@ -491,9 +546,16 @@ export class RoomDO implements DurableObject {
     const recordsBefore = this.room.accessRecords.length;
     const result = this.checkAccess(accessHash);
     if (result.kind === "ok") {
+      const secondPartyJoined = recordsBefore === 1 && this.room.accessRecords.length === 2;
+      // A valid OTP claim that just filled the slot consumes the one-time
+      // pairing hash — it can never be replayed against this room again.
+      if (secondPartyJoined && this.room.pairingOtpHash) {
+        this.room.pairingOtpHash = null;
+        this.room.pairingFailedAttempts = 0;
+        this.room.pairingLockedUntilMs = null;
+      }
       this.emitCohortActive(); // a join is channel activity this week, too
       await this.persist();
-      const secondPartyJoined = recordsBefore === 1 && this.room.accessRecords.length === 2;
       enqueueMetric(
         this.env.METRICS_QUEUE,
         secondPartyJoined ? "second_party_joined" : "room_rejoin",
@@ -506,10 +568,22 @@ export class RoomDO implements DurableObject {
         cfCountry,
         stegCountry: evt.data.country_iso ?? "",
       } satisfies WsAttachment);
+      // Tell the creator their counterparty just paired (excludes the joiner;
+      // their own socket isn't marked joined yet anyway).
+      if (secondPartyJoined) {
+        this.broadcastExcept(senderHash, { event: "party_paired", data: {} });
+      }
       await this.padJoin(start);
-      const reply: { room_id: string; current_message?: MessagePayload; ttl_expires_at: string } = {
+      const reply: {
+        room_id: string;
+        current_message?: MessagePayload;
+        ttl_expires_at: string;
+        awaiting_party: boolean;
+      } = {
         room_id: this.room.roomId,
         ttl_expires_at: new Date(this.room.ttlExpiresAtMs).toISOString(),
+        // Still alone iff the second slot is unfilled (returning solo creator).
+        awaiting_party: this.room.accessRecords.length < 2,
       };
       if (this.room.currentMessage) {
         reply.current_message = this.toPayload(this.room.currentMessage);
@@ -859,11 +933,76 @@ export class RoomDO implements DurableObject {
   }
 
   // -------------------------------------------------------------------------
+  // Reset pairing OTP
+  //
+  // The creator re-issues the pairing code while the second slot is still
+  // open — e.g. they closed the tab before relaying the original and it's gone
+  // from sessionStorage. Replaces the stored hash and clears the wrong-OTP
+  // lockout. The switch already guaranteed this socket is joined, and we
+  // require the slot to still be open, so the only possible caller is the lone
+  // creator (slot 1). Once a second party has paired there's no slot to gate.
+  // -------------------------------------------------------------------------
+
+  private async handleResetPairing(
+    ws: WebSocket,
+    evt: Extract<ClientEvent, { event: "reset_pairing" }>,
+  ): Promise<void> {
+    if (!this.room || this.room.accessRecords.length >= 2) {
+      this.send(ws, { ref: evt.ref, error: { reason: "not_found" } });
+      return;
+    }
+    const newHash = evt.data.otp_hash;
+    if (typeof newHash !== "string" || !HEX64_RE.test(newHash)) {
+      this.send(ws, { ref: evt.ref, error: { reason: "invalid_token" } });
+      return;
+    }
+    this.room.pairingOtpHash = newHash;
+    this.room.pairingFailedAttempts = 0;
+    this.room.pairingLockedUntilMs = null;
+    await this.persist();
+    this.send(ws, { ref: evt.ref, ok: {} });
+  }
+
+  // -------------------------------------------------------------------------
   // Access control — ports the elixir/lib/stelgano/rooms.ex handle_access /
   // handle_access_miss logic. Keeps the "increment counter on the record
   // with the most failures" cleverness so a wrong PIN doesn't reveal which
   // access_hash is the legitimate one.
   // -------------------------------------------------------------------------
+
+  /** Gates a second-party slot claim on the pairing OTP. Mutates the room's
+   *  failure counter / lockout on a wrong OTP but does NOT consume the hash —
+   *  the hash is cleared only once the claim actually registers, so a claim
+   *  that later trips the rate limiter can still be retried. Caller persists.
+   *  A bare probe (no OTP supplied) returns `otp_required` without counting a
+   *  failure, so the normal "join then enter code" flow costs nothing. */
+  private checkPairingOtp(
+    supplied: string | undefined,
+  ): { kind: "ok" } | { kind: "error"; reason: ErrorReason } {
+    const room = this.room;
+    if (!room) return { kind: "error", reason: "not_found" };
+
+    const now = Date.now();
+    if (room.pairingLockedUntilMs !== null && room.pairingLockedUntilMs > now) {
+      return { kind: "error", reason: "locked" };
+    }
+    if (!supplied) {
+      return { kind: "error", reason: "otp_required" };
+    }
+    if (!HEX64_RE.test(supplied) || supplied !== room.pairingOtpHash) {
+      room.pairingFailedAttempts += 1;
+      if (room.pairingFailedAttempts >= MAX_ACCESS_ATTEMPTS) {
+        room.pairingLockedUntilMs = now + LOCKOUT_MINUTES * 60_000;
+        // Distinct dim so a pairing lockout is attributable and doesn't get
+        // conflated with PIN-bruteforce access_lockout.
+        enqueueMetric(this.env.METRICS_QUEUE, "pair_failed", { dim: "locked" });
+        return { kind: "error", reason: "locked" };
+      }
+      enqueueMetric(this.env.METRICS_QUEUE, "pair_failed", { dim: "invalid" });
+      return { kind: "error", reason: "otp_invalid" };
+    }
+    return { kind: "ok" };
+  }
 
   private checkAccess(
     accessHash: string,

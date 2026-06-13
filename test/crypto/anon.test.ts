@@ -14,9 +14,13 @@ import {
   accessHash,
   decrypt,
   encrypt,
+  formatOtp,
   fromBase64,
   generateExtensionToken,
+  generatePairingOtp,
+  hashOtp,
   normalise,
+  normaliseOtp,
   roomHash,
   senderHash,
   toBase64,
@@ -185,5 +189,45 @@ describe("generateExtensionToken", () => {
     const b = await generateExtensionToken();
     expect(a.secret).not.toBe(b.secret);
     expect(a.tokenHash).not.toBe(b.tokenHash);
+  });
+});
+
+describe("pairing OTP", () => {
+  it("normaliseOtp uppercases and strips non-alphabet chars", () => {
+    expect(normaliseOtp("p2k4-9h7m")).toBe("P2K49H7M");
+    expect(normaliseOtp("P2K4 9H7M")).toBe("P2K49H7M");
+    // I/L/O/U are excluded from the alphabet and dropped.
+    expect(normaliseOtp("aioul")).toBe("A");
+    expect(normaliseOtp("")).toBe("");
+    // @ts-expect-error — deliberate runtime check
+    expect(normaliseOtp(null)).toBe("");
+  });
+
+  it("generatePairingOtp returns an 8-char alphabet code and its SHA-256", async () => {
+    const { otp, otpHash } = await generatePairingOtp();
+    expect(otp).toHaveLength(8);
+    expect(otp).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/); // Crockford base32, no I/L/O/U
+    expect(otpHash).toMatch(/^[a-f0-9]{64}$/);
+    // The hash is exactly SHA-256 of the raw OTP.
+    expect(await hashOtp(otp)).toBe(otpHash);
+  });
+
+  it("hashOtp is canonicalisation-insensitive (dashes/case/spaces)", async () => {
+    const { otp, otpHash } = await generatePairingOtp();
+    expect(await hashOtp(formatOtp(otp))).toBe(otpHash);
+    expect(await hashOtp(otp.toLowerCase())).toBe(otpHash);
+    expect(await hashOtp(` ${formatOtp(otp)} `)).toBe(otpHash);
+  });
+
+  it("produces distinct OTPs across calls", async () => {
+    const a = await generatePairingOtp();
+    const b = await generatePairingOtp();
+    expect(a.otp).not.toBe(b.otp);
+    expect(a.otpHash).not.toBe(b.otpHash);
+  });
+
+  it("formatOtp inserts one grouping hyphen that normalises away", () => {
+    expect(formatOtp("P2K49H7M")).toBe("P2K4-9H7M");
+    expect(normaliseOtp(formatOtp("P2K49H7M"))).toBe("P2K49H7M");
   });
 });

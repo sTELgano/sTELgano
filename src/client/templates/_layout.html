@@ -72,6 +72,21 @@
     })();
   </script>
 
+  <!-- Deep-link intent: a CTA marked data-intent="signup" stashes which /chat
+       surface to open, so /chat can default to the blank sign-in yet still let
+       a "get a number" link land on the generator — without a URL parameter
+       (/chat stays parameter-free). Read once and cleared by the chat client. -->
+  <script>
+    document.addEventListener("click", function (e) {
+      var t = e.target;
+      var a = t && t.closest ? t.closest("a[data-intent]") : null;
+      if (!a) return;
+      try {
+        sessionStorage.setItem("stelegano_intent", a.getAttribute("data-intent"));
+      } catch (err) {}
+    });
+  </script>
+
   <!-- Conversion-funnel entry. Runs on every static page so the
        platform funnel counts a "landing" for any site entry, not just
        the homepage. Captures ?c campaign attribution (set by the

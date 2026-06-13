@@ -239,3 +239,54 @@ export async function generateExtensionToken(): Promise<{
   const tokenHash = await sha256hex(secret);
   return { secret, tokenHash };
 }
+
+// ---------------------------------------------------------------------------
+// Pairing OTP (second-party channel binding)
+// ---------------------------------------------------------------------------
+
+/** Crockford base32 alphabet — excludes I, L, O, U so the code can't be
+ *  misread or spell anything. The OTP is relayed out of band alongside the
+ *  steg number, so legibility matters more than density. */
+const OTP_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/** Canonicalises a user-typed OTP for hashing/compare: uppercases and
+ *  strips everything outside the alphabet (spaces, dashes, the grouping
+ *  hyphen we render with). So "p2k4-9h7m" and "P2K4 9H7M" hash identically. */
+export function normaliseOtp(raw: string): string {
+  if (typeof raw !== "string") return "";
+  const up = raw.toUpperCase();
+  let out = "";
+  for (const ch of up) {
+    if (OTP_ALPHABET.includes(ch)) out += ch;
+  }
+  return out;
+}
+
+/** SHA-256 (hex) of a canonicalised OTP. The second party computes this
+ *  from the code they were given; the server compares it to the hash the
+ *  creator stored. The plaintext OTP never reaches the server. */
+export function hashOtp(otp: string): Promise<string> {
+  return sha256hex(normaliseOtp(otp));
+}
+
+/** Mints a fresh pairing OTP: 8 Crockford-base32 chars (~41 bits) plus its
+ *  SHA-256. The creator shows `otp` in-chat and shares it with the second
+ *  party; `otpHash` is sent to the server at room creation to gate the
+ *  second slot. Random draws are unbiased — 32-symbol alphabet divides 256
+ *  evenly, so a plain byte→symbol map has no modulo skew. */
+export async function generatePairingOtp(): Promise<{ otp: string; otpHash: string }> {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  let otp = "";
+  for (const b of bytes) otp += OTP_ALPHABET[b & 31];
+  const otpHash = await sha256hex(otp);
+  return { otp, otpHash };
+}
+
+/** Inserts a single grouping hyphen at the midpoint for display only
+ *  ("P2K49H7M" → "P2K4-9H7M"). normaliseOtp() strips it back out. */
+export function formatOtp(otp: string): string {
+  const clean = normaliseOtp(otp);
+  if (clean.length <= 4) return clean;
+  const mid = Math.ceil(clean.length / 2);
+  return `${clean.slice(0, mid)}-${clean.slice(mid)}`;
+}

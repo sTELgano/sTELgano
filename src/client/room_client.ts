@@ -42,6 +42,10 @@ export type Listeners = {
   onRoomExpired?: () => void;
   onTtlExtended?: (ttlExpiresAt: string) => void;
 
+  /** The second party claimed the slot with a valid OTP — fires on the
+   *  creator's socket so the UI can drop the pairing code. */
+  onPartyPaired?: () => void;
+
   /** Underlying socket closed (clean or unclean). Code 1000 = normal. */
   onClose?: (code: number, reason: string) => void;
 
@@ -107,12 +111,25 @@ export class RoomClient {
    *
    *  A room is always created free; a paid (yearly) number is reached via
    *  redeemExtension() after joining, so join carries no extension secret. */
-  join(senderHash: string, accessHash: string, countryIso?: string): Promise<JoinReply> {
-    const data: { sender_hash: string; access_hash: string; country_iso?: string } = {
+  join(
+    senderHash: string,
+    accessHash: string,
+    countryIso?: string,
+    otpHash?: string,
+  ): Promise<JoinReply> {
+    const data: {
+      sender_hash: string;
+      access_hash: string;
+      country_iso?: string;
+      otp_hash?: string;
+    } = {
       sender_hash: senderHash,
       access_hash: accessHash,
     };
     if (countryIso) data.country_iso = countryIso;
+    // SHA-256 of the pairing OTP: set the gate (creator's first join) or
+    // claim the open slot (second party's first join).
+    if (otpHash) data.otp_hash = otpHash;
     return this.request<JoinReply>("join", data);
   }
 
@@ -162,6 +179,12 @@ export class RoomClient {
 
   expireRoom(): Promise<Record<string, never>> {
     return this.request<Record<string, never>>("expire_room", {});
+  }
+
+  /** Re-issue the pairing OTP (creator only, while the slot is still open).
+   *  Sends the new hash; resolves on success. */
+  resetPairing(otpHash: string): Promise<Record<string, never>> {
+    return this.request<Record<string, never>>("reset_pairing", { otp_hash: otpHash });
   }
 
   // -------------------------------------------------------------------------
@@ -272,6 +295,9 @@ export class RoomClient {
         break;
       case "ttl_extended":
         this.listeners.onTtlExtended?.(b.data.ttl_expires_at);
+        break;
+      case "party_paired":
+        this.listeners.onPartyPaired?.();
         break;
       default: {
         const _exhaustive: never = b;
